@@ -853,6 +853,135 @@
       color: #f2e5ce;
     }
 
+    .checkpoint-box {
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: var(--accent-glow);
+      border-left: 3px solid var(--accent-bright);
+      font-size: 0.78rem;
+      color: #d7f5d9;
+    }
+
+    .drill-item {
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .drill-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .drill-body-grid {
+      display: grid;
+      grid-template-columns: 1fr 224px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    @media (max-width: 760px) {
+      .drill-body-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .drill-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .drill-steps {
+      list-style: none;
+      counter-reset: drill-step;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 2px 0;
+    }
+
+    .drill-steps li {
+      counter-increment: drill-step;
+      display: flex;
+      gap: 8px;
+      font-size: 0.81rem;
+      color: #dce0ee;
+      align-items: flex-start;
+    }
+
+    .drill-steps li::before {
+      content: counter(drill-step);
+      flex: 0 0 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-strong);
+      color: var(--pitch);
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+      margin-top: 1px;
+    }
+
+    .drill-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+
+    .video-link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: var(--radius-sm);
+      background: rgba(239, 83, 80, 0.14);
+      border: 1px solid rgba(239, 83, 80, 0.45);
+      color: #ffcdd2;
+      font-size: 0.77rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .video-link-btn:hover {
+      background: rgba(239, 83, 80, 0.25);
+      border-color: #ef5350;
+      color: #fff;
+    }
+
+    .drill-diagram-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .drill-diagram-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .drill-diagram-caption {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.35;
+    }
+
     /* --- TACTICAL PITCH / MATCHUP VISUAL --- */
     .attack-hero {
       background: linear-gradient(135deg, rgba(79, 195, 247, 0.14), rgba(27, 28, 36, 0.95));
@@ -1906,7 +2035,31 @@ Return ONLY valid JSON matching this exact schema:
     { "phase": "Phase name (e.g. Stance & Trigger / Run-up & Gather)", "timestamp": "e.g. 0.4s - 0.9s", "observation": "Detailed biomechanical note" }
   ],
   "improvements": [
-    { "title": "Technical adjustment", "why": "What it fixes", "drill": "Concrete net drill with reps/setup", "cue": "Short 3-6 word coaching cue" }
+    {
+      "title": "Technical adjustment headline",
+      "priority": "High | Medium",
+      "drillName": "Memorable name of the specific coaching drill",
+      "why": "Detailed biomechanical reason why this adjustment fixes the observed flaw",
+      "equipment": ["2 Cones", "Tennis Balls", "Chalk Line"],
+      "steps": [
+        "Step 1: Exact setup distance, markers, and starting posture",
+        "Step 2: Exact movement/execution during the drill",
+        "Step 3: Progression once comfortable"
+      ],
+      "reps": "e.g. 3 sets × 12 balls · 3×/week",
+      "checkpoint": "Observable sign the player is executing the drill correctly",
+      "cue": "Short 3-6 word coaching cue",
+      "videoSearchQuery": "Specific YouTube search phrase for real cricket coaching videos of this exact drill (e.g. 'cricket coaching top hand straight drive head alignment drill')",
+      "diagram": {
+        "caption": "Short 1-line diagram explanation",
+        "elements": [
+          { "type": "player | coach | cone | target", "x": 0.50, "y": 0.22, "label": "Short label" }
+        ],
+        "arrows": [
+          { "fromX": 0.50, "fromY": 0.82, "toX": 0.50, "toY": 0.28, "style": "ball | shot | move", "label": "Optional short label" }
+        ]
+      }
+    }
   ],
   "avenuesOfAttack": {
     "headline": "${isBatting ? 'How to Bowl to This Batter' : 'How to Bat Against This Bowler'}",
@@ -1933,7 +2086,10 @@ Return ONLY valid JSON matching this exact schema:
 For pitchZones coordinates:
 - x is across the pitch from 0.12 (wide leg-side for RHB / wide off-side for LHB) to 0.88 (wide off-side for RHB / wide leg-side for LHB), with 0.50 being middle stump.
 - y is length from batter's stumps: 0.14 (Yorker), 0.28 (Full), 0.48 (Good length), 0.68 (Back of a length), 0.84 (Short/Bouncer).
-Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and one "avoid" zone.`;
+Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and one "avoid" zone.
+For each improvement's diagram (top-down net/pitch view):
+- x is 0.10 to 0.90 left-to-right (0.50 center of pitch); y is 0.15 (top/batter crease) to 0.88 (bottom/bowler or feeder end).
+- Include 3 to 5 elements (player, coach/feeder, cones, target zone) and 1 to 3 arrows showing ball feed, footwork, or target trajectory.`;
       }
 
       // --- RENDER REPORT ---
@@ -2060,24 +2216,106 @@ Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and 
           const head = document.createElement('div');
           head.className = 'drill-head';
           const title = document.createElement('strong');
-          title.textContent = `${idx + 1}. ${imp.title}`;
-          head.appendChild(title);
+          title.textContent = `${idx + 1}. ${imp.title}${imp.drillName ? ` — ${imp.drillName}` : ''}`;
+
+          const metaRow = document.createElement('div');
+          metaRow.className = 'drill-meta-row';
+          if (imp.priority) {
+            const pBadge = document.createElement('span');
+            pBadge.className = `badge ${imp.priority.toLowerCase() === 'high' ? 'badge-red' : 'badge-amber'}`;
+            pBadge.textContent = `${imp.priority} Priority`;
+            metaRow.appendChild(pBadge);
+          }
+          if (imp.reps) {
+            const rBadge = document.createElement('span');
+            rBadge.className = 'badge badge-blue';
+            rBadge.textContent = imp.reps;
+            metaRow.appendChild(rBadge);
+          }
+          head.append(title, metaRow);
+
+          const bodyGrid = document.createElement('div');
+          bodyGrid.className = 'drill-body-grid';
+
+          const detailsCol = document.createElement('div');
+          detailsCol.className = 'drill-details';
 
           const why = document.createElement('p');
           const whyLabel = document.createElement('strong');
           whyLabel.textContent = 'Why it matters: ';
           why.append(whyLabel, document.createTextNode(imp.why || ''));
+          detailsCol.appendChild(why);
 
-          const drill = document.createElement('p');
-          const drillLabel = document.createElement('strong');
-          drillLabel.textContent = 'Drill: ';
-          drill.append(drillLabel, document.createTextNode(imp.drill || ''));
+          if (Array.isArray(imp.equipment) && imp.equipment.length > 0) {
+            const eqRow = document.createElement('div');
+            eqRow.className = 'field-chips';
+            imp.equipment.forEach(eq => {
+              const chip = document.createElement('span');
+              chip.className = 'field-chip';
+              chip.textContent = `🎒 ${eq}`;
+              eqRow.appendChild(chip);
+            });
+            detailsCol.appendChild(eqRow);
+          }
+
+          if (Array.isArray(imp.steps) && imp.steps.length > 0) {
+            const ol = document.createElement('ol');
+            ol.className = 'drill-steps';
+            imp.steps.forEach(stepText => {
+              const li = document.createElement('li');
+              li.textContent = stepText.replace(/^Step\s*\d+\s*[:.-]\s*/i, '');
+              ol.appendChild(li);
+            });
+            detailsCol.appendChild(ol);
+          } else if (imp.drill) {
+            const drill = document.createElement('p');
+            const drillLabel = document.createElement('strong');
+            drillLabel.textContent = 'Drill: ';
+            drill.append(drillLabel, document.createTextNode(imp.drill));
+            detailsCol.appendChild(drill);
+          }
+
+          if (imp.checkpoint) {
+            const cp = document.createElement('div');
+            cp.className = 'checkpoint-box';
+            cp.textContent = `✓ Success Checkpoint: ${imp.checkpoint}`;
+            detailsCol.appendChild(cp);
+          }
 
           const cue = document.createElement('div');
           cue.className = 'cue-box';
           cue.textContent = `Coaching Cue: "${imp.cue || ''}"`;
+          detailsCol.appendChild(cue);
 
-          div.append(head, why, drill, cue);
+          const actionsRow = document.createElement('div');
+          actionsRow.className = 'drill-actions';
+          const searchQ = imp.videoSearchQuery || `cricket coaching ${isBatting ? 'batting' : 'bowling'} drill ${imp.drillName || imp.title}`;
+          const ytLink = document.createElement('a');
+          ytLink.className = 'video-link-btn';
+          ytLink.href = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQ)}`;
+          ytLink.target = '_blank';
+          ytLink.rel = 'noopener noreferrer';
+          ytLink.textContent = '▶ Watch Drill Videos on YouTube';
+          actionsRow.appendChild(ytLink);
+          detailsCol.appendChild(actionsRow);
+
+          // Diagram column
+          const diagramBox = document.createElement('div');
+          diagramBox.className = 'drill-diagram-box';
+          const dTitle = document.createElement('div');
+          dTitle.className = 'drill-diagram-title';
+          dTitle.textContent = 'Net Setup Diagram';
+          const svg = createDrillDiagramSvg(imp.diagram, isBatting ? 'batting' : 'bowling', idx);
+          diagramBox.append(dTitle, svg);
+          if (imp.diagram?.caption) {
+            const cap = document.createElement('div');
+            cap.className = 'drill-diagram-caption';
+            cap.textContent = imp.diagram.caption;
+            diagramBox.appendChild(cap);
+          }
+
+          bodyGrid.append(detailsCol, diagramBox);
+          div.append(head, bodyGrid);
           drillList.appendChild(div);
         });
 
@@ -2135,6 +2373,156 @@ Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and 
           li.append(strong, document.createTextNode(item.detail || ''));
           ul.appendChild(li);
         });
+      }
+
+      // --- SVG DRILL SETUP DIAGRAM ---
+      function createDrillDiagramSvg(diagram, role, idx) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '0 0 210 195');
+        svg.setAttribute('width', '204');
+        svg.setAttribute('height', '190');
+        svg.setAttribute('aria-label', 'Cricket net drill setup diagram');
+
+        const el = (tag, attrs = {}, text = null) => {
+          const node = document.createElementNS(ns, tag);
+          Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
+          if (text !== null) node.textContent = text;
+          return node;
+        };
+
+        // Arrowhead marker definitions (unique per SVG index)
+        const defs = el('defs');
+        [
+          { id: `arr-ball-${idx}`, color: '#ffffff' },
+          { id: `arr-shot-${idx}`, color: '#4caf50' },
+          { id: `arr-move-${idx}`, color: '#ffb74d' }
+        ].forEach(m => {
+          const marker = el('marker', {
+            id: m.id,
+            viewBox: '0 0 10 10',
+            refX: '8',
+            refY: '5',
+            markerWidth: '6',
+            markerHeight: '6',
+            orient: 'auto-start-reverse'
+          });
+          marker.appendChild(el('path', { d: 'M 0 1 L 10 5 L 0 9 z', fill: m.color }));
+          defs.appendChild(marker);
+        });
+        svg.appendChild(defs);
+
+        // Net turf & pitch strip
+        svg.appendChild(el('rect', { x: 0, y: 0, width: 210, height: 195, rx: 8, fill: '#1c4223' }));
+        svg.appendChild(el('rect', { x: 48, y: 12, width: 114, height: 171, rx: 4, fill: '#b89f78', stroke: '#d8c3a0', 'stroke-width': 1 }));
+        // Top popping crease & stumps
+        svg.appendChild(el('line', { x1: 38, y1: 32, x2: 172, y2: 32, stroke: '#fff', 'stroke-width': 1.5, opacity: 0.85 }));
+        [99, 105, 111].forEach(sx => {
+          svg.appendChild(el('circle', { cx: sx, cy: 20, r: 2, fill: '#222', stroke: '#fff', 'stroke-width': 0.8 }));
+        });
+        // Bottom crease line
+        svg.appendChild(el('line', { x1: 48, y1: 168, x2: 162, y2: 168, stroke: '#fff', 'stroke-width': 1.2, opacity: 0.55 }));
+
+        const fallback = role === 'batting'
+          ? {
+              elements: [
+                { type: 'player', x: 0.50, y: 0.22, label: 'Batter' },
+                { type: 'coach', x: 0.50, y: 0.84, label: 'Feeder' },
+                { type: 'cone', x: 0.36, y: 0.52, label: 'Gate' },
+                { type: 'cone', x: 0.64, y: 0.52, label: 'Gate' },
+                { type: 'target', x: 0.50, y: 0.66, label: 'Target' }
+              ],
+              arrows: [
+                { fromX: 0.50, fromY: 0.78, toX: 0.50, toY: 0.29, style: 'ball', label: 'Feed' }
+              ]
+            }
+          : {
+              elements: [
+                { type: 'player', x: 0.50, y: 0.82, label: 'Bowler' },
+                { type: 'cone', x: 0.35, y: 0.68, label: 'Align' },
+                { type: 'target', x: 0.56, y: 0.34, label: 'Target' }
+              ],
+              arrows: [
+                { fromX: 0.50, fromY: 0.76, toX: 0.56, toY: 0.38, style: 'shot', label: 'Line' }
+              ]
+            };
+
+        const elements = (diagram && Array.isArray(diagram.elements) && diagram.elements.length > 0)
+          ? diagram.elements
+          : fallback.elements;
+        const arrows = (diagram && Array.isArray(diagram.arrows) && diagram.arrows.length > 0)
+          ? diagram.arrows
+          : fallback.arrows;
+
+        const mapX = v => 14 + Math.max(0.05, Math.min(0.95, Number(v) || 0.5)) * 182;
+        const mapY = v => 12 + Math.max(0.05, Math.min(0.95, Number(v) || 0.5)) * 171;
+
+        // Draw target zones first (underneath)
+        elements.filter(e => e.type === 'target').forEach(item => {
+          const cx = mapX(item.x), cy = mapY(item.y);
+          svg.appendChild(el('ellipse', {
+            cx, cy, rx: 22, ry: 12,
+            fill: 'rgba(76, 175, 80, 0.28)',
+            stroke: '#4caf50',
+            'stroke-width': 1.5,
+            'stroke-dasharray': '3 2'
+          }));
+          if (item.label) {
+            svg.appendChild(el('text', { x: cx, y: cy + 3, fill: '#e8f5e9', 'font-size': 7.5, 'font-weight': 700, 'text-anchor': 'middle' }, item.label));
+          }
+        });
+
+        // Draw arrows
+        arrows.forEach(a => {
+          const x1 = mapX(a.fromX), y1 = mapY(a.fromY);
+          const x2 = mapX(a.toX), y2 = mapY(a.toY);
+          const styleKey = a.style === 'shot' ? 'shot' : a.style === 'move' ? 'move' : 'ball';
+          const color = styleKey === 'shot' ? '#4caf50' : styleKey === 'move' ? '#ffb74d' : '#ffffff';
+          const dash = styleKey === 'ball' ? '4 3' : styleKey === 'move' ? '2 2' : '';
+
+          const lineAttrs = {
+            x1, y1, x2, y2,
+            stroke: color,
+            'stroke-width': 2,
+            'marker-end': `url(#arr-${styleKey}-${idx})`
+          };
+          if (dash) lineAttrs['stroke-dasharray'] = dash;
+          svg.appendChild(el('line', lineAttrs));
+        });
+
+        // Draw markers (cones, player, coach)
+        elements.filter(e => e.type !== 'target').forEach(item => {
+          const cx = mapX(item.x), cy = mapY(item.y);
+          if (item.type === 'cone') {
+            svg.appendChild(el('polygon', {
+              points: `${cx},${cy - 6} ${cx - 6},${cy + 5} ${cx + 6},${cy + 5}`,
+              fill: '#ffb74d',
+              stroke: '#121318',
+              'stroke-width': 1
+            }));
+          } else if (item.type === 'coach') {
+            svg.appendChild(el('circle', { cx, cy, r: 8, fill: '#4fc3f7', stroke: '#121318', 'stroke-width': 1.5 }));
+            svg.appendChild(el('text', { x: cx, y: cy + 3, fill: '#121318', 'font-size': 8, 'font-weight': 800, 'text-anchor': 'middle' }, 'F'));
+          } else {
+            svg.appendChild(el('circle', { cx, cy, r: 8.5, fill: '#4caf50', stroke: '#121318', 'stroke-width': 1.5 }));
+            svg.appendChild(el('text', { x: cx, y: cy + 3, fill: '#121318', 'font-size': 8, 'font-weight': 800, 'text-anchor': 'middle' }, 'P'));
+          }
+          if (item.label) {
+            svg.appendChild(el('text', {
+              x: cx,
+              y: cy + 15,
+              fill: '#ffffff',
+              'font-size': 7.5,
+              'font-weight': 700,
+              'text-anchor': 'middle',
+              stroke: 'rgba(18,19,24,0.75)',
+              'stroke-width': 2,
+              'paint-order': 'stroke'
+            }, item.label));
+          }
+        });
+
+        return svg;
       }
 
       // --- SVG TACTICAL PITCH MAP ---
@@ -2226,7 +2614,13 @@ Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and 
           ...(r.phases || []).map(p => `- **${p.phase}** (${p.timestamp}): ${p.observation}`),
           ``,
           `## Coaching Adjustments & Drills`,
-          ...(r.improvements || []).map((i, idx) => `${idx + 1}. **${i.title}**\n   - *Why:* ${i.why}\n   - *Drill:* ${i.drill}\n   - *Cue:* "${i.cue}"`),
+          ...(r.improvements || []).map((i, idx) => {
+            const stepsMd = Array.isArray(i.steps) && i.steps.length
+              ? i.steps.map((s, si) => `     ${si + 1}. ${s}`).join('\n')
+              : `     - ${i.drill || ''}`;
+            const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(i.videoSearchQuery || `cricket coaching drill ${i.drillName || i.title}`)}`;
+            return `${idx + 1}. **${i.title}${i.drillName ? ` — ${i.drillName}` : ''}**${i.reps ? ` (${i.reps})` : ''}\n   - *Why:* ${i.why}\n   - *Equipment:* ${(i.equipment || []).join(', ') || 'Standard net gear'}\n   - *Steps:*\n${stepsMd}\n   - *Success Checkpoint:* ${i.checkpoint || 'Consistent execution'}\n   - *Cue:* "${i.cue}"\n   - *Drill Videos:* ${ytUrl}`;
+          }),
           ``,
           `## ${r.avenuesOfAttack?.headline || 'Avenues of Attack'}`,
           r.avenuesOfAttack?.summary || '',
@@ -2292,21 +2686,93 @@ Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and 
             improvements: [
               {
                 title: 'Keep Head Inside the Line of the Front Toe',
+                priority: 'High',
+                drillName: 'Top-Hand Chalk-Line Straight Drive',
                 why: 'Eliminates falling over to off-stump and keeps the bat coming down straighter against inswing and nip-backers.',
-                drill: 'Underarm / side-arm top-hand-only straight drives along a chalk line from middle stump to the bowler, 3 sets of 12 balls.',
-                cue: 'Nose over front knee, not outside it'
+                equipment: ['Chalk / Tape Line', '2 Target Cones', 'Underarm Feeder'],
+                steps: [
+                  'Mark a straight chalk or tape line from middle stump down the pitch toward the feeder (10m away) and place two cones 1.5m apart as a straight gate.',
+                  'Grip the bat with your top hand only (or light bottom-hand two-finger hold) and receive gentle full underarm feeds onto middle-and-off.',
+                  'Stride forward keeping your nose stacked inside your front knee, punching the ball firmly through the straight gate.',
+                  'Progress to two-handed side-arm throwdowns swinging slightly in from outside off.'
+                ],
+                reps: '3 sets × 12 balls · 3×/week',
+                checkpoint: 'Ball rolls cleanly through the straight cone gate with the front shoulder staying side-on after impact.',
+                cue: 'Nose over front knee, not outside it',
+                videoSearchQuery: 'cricket batting top hand straight drive head position coaching drill',
+                diagram: {
+                  caption: 'Feed straight onto middle-off; drive cleanly through the straight cone gate.',
+                  elements: [
+                    { type: 'player', x: 0.50, y: 0.18, label: 'Batter' },
+                    { type: 'cone', x: 0.38, y: 0.52, label: 'Gate' },
+                    { type: 'cone', x: 0.62, y: 0.52, label: 'Gate' },
+                    { type: 'target', x: 0.50, y: 0.68, label: 'Straight V' },
+                    { type: 'coach', x: 0.50, y: 0.86, label: 'Feeder' }
+                  ],
+                  arrows: [
+                    { fromX: 0.50, fromY: 0.80, toX: 0.50, toY: 0.25, style: 'ball' },
+                    { fromX: 0.50, fromY: 0.25, toX: 0.50, toY: 0.64, style: 'shot' }
+                  ]
+                }
               },
               {
                 title: 'Open the Front Foot Slightly Toward Extra Cover',
+                priority: 'High',
+                drillName: 'Front-Foot Alignment Cone & V-Drive Drill',
                 why: 'Prevents the front hip from locking up and lets the bat swing cleanly through mid-on when the ball shapes in.',
-                drill: 'Place a flat cone beside the front foot landing spot; hit 20 balls aiming strictly between mid-on and mid-off.',
-                cue: 'Lead with the elbow down the ground'
+                equipment: ['1 Flat Disc Cone', '2 Boundary Markers', '18–20 Balls'],
+                steps: [
+                  'Place a flat disc cone just outside the line of off-stump where the outside edge of your front boot should land.',
+                  'Have a feeder throw full-to-good-length balls attacking middle and off stump.',
+                  'Plant your front toe pointing slightly toward extra cover (not closed off toward mid-off) and drive strictly in the V between mid-on and mid-off.'
+                ],
+                reps: '2 sets × 15 balls · 2–3×/week',
+                checkpoint: 'Front toe lands open enough that your hips clear effortlessly and you can drive straight back past the bowler.',
+                cue: 'Lead with the elbow down the ground',
+                videoSearchQuery: 'cricket batting front foot alignment drill playing straight in the V',
+                diagram: {
+                  caption: 'Flat cone guides front-foot angle; target the V between mid-on and mid-off.',
+                  elements: [
+                    { type: 'player', x: 0.50, y: 0.18, label: 'Batter' },
+                    { type: 'cone', x: 0.61, y: 0.28, label: 'Foot Cone' },
+                    { type: 'target', x: 0.42, y: 0.65, label: 'Mid-On' },
+                    { type: 'target', x: 0.62, y: 0.65, label: 'Mid-Off' },
+                    { type: 'coach', x: 0.50, y: 0.86, label: 'Feeder' }
+                  ],
+                  arrows: [
+                    { fromX: 0.50, fromY: 0.80, toX: 0.52, toY: 0.26, style: 'ball' },
+                    { fromX: 0.50, fromY: 0.24, toX: 0.43, toY: 0.60, style: 'shot' }
+                  ]
+                }
               },
               {
                 title: 'Create Room vs. Body-Line Short Balls',
-                why: 'Frees the arms to roll the wrists on the pull rather than getting jammed on the hip.',
-                drill: 'Tennis-ball rapid throwdowns aimed at the left shoulder; practice swaying or pivoting back-foot inside the line.',
-                cue: 'Clear the hip, hit down through square'
+                priority: 'Medium',
+                drillName: 'Rapid Tennis-Ball Hip-Clear Pull Drill',
+                why: 'Frees the arms to roll the wrists on the pull rather than getting jammed on the ribcage.',
+                equipment: ['6–8 Tennis Balls', 'Side-Arm / Feeder', 'Target Cone at Mid-Wicket'],
+                steps: [
+                  'Start in your normal stance while a feeder fires rapid short tennis balls from 12m aimed at your chest and left shoulder.',
+                  'Transfer weight back and slightly leg-side of the line, pivoting your back hip to give your arms full extension.',
+                  'Roll your wrists on contact to keep the pull shot down toward the mid-wicket target cone.'
+                ],
+                reps: '3 sets × 10 balls · 2×/week',
+                checkpoint: 'Contact occurs in front of your front shoulder with the ball hitting the ground before 15m.',
+                cue: 'Clear the hip, hit down through square',
+                videoSearchQuery: 'cricket batting pull shot tennis ball drill short ball body line',
+                diagram: {
+                  caption: 'Pivot inside the short-ball line and roll wrists down toward square mid-wicket.',
+                  elements: [
+                    { type: 'player', x: 0.50, y: 0.20, label: 'Batter' },
+                    { type: 'target', x: 0.18, y: 0.44, label: 'Pull Zone' },
+                    { type: 'cone', x: 0.24, y: 0.54, label: 'Marker' },
+                    { type: 'coach', x: 0.50, y: 0.82, label: 'Thrower' }
+                  ],
+                  arrows: [
+                    { fromX: 0.50, fromY: 0.76, toX: 0.48, toY: 0.26, style: 'ball' },
+                    { fromX: 0.46, fromY: 0.22, toX: 0.22, toY: 0.42, style: 'shot' }
+                  ]
+                }
               }
             ],
             avenuesOfAttack: {
@@ -2370,21 +2836,90 @@ Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and 
             improvements: [
               {
                 title: 'Stabilize & Brace the Front Leg',
-                why: 'Turns linear run-up momentum into rotational whip, adding pace and consistent length.',
-                drill: 'Walk-in "pole-vault" front-leg brace drills (3 steps into a locked front knee) + eccentric single-leg drop squats.',
-                cue: 'Plant tall, hit the wall with the front leg'
+                priority: 'High',
+                drillName: '3-Step Pole-Vault Front-Leg Brace Drill',
+                why: 'Turns linear run-up momentum into rotational whip, adding 4–6 km/h of pace and keeping fuller lengths from dropping short.',
+                equipment: ['2 Crease Cones', 'Target Mat on Good Length', '6 Cricket Balls'],
+                steps: [
+                  'Start 3 walking paces behind the popping crease with a cone marking your back-foot landing zone.',
+                  'Walk briskly into back-foot contact, drive your front knee up, and plant the front foot firmly with a straight, locked knee.',
+                  'Feel your torso catapult over the braced front leg as you release toward the good-length target mat.',
+                  'Once braced cleanly for 12 balls, gradually extend to a half run-up while keeping the same front-knee rigidity.'
+                ],
+                reps: '3 sets × 8 balls · 3×/week',
+                checkpoint: 'Front knee stays braced (minimal bend) through ball release and the ball hits the keeper’s gloves noticeably harder.',
+                cue: 'Plant tall, hit the wall with the front leg',
+                videoSearchQuery: 'fast bowling front leg brace drill cricket coaching pace',
+                diagram: {
+                  caption: '3-step walk-in through crease cones; catapult over braced front leg to 4th stump.',
+                  elements: [
+                    { type: 'target', x: 0.60, y: 0.34, label: '4th Stump' },
+                    { type: 'cone', x: 0.42, y: 0.72, label: 'BFC' },
+                    { type: 'cone', x: 0.58, y: 0.72, label: 'FFC' },
+                    { type: 'player', x: 0.50, y: 0.86, label: 'Bowler' }
+                  ],
+                  arrows: [
+                    { fromX: 0.50, fromY: 0.80, toX: 0.50, toY: 0.68, style: 'move' },
+                    { fromX: 0.52, fromY: 0.66, toX: 0.60, toY: 0.38, style: 'shot' }
+                  ]
+                }
               },
               {
                 title: 'Pull Front Arm Straight Down to the Hip',
+                priority: 'High',
+                drillName: 'Corridor Target-Line Alignment Drill',
                 why: 'Keeps the head stacked over the front knee and stops deliveries drifting onto the batter’s pads.',
-                drill: 'Target-line bowling with a visual cone straight down the pitch; keep eyes level on target through release.',
-                cue: 'Pull the elbow to the pocket, not out wide'
+                equipment: ['2 Alignment Cones', 'Off-Stump Target Cone', 'Cricket Balls'],
+                steps: [
+                  'Place two cones 1.2m apart just past the popping crease to form a straight follow-through corridor.',
+                  'Lock your eyes on a bright cone placed on top of off-stump and point your front elbow directly at it during gather.',
+                  'Pull the front elbow straight down into your left rib/hip pocket (not out toward mid-wicket) and run straight through the corridor cones.'
+                ],
+                reps: '3 sets × 6 balls · 2–3×/week',
+                checkpoint: 'Head stays level through release and follow-through finishes cleanly between the two corridor cones.',
+                cue: 'Pull the elbow to the pocket, not out wide',
+                videoSearchQuery: 'cricket fast bowling front arm alignment stop falling away drill',
+                diagram: {
+                  caption: 'Run straight through the follow-through cone corridor keeping eyes on off-stump.',
+                  elements: [
+                    { type: 'target', x: 0.58, y: 0.24, label: 'Off Stump' },
+                    { type: 'cone', x: 0.38, y: 0.56, label: 'Corridor' },
+                    { type: 'cone', x: 0.62, y: 0.56, label: 'Corridor' },
+                    { type: 'player', x: 0.50, y: 0.82, label: 'Bowler' }
+                  ],
+                  arrows: [
+                    { fromX: 0.50, fromY: 0.76, toX: 0.50, toY: 0.54, style: 'move' },
+                    { fromX: 0.52, fromY: 0.74, toX: 0.58, toY: 0.28, style: 'shot' }
+                  ]
+                }
               },
               {
                 title: 'Disguise the Short Ball Height',
-                why: 'Prevents batters from picking up the length early and sitting back to pull.',
-                drill: 'Alternate 1 good-length ball and 1 back-of-a-length ball from the exact same wrist height using a high-target rope.',
-                cue: 'Same window, different hit point'
+                priority: 'Medium',
+                drillName: 'Same-Window Alternating Length Drill',
+                why: 'Prevents batters from picking up the shorter delivery early from a dropped release point.',
+                equipment: ['2 Length Target Mats', 'High Release Reference Rope / Stump'],
+                steps: [
+                  'Set two target mats: one on a 6m good length and one on a 9m back-of-a-length.',
+                  'Bowl alternating pairs (Ball 1: good length, Ball 2: back-of-a-length) while keeping your wrist release height identical.',
+                  'Adjust length purely via release timing (releasing a fraction later into the pitch) rather than dropping your bowling shoulder.'
+                ],
+                reps: '4 sets × 6 balls (alternating) · 2×/week',
+                checkpoint: 'From the batter’s end, both deliveries emerge from the exact same release window.',
+                cue: 'Same window, different hit point',
+                videoSearchQuery: 'cricket fast bowling disguising bouncer short ball length drill',
+                diagram: {
+                  caption: 'Alternate 6m good length and 9m short length from the same high release window.',
+                  elements: [
+                    { type: 'target', x: 0.60, y: 0.34, label: '6m Good' },
+                    { type: 'target', x: 0.46, y: 0.54, label: '9m Short' },
+                    { type: 'player', x: 0.50, y: 0.84, label: 'Bowler' }
+                  ],
+                  arrows: [
+                    { fromX: 0.50, fromY: 0.78, toX: 0.60, toY: 0.38, style: 'shot' },
+                    { fromX: 0.50, fromY: 0.78, toX: 0.46, toY: 0.58, style: 'ball' }
+                  ]
+                }
               }
             ],
             avenuesOfAttack: {
