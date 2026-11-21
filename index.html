@@ -1,0 +1,2419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cricket Player Analysis — Biomechanics & Tactical Matchup Lab</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #121318;
+      --surface: #1b1c24;
+      --surface-elevated: #242531;
+      --surface-hover: #2b2d3b;
+      --border: #2d3040;
+      --border-strong: #3e4258;
+      --accent: #2e7d32;
+      --accent-bright: #4caf50;
+      --accent-glow: rgba(76, 175, 80, 0.22);
+      --pitch: #c7b088;
+      --pitch-soft: rgba(199, 176, 136, 0.14);
+      --danger: #ef5350;
+      --danger-soft: rgba(239, 83, 80, 0.14);
+      --warning: #ffb74d;
+      --warning-soft: rgba(255, 183, 77, 0.14);
+      --info: #4fc3f7;
+      --info-soft: rgba(79, 195, 247, 0.14);
+      --text: #f0f2f8;
+      --text-muted: #8e92a8;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* --- TOP BAR --- */
+    header.top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      min-height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 18px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #1b5e20);
+      border: 1px solid rgba(76, 175, 80, 0.45);
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+      box-shadow: 0 2px 10px var(--accent-glow);
+    }
+
+    .brand h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .brand span {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* --- BUTTONS & PILLS --- */
+    button, .btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--surface-hover);
+      border-color: var(--border-strong);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent-bright);
+      color: #fff;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #388e3c;
+      border-color: #66bb6a;
+    }
+
+    .btn-ghost {
+      background: transparent;
+    }
+
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 0.75rem;
+    }
+
+    .btn-active {
+      background: var(--accent-glow);
+      border-color: var(--accent-bright);
+      color: #c8f7ca;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--warning);
+    }
+
+    .status-pill.connected .status-dot {
+      background: var(--accent-bright);
+      box-shadow: 0 0 8px var(--accent-bright);
+    }
+
+    .status-pill.connected {
+      color: #c8f7ca;
+      border-color: rgba(76, 175, 80, 0.45);
+    }
+
+    /* --- MAIN WORKSPACE GRID --- */
+    main.workspace {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(340px, 46%) minmax(380px, 54%);
+      gap: 16px;
+      padding: 16px;
+      max-width: 1680px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 1080px) {
+      main.workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .panel-header h2 {
+      font-size: 0.92rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* --- VIDEO UPLOAD & PLAYER --- */
+    .drop-zone {
+      border: 2px dashed var(--border-strong);
+      border-radius: var(--radius);
+      background: var(--bg);
+      padding: 28px 18px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent-bright);
+      background: rgba(76, 175, 80, 0.06);
+    }
+
+    .drop-zone-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .drop-zone h3 {
+      font-size: 0.95rem;
+      margin-bottom: 4px;
+    }
+
+    .drop-zone p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .video-stage {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .video-stage.active {
+      display: flex;
+    }
+
+    .video-container {
+      position: relative;
+      background: #000;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .video-container canvas#telestrator {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .video-container canvas#telestrator.drawing-enabled {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+
+    .video-controls-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+    }
+
+    .scrubber-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .scrubber-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent-bright);
+      cursor: pointer;
+    }
+
+    .time-readout {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      min-width: 88px;
+      text-align: right;
+    }
+
+    .transport-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    /* --- KEYFRAMES FILMSTRIP --- */
+    .filmstrip-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .filmstrip-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .filmstrip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .frame-thumb {
+      flex: 0 0 92px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+      transition: border-color 0.15s;
+    }
+
+    .frame-thumb:hover {
+      border-color: var(--accent-bright);
+    }
+
+    .frame-thumb img {
+      width: 100%;
+      height: 54px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .frame-thumb .frame-label {
+      font-size: 0.68rem;
+      padding: 2px 5px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .frame-thumb .frame-remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 0.65rem;
+      justify-content: center;
+    }
+
+    /* --- PLAYER CONFIGURATION FORM --- */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 560px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    .field label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    select, input[type="text"], input[type="password"], textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-size: 0.85rem;
+      transition: border-color 0.15s;
+    }
+
+    select:focus, input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent-bright);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 62px;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .segmented button {
+      border: none;
+      background: transparent;
+      justify-content: center;
+      padding: 7px 10px;
+      color: var(--text-muted);
+    }
+
+    .segmented button.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 1px 6px var(--accent-glow);
+    }
+
+    .analyze-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .analyze-bar .btn-primary {
+      flex: 1;
+      justify-content: center;
+      padding: 11px 16px;
+      font-size: 0.9rem;
+    }
+
+    /* --- REPORT AREA --- */
+    .report-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 44px 24px;
+      gap: 12px;
+      color: var(--text-muted);
+    }
+
+    .report-empty-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      display: grid;
+      place-items: center;
+      font-size: 1.6rem;
+    }
+
+    .report-empty h3 {
+      color: var(--text);
+      font-size: 1.05rem;
+    }
+
+    .report-empty p {
+      max-width: 440px;
+      font-size: 0.85rem;
+    }
+
+    .demo-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 6px;
+    }
+
+    .loading-state {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 56px 24px;
+      gap: 14px;
+      text-align: center;
+    }
+
+    .loading-state.active {
+      display: flex;
+    }
+
+    .spinner {
+      width: 38px;
+      height: 38px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent-bright);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .report-content {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .report-content.active {
+      display: flex;
+    }
+
+    /* --- REPORT TABS --- */
+    .report-tabs {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+      background: var(--surface-elevated);
+    }
+
+    .tab-btn.active {
+      background: var(--accent-glow);
+      border-color: var(--accent-bright);
+      color: #c8f7ca;
+    }
+
+    .tab-btn.attack-tab.active {
+      background: var(--info-soft);
+      border-color: var(--info);
+      color: #b3e5fc;
+    }
+
+    .tab-panel {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .tab-panel.active {
+      display: flex;
+    }
+
+    /* --- REPORT CARDS --- */
+    .summary-banner {
+      background: linear-gradient(135deg, rgba(46, 125, 50, 0.16), rgba(36, 37, 49, 0.9));
+      border: 1px solid rgba(76, 175, 80, 0.35);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .summary-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-green { background: var(--accent-glow); color: #a5d6a7; border: 1px solid rgba(76,175,80,0.4); }
+    .badge-red { background: var(--danger-soft); color: #ef9a9a; border: 1px solid rgba(239,83,80,0.4); }
+    .badge-amber { background: var(--warning-soft); color: #ffe082; border: 1px solid rgba(255,183,77,0.4); }
+    .badge-blue { background: var(--info-soft); color: #81d4fa; border: 1px solid rgba(79,195,247,0.4); }
+    .badge-pitch { background: var(--pitch-soft); color: var(--pitch); border: 1px solid rgba(199,176,136,0.4); }
+
+    .scorecard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 10px;
+    }
+
+    .metric-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .metric-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .metric-name {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .metric-score {
+      font-size: 0.95rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meter-track {
+      height: 6px;
+      background: var(--surface-elevated);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent-bright);
+    }
+
+    .metric-note {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .two-col-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 720px) {
+      .two-col-cards {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .info-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .info-card.strengths {
+      border-top: 3px solid var(--accent-bright);
+    }
+
+    .info-card.weaknesses {
+      border-top: 3px solid var(--danger);
+    }
+
+    .info-card.attack-card {
+      border-top: 3px solid var(--info);
+    }
+
+    .info-card h3 {
+      font-size: 0.88rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .bullet-list li {
+      font-size: 0.83rem;
+      padding-left: 14px;
+      position: relative;
+      color: #dcdfeb;
+    }
+
+    .bullet-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--accent-bright);
+      font-weight: 700;
+    }
+
+    .weaknesses .bullet-list li::before {
+      color: var(--danger);
+    }
+
+    .attack-card .bullet-list li::before {
+      color: var(--info);
+    }
+
+    .bullet-title {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* --- PHASE TIMELINE & DRILLS --- */
+    .phase-list, .drill-list, .plan-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .phase-item, .drill-item, .plan-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .phase-head, .drill-head, .plan-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .phase-head strong, .drill-head strong, .plan-head strong {
+      font-size: 0.86rem;
+    }
+
+    .phase-item p, .drill-item p, .plan-item p {
+      font-size: 0.82rem;
+      color: #d3d7e6;
+    }
+
+    .cue-box {
+      margin-top: 4px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      background: var(--pitch-soft);
+      border-left: 3px solid var(--pitch);
+      font-size: 0.78rem;
+      color: #f2e5ce;
+    }
+
+    /* --- TACTICAL PITCH / MATCHUP VISUAL --- */
+    .attack-hero {
+      background: linear-gradient(135deg, rgba(79, 195, 247, 0.14), rgba(27, 28, 36, 0.95));
+      border: 1px solid rgba(79, 195, 247, 0.35);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tactical-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    @media (max-width: 720px) {
+      .tactical-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .pitch-map-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .pitch-map-card h4 {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      width: 100%;
+      text-align: center;
+    }
+
+    .pitch-legend {
+      display: flex;
+      gap: 10px;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    .field-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .field-chip {
+      font-size: 0.74rem;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-strong);
+      color: var(--text);
+    }
+
+    /* --- DIALOG MODAL --- */
+    dialog {
+      margin: auto;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      max-width: 480px;
+      width: calc(100% - 32px);
+      padding: 0;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+    }
+
+    dialog::backdrop {
+      background: rgba(8, 9, 13, 0.72);
+      backdrop-filter: blur(4px);
+    }
+
+    .dialog-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .dialog-header h3 {
+      font-size: 0.96rem;
+    }
+
+    .dialog-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .dialog-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .help-text {
+      font-size: 0.77rem;
+      color: var(--text-muted);
+    }
+
+    .help-text a {
+      color: var(--info);
+      text-decoration: none;
+    }
+
+    .help-text a:hover {
+      text-decoration: underline;
+    }
+
+    .error-banner {
+      display: none;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--danger-soft);
+      border: 1px solid rgba(239, 83, 80, 0.45);
+      color: #ffcdd2;
+      font-size: 0.82rem;
+    }
+
+    .error-banner.active {
+      display: block;
+    }
+
+    @media print {
+      header.top-bar, .left-panel, .report-tabs {
+        display: none !important;
+      }
+      main.workspace {
+        display: block;
+        padding: 0;
+      }
+      .tab-panel {
+        display: flex !important;
+        margin-bottom: 18px;
+      }
+      body, .panel, .info-card, .metric-card, .phase-item, .drill-item, .plan-item {
+        background: #fff !important;
+        color: #111 !important;
+        border-color: #ccc !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="top-bar">
+    <div class="brand">
+      <div class="brand-icon" aria-hidden="true">🏏</div>
+      <div>
+        <h1>Cricket Player Analysis</h1>
+        <span>Video Biomechanics, Coaching &amp; Tactical Matchup Lab</span>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button type="button" class="status-pill" id="apiStatusBtn" title="Configure Gemini API key for real video analysis">
+        <span class="status-dot"></span>
+        <span id="apiStatusText">AI Key Not Set</span>
+      </button>
+      <button type="button" id="loadBatterDemoBtn">Demo: Batter</button>
+      <button type="button" id="loadBowlerDemoBtn">Demo: Bowler</button>
+      <button type="button" id="exportReportBtn" disabled>Export Report</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- LEFT PANEL: VIDEO STUDIO & PLAYER SETUP -->
+    <section class="panel left-panel" aria-label="Video Upload and Player Configuration">
+      <div class="panel-header">
+        <h2>🎬 Video Studio &amp; Player Profile</h2>
+        <button type="button" class="btn-sm btn-ghost" id="changeVideoBtn" style="display:none;">Change Video</button>
+      </div>
+
+      <div class="panel-body">
+        <!-- Drop Zone -->
+        <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload cricket batting or bowling video">
+          <div class="drop-zone-icon">📹</div>
+          <h3>Drop a Batting or Bowling Video Here</h3>
+          <p>MP4, MOV, or WebM &bull; Click to browse &bull; Runs locally in your browser</p>
+          <input type="file" id="videoInput" accept="video/*" hidden>
+        </div>
+
+        <!-- Active Video Player + Telestrator -->
+        <div class="video-stage" id="videoStage">
+          <div class="video-container">
+            <video id="videoPlayer" playsinline preload="metadata"></video>
+            <canvas id="telestrator"></canvas>
+          </div>
+
+          <div class="video-controls-bar">
+            <div class="scrubber-row">
+              <input type="range" id="videoScrubber" min="0" max="100" step="0.01" value="0" aria-label="Video timeline">
+              <span class="time-readout" id="timeReadout">0.00s / 0.00s</span>
+            </div>
+
+            <div class="transport-row">
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="playPauseBtn">▶ Play</button>
+                <button type="button" class="btn-sm" id="stepBackBtn" title="Step back 1 frame">-1f</button>
+                <button type="button" class="btn-sm" id="stepFwdBtn" title="Step forward 1 frame">+1f</button>
+                <select id="speedSelect" aria-label="Playback speed" style="width:auto; padding:4px 6px; font-size:0.75rem;">
+                  <option value="0.1">0.1x</option>
+                  <option value="0.25" selected>0.25x</option>
+                  <option value="0.5">0.5x</option>
+                  <option value="1">1.0x</option>
+                </select>
+              </div>
+
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="captureFrameBtn" title="Bookmark current frame for AI analysis">📸 Pin Frame</button>
+                <button type="button" class="btn-sm" id="drawToggleBtn" title="Toggle telestrator drawing overlay">✏️ Draw</button>
+                <button type="button" class="btn-sm" id="clearDrawBtn" title="Clear drawings">Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="filmstrip-section">
+            <div class="filmstrip-header">
+              <span>Keyframes queued for analysis (<strong id="frameCount">0</strong>)</span>
+              <button type="button" class="btn-sm btn-ghost" id="autoExtractBtn">Auto-Sample 8 Frames</button>
+            </div>
+            <div class="filmstrip" id="filmstrip"></div>
+          </div>
+        </div>
+
+        <!-- Player Profile Form -->
+        <div class="form-grid">
+          <div class="field full">
+            <label>Discipline</label>
+            <div class="segmented" role="group" aria-label="Player discipline">
+              <button type="button" id="roleBattingBtn" class="active">🏏 Batting</button>
+              <button type="button" id="roleBowlingBtn">⚡ Bowling</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="handednessSelect">Handedness</label>
+            <select id="handednessSelect">
+              <option value="Right-handed">Right-handed</option>
+              <option value="Left-handed">Left-handed</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="styleSelect" id="styleLabel">Batting Role / Style</label>
+            <select id="styleSelect"></select>
+          </div>
+
+          <div class="field">
+            <label for="cameraAngleSelect">Camera Angle</label>
+            <select id="cameraAngleSelect">
+              <option value="Side-on">Side-on</option>
+              <option value="Front-on (Umpire / Keeper view)">Front-on (Umpire / Keeper view)</option>
+              <option value="Behind the bowler">Behind the bowler</option>
+              <option value="Diagonal / 45-degree">Diagonal / 45-degree</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="formatSelect">Match Context</label>
+            <select id="formatSelect">
+              <option value="All-format / Club">All-format / Club</option>
+              <option value="T20 / White-ball">T20 / White-ball</option>
+              <option value="One-Day (50-over)">One-Day (50-over)</option>
+              <option value="Red-ball / Multi-day">Red-ball / Multi-day</option>
+            </select>
+          </div>
+
+          <div class="field full">
+            <label for="notesInput">Coach / Player Focus Notes (Optional)</label>
+            <textarea id="notesInput" placeholder="e.g., Struggles against full inswingers, head falling over to off-side, or losing pace in final overs..."></textarea>
+          </div>
+        </div>
+
+        <div class="error-banner" id="errorBanner" role="alert"></div>
+
+        <div class="analyze-bar">
+          <button type="button" class="btn-primary" id="analyzeBtn">
+            ✨ Analyze Technique &amp; Avenues of Attack
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: BIOMECHANICAL & TACTICAL REPORT -->
+    <section class="panel right-panel" aria-label="Analysis and Tactical Matchup Report">
+      <div class="panel-header">
+        <h2 id="reportTitle">📊 Coaching &amp; Tactical Matchup Report</h2>
+        <span class="badge badge-pitch" id="reportSourceBadge" style="display:none;">Ready</span>
+      </div>
+
+      <div class="panel-body" style="flex:1;">
+        <!-- Empty State -->
+        <div class="report-empty" id="reportEmpty">
+          <div class="report-empty-icon">🎯</div>
+          <h3>Upload a Clip to Unlock Technique &amp; Matchup Intelligence</h3>
+          <p>
+            Get a biomechanical phase-by-phase breakdown, strengths &amp; weaknesses, actionable coaching drills, and a complete
+            <strong>Avenues of Attack</strong> game plan for how to bowl to this batter or bat against this bowler.
+          </p>
+          <div class="demo-row">
+            <button type="button" class="btn-primary" id="emptyBatterDemoBtn">Preview Batter Report</button>
+            <button type="button" id="emptyBowlerDemoBtn">Preview Bowler Report</button>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div class="loading-state" id="loadingState" aria-live="polite">
+          <div class="spinner"></div>
+          <div>
+            <strong id="loadingTitle">Analyzing cricket mechanics...</strong>
+            <p class="help-text" id="loadingSubtitle">Inspecting alignment, weight transfer, release/contact, and tactical vulnerabilities.</p>
+          </div>
+        </div>
+
+        <!-- Populated Report -->
+        <div class="report-content" id="reportContent">
+          <div class="summary-banner">
+            <div class="summary-meta">
+              <div style="display:flex; gap:6px; flex-wrap:wrap;" id="reportBadges"></div>
+              <span class="help-text" id="reportTimestamp"></span>
+            </div>
+            <p id="reportOverview" style="font-size:0.86rem; color:#e7eaf4;"></p>
+          </div>
+
+          <div class="report-tabs" role="tablist">
+            <button type="button" class="tab-btn active" role="tab" data-tab="overview">Technique &amp; Strengths/Weaknesses</button>
+            <button type="button" class="tab-btn" role="tab" data-tab="improvements">Improvements &amp; Drills</button>
+            <button type="button" class="tab-btn attack-tab" role="tab" data-tab="attack" id="attackTabBtn">⚔️ Avenues of Attack</button>
+          </div>
+
+          <!-- TAB 1: OVERVIEW + STRENGTHS & WEAKNESSES + PHASES -->
+          <div class="tab-panel active" id="tab-overview">
+            <div class="scorecard-grid" id="scorecardGrid"></div>
+
+            <div class="two-col-cards">
+              <div class="info-card strengths">
+                <h3>✅ Strengths</h3>
+                <ul class="bullet-list" id="strengthsList"></ul>
+              </div>
+              <div class="info-card weaknesses">
+                <h3>⚠️ Weaknesses &amp; Technical Leaks</h3>
+                <ul class="bullet-list" id="weaknessesList"></ul>
+              </div>
+            </div>
+
+            <div class="info-card">
+              <h3>🎞️ Phase-by-Phase Breakdown</h3>
+              <div class="phase-list" id="phaseList"></div>
+            </div>
+          </div>
+
+          <!-- TAB 2: IMPROVEMENTS & DRILLS -->
+          <div class="tab-panel" id="tab-improvements">
+            <div class="info-card">
+              <h3>🛠️ Priority Technical Adjustments &amp; Practice Drills</h3>
+              <div class="drill-list" id="drillList"></div>
+            </div>
+          </div>
+
+          <!-- TAB 3: AVENUES OF ATTACK -->
+          <div class="tab-panel" id="tab-attack">
+            <div class="attack-hero">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                <h3 id="attackHeadline" style="font-size:0.96rem;">⚔️ How to Attack This Player</h3>
+                <span class="badge badge-blue" id="attackModeBadge">Matchup Playbook</span>
+              </div>
+              <p id="attackSummary" style="font-size:0.84rem; color:#d8ecf8;"></p>
+            </div>
+
+            <div class="tactical-grid">
+              <div class="pitch-map-card">
+                <h4 id="pitchMapTitle">Target Pitch Map</h4>
+                <svg id="pitchMapSvg" viewBox="0 0 220 310" width="210" height="296" aria-label="Cricket pitch tactical target map"></svg>
+                <div class="pitch-legend">
+                  <span><i class="legend-dot" style="background:#ef5350;"></i>Primary Attack</span>
+                  <span><i class="legend-dot" style="background:#ffb74d;"></i>Secondary / Trap</span>
+                  <span><i class="legend-dot" style="background:#4caf50;"></i>Avoid / Danger</span>
+                </div>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                <div class="info-card attack-card">
+                  <h3 id="plansHeading">🎯 Setup &amp; Execution Plans</h3>
+                  <div class="plan-list" id="attackPlansList"></div>
+                </div>
+
+                <div class="info-card">
+                  <h3 id="tacticalExtrasHeading">📋 Field Placements &amp; Key Matchup Cues</h3>
+                  <div class="field-chips" id="fieldChips"></div>
+                  <ul class="bullet-list" id="tacticalCuesList" style="margin-top:6px;"></ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- GEMINI API SETTINGS DIALOG -->
+  <dialog id="apiDialog" aria-labelledby="apiDialogTitle">
+    <div class="dialog-header">
+      <h3 id="apiDialogTitle">🤖 AI Video Analysis Settings (Gemini)</h3>
+      <button type="button" class="btn-sm btn-ghost" id="closeApiDialogBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <p class="help-text">
+        To analyze your uploaded cricket videos with multimodal AI, enter a Google Gemini API key. Your key is stored
+        <strong>only in your browser's localStorage</strong> and sent directly to Google's Gemini API.
+        Get a key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
+      </p>
+
+      <div class="field">
+        <label for="apiKeyInput">Gemini API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="AIza..." autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="modelSelect">Gemini Model</label>
+        <select id="modelSelect">
+          <option value="gemini-3.8-flash">gemini-3.8-flash (Fast, Multimodal — Recommended)</option>
+          <option value="gemini-3.8-pro">gemini-3.8-pro (Deeper Biomechanical Reasoning)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="analysisModeSelect">Video Processing Mode</label>
+        <select id="analysisModeSelect">
+          <option value="auto">Auto (Full video if &le; 15 MB, else Keyframes)</option>
+          <option value="keyframes">Keyframes Sequence (Fastest, works for any file size)</option>
+          <option value="video">Full Video Inline (Best motion fidelity, max 18 MB)</option>
+        </select>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button type="button" class="btn-ghost" id="clearApiKeyBtn">Remove Key</button>
+      <button type="button" class="btn-primary" id="saveApiKeyBtn">Save Settings</button>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      // Auto-migrate deprecated 2.5 model IDs saved in localStorage
+      const savedModelRaw = localStorage.getItem('cpa_gemini_model') || 'gemini-3.8-flash';
+      const migratedModel = savedModelRaw === 'gemini-2.5-pro'
+        ? 'gemini-3.8-pro'
+        : savedModelRaw.startsWith('gemini-2.5-')
+          ? 'gemini-3.8-flash'
+          : savedModelRaw;
+      if (migratedModel !== savedModelRaw) {
+        localStorage.setItem('cpa_gemini_model', migratedModel);
+      }
+
+      // --- STATE ---
+      const state = {
+        role: 'batting', // 'batting' | 'bowling'
+        videoFile: null,
+        videoUrl: null,
+        frames: [], // { time: number, dataUrl: string, label: string }
+        drawingEnabled: false,
+        isDrawing: false,
+        drawStart: null,
+        drawings: [], // { x1, y1, x2, y2 }
+        currentReport: null,
+        apiKey: localStorage.getItem('cpa_gemini_api_key') || '',
+        model: migratedModel,
+        analysisMode: localStorage.getItem('cpa_analysis_mode') || 'auto'
+      };
+
+      const STYLE_OPTIONS = {
+        batting: [
+          'Top-Order Anchor',
+          'Aggressive Opener',
+          'Middle-Order Striker',
+          'Lower-Order Finisher',
+          'All-Format Batter'
+        ],
+        bowling: [
+          'Fast / Express Pace',
+          'Fast-Medium Seam / Swing',
+          'Medium Pace / Wobble Seam',
+          'Off-Spin (Finger Spin)',
+          'Leg-Spin / Wrist Spin',
+          'Left-Arm Orthodox Spin'
+        ]
+      };
+
+      // --- DOM ELEMENTS ---
+      const dropZone = document.getElementById('dropZone');
+      const videoInput = document.getElementById('videoInput');
+      const videoStage = document.getElementById('videoStage');
+      const videoPlayer = document.getElementById('videoPlayer');
+      const changeVideoBtn = document.getElementById('changeVideoBtn');
+      const videoScrubber = document.getElementById('videoScrubber');
+      const timeReadout = document.getElementById('timeReadout');
+      const playPauseBtn = document.getElementById('playPauseBtn');
+      const stepBackBtn = document.getElementById('stepBackBtn');
+      const stepFwdBtn = document.getElementById('stepFwdBtn');
+      const speedSelect = document.getElementById('speedSelect');
+      const captureFrameBtn = document.getElementById('captureFrameBtn');
+      const autoExtractBtn = document.getElementById('autoExtractBtn');
+      const filmstrip = document.getElementById('filmstrip');
+      const frameCount = document.getElementById('frameCount');
+
+      const telestrator = document.getElementById('telestrator');
+      const tCtx = telestrator.getContext('2d');
+      const drawToggleBtn = document.getElementById('drawToggleBtn');
+      const clearDrawBtn = document.getElementById('clearDrawBtn');
+
+      const roleBattingBtn = document.getElementById('roleBattingBtn');
+      const roleBowlingBtn = document.getElementById('roleBowlingBtn');
+      const handednessSelect = document.getElementById('handednessSelect');
+      const styleLabel = document.getElementById('styleLabel');
+      const styleSelect = document.getElementById('styleSelect');
+      const cameraAngleSelect = document.getElementById('cameraAngleSelect');
+      const formatSelect = document.getElementById('formatSelect');
+      const notesInput = document.getElementById('notesInput');
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const errorBanner = document.getElementById('errorBanner');
+
+      const reportEmpty = document.getElementById('reportEmpty');
+      const loadingState = document.getElementById('loadingState');
+      const loadingTitle = document.getElementById('loadingTitle');
+      const loadingSubtitle = document.getElementById('loadingSubtitle');
+      const reportContent = document.getElementById('reportContent');
+      const reportSourceBadge = document.getElementById('reportSourceBadge');
+      const exportReportBtn = document.getElementById('exportReportBtn');
+
+      const apiDialog = document.getElementById('apiDialog');
+      const apiStatusBtn = document.getElementById('apiStatusBtn');
+      const apiStatusText = document.getElementById('apiStatusText');
+      const apiKeyInput = document.getElementById('apiKeyInput');
+      const modelSelect = document.getElementById('modelSelect');
+      const analysisModeSelect = document.getElementById('analysisModeSelect');
+
+      // --- INITIALIZE ---
+      function init() {
+        populateStyleOptions();
+        updateApiStatusUI();
+        bindEvents();
+      }
+
+      function populateStyleOptions() {
+        styleSelect.textContent = '';
+        styleLabel.textContent = state.role === 'batting' ? 'Batting Role / Style' : 'Bowling Style';
+        STYLE_OPTIONS[state.role].forEach(opt => {
+          const el = document.createElement('option');
+          el.value = opt;
+          el.textContent = opt;
+          styleSelect.appendChild(el);
+        });
+      }
+
+      function updateApiStatusUI() {
+        if (state.apiKey) {
+          apiStatusBtn.classList.add('connected');
+          apiStatusText.textContent = `Gemini Connected (${state.model.replace('gemini-', '')})`;
+        } else {
+          apiStatusBtn.classList.remove('connected');
+          apiStatusText.textContent = 'Configure AI Key';
+        }
+      }
+
+      function showError(msg) {
+        errorBanner.textContent = msg;
+        errorBanner.classList.add('active');
+      }
+
+      function clearError() {
+        errorBanner.textContent = '';
+        errorBanner.classList.remove('active');
+      }
+
+      // --- EVENTS ---
+      function bindEvents() {
+        // Role toggle
+        roleBattingBtn.addEventListener('click', () => setRole('batting'));
+        roleBowlingBtn.addEventListener('click', () => setRole('bowling'));
+
+        // Drop zone & file input
+        dropZone.addEventListener('click', () => videoInput.click());
+        dropZone.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            videoInput.click();
+          }
+        });
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('drag-over');
+          const file = e.dataTransfer.files[0];
+          if (file && file.type.startsWith('video/')) handleVideoFile(file);
+          else showError('Please drop a valid video file (MP4, MOV, or WebM).');
+        });
+        videoInput.addEventListener('change', () => {
+          if (videoInput.files[0]) handleVideoFile(videoInput.files[0]);
+        });
+        changeVideoBtn.addEventListener('click', () => videoInput.click());
+
+        // Video player controls
+        videoPlayer.addEventListener('loadedmetadata', () => {
+          videoPlayer.playbackRate = parseFloat(speedSelect.value);
+          videoScrubber.max = videoPlayer.duration || 100;
+          updateTimeReadout();
+          resizeTelestrator();
+          autoExtractKeyframes(8);
+        });
+        videoPlayer.addEventListener('timeupdate', () => {
+          videoScrubber.value = videoPlayer.currentTime;
+          updateTimeReadout();
+        });
+        videoPlayer.addEventListener('play', () => playPauseBtn.textContent = '⏸ Pause');
+        videoPlayer.addEventListener('pause', () => playPauseBtn.textContent = '▶ Play');
+
+        videoScrubber.addEventListener('input', () => {
+          videoPlayer.currentTime = parseFloat(videoScrubber.value);
+          updateTimeReadout();
+        });
+        playPauseBtn.addEventListener('click', () => {
+          if (videoPlayer.paused) videoPlayer.play();
+          else videoPlayer.pause();
+        });
+        stepBackBtn.addEventListener('click', () => {
+          videoPlayer.pause();
+          videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 1 / 30);
+        });
+        stepFwdBtn.addEventListener('click', () => {
+          videoPlayer.pause();
+          videoPlayer.currentTime = Math.min(videoPlayer.duration || 0, videoPlayer.currentTime + 1 / 30);
+        });
+        speedSelect.addEventListener('change', () => {
+          videoPlayer.playbackRate = parseFloat(speedSelect.value);
+        });
+        captureFrameBtn.addEventListener('click', captureCurrentFrame);
+        autoExtractBtn.addEventListener('click', () => autoExtractKeyframes(8));
+
+        // Telestrator drawing
+        window.addEventListener('resize', resizeTelestrator);
+        drawToggleBtn.addEventListener('click', () => {
+          state.drawingEnabled = !state.drawingEnabled;
+          telestrator.classList.toggle('drawing-enabled', state.drawingEnabled);
+          drawToggleBtn.classList.toggle('btn-active', state.drawingEnabled);
+        });
+        clearDrawBtn.addEventListener('click', () => {
+          state.drawings = [];
+          redrawTelestrator();
+        });
+        telestrator.addEventListener('pointerdown', (e) => {
+          if (!state.drawingEnabled) return;
+          state.isDrawing = true;
+          const pt = getCanvasPoint(e);
+          state.drawStart = pt;
+          telestrator.setPointerCapture(e.pointerId);
+        });
+        telestrator.addEventListener('pointermove', (e) => {
+          if (!state.isDrawing || !state.drawStart) return;
+          const pt = getCanvasPoint(e);
+          redrawTelestrator(state.drawStart, pt);
+        });
+        telestrator.addEventListener('pointerup', (e) => {
+          if (!state.isDrawing || !state.drawStart) return;
+          const pt = getCanvasPoint(e);
+          state.drawings.push({ x1: state.drawStart.x, y1: state.drawStart.y, x2: pt.x, y2: pt.y });
+          state.isDrawing = false;
+          state.drawStart = null;
+          redrawTelestrator();
+        });
+
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+          });
+        });
+
+        // Analyze & Demos
+        analyzeBtn.addEventListener('click', runAnalysis);
+        document.getElementById('loadBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
+        document.getElementById('loadBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
+        document.getElementById('emptyBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
+        document.getElementById('emptyBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
+        exportReportBtn.addEventListener('click', exportMarkdownReport);
+
+        // API Settings Dialog
+        apiStatusBtn.addEventListener('click', openApiDialog);
+        document.getElementById('closeApiDialogBtn').addEventListener('click', () => apiDialog.close());
+        apiDialog.addEventListener('click', (e) => {
+          if (e.target === apiDialog) apiDialog.close();
+        });
+        document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
+          state.apiKey = apiKeyInput.value.trim();
+          state.model = modelSelect.value;
+          state.analysisMode = analysisModeSelect.value;
+          if (state.apiKey) localStorage.setItem('cpa_gemini_api_key', state.apiKey);
+          else localStorage.removeItem('cpa_gemini_api_key');
+          localStorage.setItem('cpa_gemini_model', state.model);
+          localStorage.setItem('cpa_analysis_mode', state.analysisMode);
+          updateApiStatusUI();
+          apiDialog.close();
+        });
+        document.getElementById('clearApiKeyBtn').addEventListener('click', () => {
+          state.apiKey = '';
+          apiKeyInput.value = '';
+          localStorage.removeItem('cpa_gemini_api_key');
+          updateApiStatusUI();
+        });
+      }
+
+      function setRole(role) {
+        state.role = role;
+        roleBattingBtn.classList.toggle('active', role === 'batting');
+        roleBowlingBtn.classList.toggle('active', role === 'bowling');
+        populateStyleOptions();
+      }
+
+      function openApiDialog() {
+        apiKeyInput.value = state.apiKey;
+        modelSelect.value = state.model;
+        analysisModeSelect.value = state.analysisMode;
+        apiDialog.showModal();
+      }
+
+      // --- VIDEO HANDLING & KEYFRAMES ---
+      function handleVideoFile(file) {
+        clearError();
+        if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
+        state.videoFile = file;
+        state.videoUrl = URL.createObjectURL(file);
+        state.frames = [];
+        state.drawings = [];
+        renderFilmstrip();
+
+        videoPlayer.src = state.videoUrl;
+        videoInput.value = '';
+        analyzeBtn.disabled = false;
+        dropZone.style.display = 'none';
+        videoStage.classList.add('active');
+        changeVideoBtn.style.display = 'inline-flex';
+      }
+
+      function updateTimeReadout() {
+        const cur = videoPlayer.currentTime || 0;
+        const dur = videoPlayer.duration || 0;
+        timeReadout.textContent = `${cur.toFixed(2)}s / ${dur.toFixed(2)}s`;
+      }
+
+      function resizeTelestrator() {
+        const rect = telestrator.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        telestrator.width = rect.width;
+        telestrator.height = rect.height;
+        redrawTelestrator();
+      }
+
+      function getCanvasPoint(e) {
+        const rect = telestrator.getBoundingClientRect();
+        return {
+          x: (e.clientX - rect.left) / rect.width,
+          y: (e.clientY - rect.top) / rect.height
+        };
+      }
+
+      function redrawTelestrator(previewStart = null, previewEnd = null) {
+        const w = telestrator.width;
+        const h = telestrator.height;
+        tCtx.clearRect(0, 0, w, h);
+        tCtx.lineWidth = 3;
+        tCtx.lineCap = 'round';
+
+        const drawLine = (x1, y1, x2, y2, color) => {
+          tCtx.strokeStyle = color;
+          tCtx.beginPath();
+          tCtx.moveTo(x1 * w, y1 * h);
+          tCtx.lineTo(x2 * w, y2 * h);
+          tCtx.stroke();
+        };
+
+        state.drawings.forEach(d => drawLine(d.x1, d.y1, d.x2, d.y2, '#4caf50'));
+        if (previewStart && previewEnd) {
+          drawLine(previewStart.x, previewStart.y, previewEnd.x, previewEnd.y, '#ffb74d');
+        }
+      }
+
+      function grabVideoFrameDataUrl() {
+        const canvas = document.createElement('canvas');
+        const maxW = 720;
+        const vw = videoPlayer.videoWidth || 640;
+        const vh = videoPlayer.videoHeight || 360;
+        const scale = Math.min(1, maxW / vw);
+        canvas.width = Math.round(vw * scale);
+        canvas.height = Math.round(vh * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.82);
+      }
+
+      function captureCurrentFrame() {
+        if (!videoPlayer.duration) return;
+        const time = videoPlayer.currentTime;
+        const dataUrl = grabVideoFrameDataUrl();
+        state.frames.push({ time, dataUrl, label: `Pinned` });
+        state.frames.sort((a, b) => a.time - b.time);
+        renderFilmstrip();
+      }
+
+      async function autoExtractKeyframes(count = 8) {
+        const dur = videoPlayer.duration;
+        if (!dur || !isFinite(dur)) return;
+
+        videoPlayer.pause();
+        const prevTime = videoPlayer.currentTime;
+        const extracted = [];
+        const step = dur / (count + 1);
+
+        for (let i = 1; i <= count; i++) {
+          const t = Math.min(dur - 0.05, Math.max(0, step * i));
+          await seekVideo(t);
+          extracted.push({
+            time: t,
+            dataUrl: grabVideoFrameDataUrl(),
+            label: `F${i}`
+          });
+        }
+
+        await seekVideo(prevTime);
+        state.frames = extracted;
+        renderFilmstrip();
+      }
+
+      function seekVideo(time) {
+        return new Promise((resolve) => {
+          const onSeeked = () => {
+            videoPlayer.removeEventListener('seeked', onSeeked);
+            resolve();
+          };
+          videoPlayer.addEventListener('seeked', onSeeked, { once: true });
+          videoPlayer.currentTime = time;
+        });
+      }
+
+      function renderFilmstrip() {
+        filmstrip.textContent = '';
+        frameCount.textContent = String(state.frames.length);
+        state.frames.forEach((f, idx) => {
+          const card = document.createElement('div');
+          card.className = 'frame-thumb';
+          card.title = `Jump to ${f.time.toFixed(2)}s`;
+
+          const img = document.createElement('img');
+          img.src = f.dataUrl;
+          img.alt = `Frame at ${f.time.toFixed(2)}s`;
+
+          const lbl = document.createElement('div');
+          lbl.className = 'frame-label';
+          const s1 = document.createElement('span');
+          s1.textContent = f.label;
+          const s2 = document.createElement('span');
+          s2.textContent = `${f.time.toFixed(2)}s`;
+          lbl.append(s1, s2);
+
+          const rem = document.createElement('button');
+          rem.type = 'button';
+          rem.className = 'frame-remove';
+          rem.textContent = '×';
+          rem.title = 'Remove frame';
+          rem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.frames.splice(idx, 1);
+            renderFilmstrip();
+          });
+
+          card.addEventListener('click', () => {
+            videoPlayer.pause();
+            videoPlayer.currentTime = f.time;
+          });
+
+          card.append(img, lbl, rem);
+          filmstrip.appendChild(card);
+        });
+      }
+
+      // --- GEMINI AI ANALYSIS ---
+      async function runAnalysis() {
+        clearError();
+
+        if (!state.videoFile) {
+          showError('Please upload a batting or bowling video first (or click "Demo: Batter" / "Demo: Bowler" in the top bar to preview).');
+          return;
+        }
+
+        if (!state.apiKey) {
+          openApiDialog();
+          showError('Add your Gemini API key in Settings to analyze your uploaded video with multimodal AI.');
+          return;
+        }
+
+        setLoading(true, 'Preparing video frames...', 'Extracting biomechanical sequence for Gemini analysis.');
+
+        try {
+          if (state.frames.length === 0) {
+            await autoExtractKeyframes(8);
+          }
+
+          const fileSizeMb = state.videoFile.size / (1024 * 1024);
+          const useFullVideo =
+            (state.analysisMode === 'video' && fileSizeMb <= 18) ||
+            (state.analysisMode === 'auto' && fileSizeMb <= 15);
+
+          const parts = [{ text: buildPrompt() }];
+
+          if (useFullVideo) {
+            setLoading(true, 'Encoding video clip...', `Sending full video (${fileSizeMb.toFixed(1)} MB) to ${state.model}.`);
+            const base64Video = await fileToBase64(state.videoFile);
+            parts.push({
+              inlineData: {
+                mimeType: state.videoFile.type || 'video/mp4',
+                data: base64Video
+              }
+            });
+          } else {
+            setLoading(true, 'Analyzing keyframe sequence...', `Sending ${state.frames.length} timestamped frames to ${state.model}.`);
+            state.frames.forEach((f, i) => {
+              parts.push({ text: `Frame ${i + 1} (${f.label}) at ${f.time.toFixed(2)}s:` });
+              parts.push({
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: f.dataUrl.split(',')[1]
+                }
+              });
+            });
+          }
+
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts }],
+              generationConfig: {
+                temperature: 0.35,
+                responseMimeType: 'application/json'
+              }
+            })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error?.message || `Gemini API error (${res.status})`);
+          }
+
+          const data = await res.json();
+          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) throw new Error('Gemini returned an empty response. Try again or switch to Keyframes mode.');
+
+          const parsed = JSON.parse(rawText);
+          parsed._meta = {
+            role: state.role,
+            handedness: handednessSelect.value,
+            style: styleSelect.value,
+            format: formatSelect.value,
+            source: `AI Analysis (${state.model})`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+
+          renderReport(parsed);
+        } catch (err) {
+          console.error(err);
+          showError(`Analysis failed: ${err.message}`);
+          setLoading(false);
+        } finally {
+          analyzeBtn.disabled = false;
+        }
+      }
+
+      function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function buildPrompt() {
+        const isBatting = state.role === 'batting';
+        const attackPerspective = isBatting
+          ? 'HOW TO BOWL TO THIS BATTER (dismissal plans, lines/lengths to target, field placements, variations, and zones to avoid bowling)'
+          : 'HOW TO BAT AGAINST THIS BOWLER (scoring options, guard/trigger adjustments, deliveries to punish vs. respect, and ways to put this bowler under pressure)';
+
+        return `You are an elite international cricket biomechanics coach and tactical analyst.
+Analyze the uploaded ${state.role.toUpperCase()} video/frames carefully.
+
+Player Context:
+- Discipline: ${state.role}
+- Handedness: ${handednessSelect.value}
+- Style: ${styleSelect.value}
+- Camera Angle: ${cameraAngleSelect.value}
+- Match Format: ${formatSelect.value}
+- Coach/Player Notes: ${notesInput.value.trim() || 'None provided'}
+
+Be honest, specific, and grounded strictly in what is visible in the video/frames (mention camera limitations if a specific body part is partially occluded).
+Return ONLY valid JSON matching this exact schema:
+{
+  "overview": "2-3 sentence executive summary of the player's action/technique.",
+  "scorecard": [
+    { "metric": "Short pillar name (5 items total)", "score": 7.5, "note": "Brief 1-line observation" }
+  ],
+  "strengths": [
+    { "title": "Strength title", "detail": "Why this works well biomechanically and in matches" }
+  ],
+  "weaknesses": [
+    { "title": "Weakness/leak title", "detail": "What goes wrong and the match/injury consequence" }
+  ],
+  "phases": [
+    { "phase": "Phase name (e.g. Stance & Trigger / Run-up & Gather)", "timestamp": "e.g. 0.4s - 0.9s", "observation": "Detailed biomechanical note" }
+  ],
+  "improvements": [
+    { "title": "Technical adjustment", "why": "What it fixes", "drill": "Concrete net drill with reps/setup", "cue": "Short 3-6 word coaching cue" }
+  ],
+  "avenuesOfAttack": {
+    "headline": "${isBatting ? 'How to Bowl to This Batter' : 'How to Bat Against This Bowler'}",
+    "summary": "2-3 sentence tactical game plan explaining ${attackPerspective}.",
+    "pitchZones": [
+      {
+        "label": "Short zone name (e.g. Top of Off / Full on Pads / Wide Yorker)",
+        "type": "primary | secondary | avoid",
+        "x": 0.55,
+        "y": 0.35,
+        "reason": "1-sentence tactical reason"
+      }
+    ],
+    "plans": [
+      { "title": "Named tactical sequence or matchup plan", "execution": "Exact ball-by-ball setup or batting response", "tag": "Primary Plan | Setup Trap | Variation | Pressure Release" }
+    ],
+    "fieldOrGuard": ["4-6 concise tags: key fielders if bowling to a batter, OR guard/crease/scoring-area cues if batting against a bowler"],
+    "tacticalCues": [
+      { "title": "Key matchup cue", "detail": "Actionable tactical tip" }
+    ]
+  }
+}
+
+For pitchZones coordinates:
+- x is across the pitch from 0.12 (wide leg-side for RHB / wide off-side for LHB) to 0.88 (wide off-side for RHB / wide leg-side for LHB), with 0.50 being middle stump.
+- y is length from batter's stumps: 0.14 (Yorker), 0.28 (Full), 0.48 (Good length), 0.68 (Back of a length), 0.84 (Short/Bouncer).
+Include 3 to 5 pitchZones covering at least one "primary", one "secondary", and one "avoid" zone.`;
+      }
+
+      // --- RENDER REPORT ---
+      function setLoading(isLoading, title = '', subtitle = '') {
+        analyzeBtn.disabled = isLoading;
+        if (isLoading) {
+          reportEmpty.style.display = 'none';
+          reportContent.classList.remove('active');
+          loadingState.classList.add('active');
+          loadingTitle.textContent = title;
+          loadingSubtitle.textContent = subtitle;
+        } else {
+          loadingState.classList.remove('active');
+          if (!state.currentReport) reportEmpty.style.display = 'flex';
+          else reportContent.classList.add('active');
+        }
+      }
+
+      function renderReport(report) {
+        state.currentReport = report;
+        analyzeBtn.disabled = false;
+        loadingState.classList.remove('active');
+        reportEmpty.style.display = 'none';
+        reportContent.classList.add('active');
+        exportReportBtn.disabled = false;
+
+        const meta = report._meta || {};
+        const isBatting = (meta.role || state.role) === 'batting';
+
+        reportSourceBadge.style.display = 'inline-flex';
+        reportSourceBadge.textContent = meta.source || 'Analysis Ready';
+
+        // Badges
+        const badgesEl = document.getElementById('reportBadges');
+        badgesEl.textContent = '';
+        [
+          { text: isBatting ? '🏏 Batting' : '⚡ Bowling', cls: 'badge-green' },
+          { text: meta.handedness || handednessSelect.value, cls: 'badge-pitch' },
+          { text: meta.style || styleSelect.value, cls: 'badge-blue' },
+          { text: meta.format || formatSelect.value, cls: 'badge-amber' }
+        ].forEach(b => {
+          const span = document.createElement('span');
+          span.className = `badge ${b.cls}`;
+          span.textContent = b.text;
+          badgesEl.appendChild(span);
+        });
+
+        document.getElementById('reportTimestamp').textContent = meta.timestamp ? `Generated ${meta.timestamp}` : '';
+        document.getElementById('reportOverview').textContent = report.overview || '';
+
+        // Attack tab label
+        document.getElementById('attackTabBtn').textContent = isBatting
+          ? '⚔️ How to Bowl to Them'
+          : '⚔️ How to Bat Against Them';
+
+        // Scorecard
+        const scoreGrid = document.getElementById('scorecardGrid');
+        scoreGrid.textContent = '';
+        (report.scorecard || []).forEach(item => {
+          const card = document.createElement('div');
+          card.className = 'metric-card';
+          const scoreVal = Math.max(0, Math.min(10, Number(item.score) || 0));
+          const color = scoreVal >= 7.5 ? '#4caf50' : scoreVal >= 5.5 ? '#ffb74d' : '#ef5350';
+
+          const top = document.createElement('div');
+          top.className = 'metric-top';
+          const name = document.createElement('span');
+          name.className = 'metric-name';
+          name.textContent = item.metric;
+          const num = document.createElement('span');
+          num.className = 'metric-score';
+          num.style.color = color;
+          num.textContent = `${scoreVal.toFixed(1)}/10`;
+          top.append(name, num);
+
+          const track = document.createElement('div');
+          track.className = 'meter-track';
+          const fill = document.createElement('div');
+          fill.className = 'meter-fill';
+          fill.style.width = `${scoreVal * 10}%`;
+          fill.style.background = color;
+          track.appendChild(fill);
+
+          const note = document.createElement('div');
+          note.className = 'metric-note';
+          note.textContent = item.note || '';
+
+          card.append(top, track, note);
+          scoreGrid.appendChild(card);
+        });
+
+        // Strengths & Weaknesses
+        renderBulletList('strengthsList', report.strengths || []);
+        renderBulletList('weaknessesList', report.weaknesses || []);
+
+        // Phases
+        const phaseList = document.getElementById('phaseList');
+        phaseList.textContent = '';
+        (report.phases || []).forEach(p => {
+          const div = document.createElement('div');
+          div.className = 'phase-item';
+          const head = document.createElement('div');
+          head.className = 'phase-head';
+          const title = document.createElement('strong');
+          title.textContent = p.phase;
+          const ts = document.createElement('span');
+          ts.className = 'badge badge-pitch';
+          ts.textContent = p.timestamp || 'Phase';
+          head.append(title, ts);
+
+          const desc = document.createElement('p');
+          desc.textContent = p.observation || '';
+          div.append(head, desc);
+          phaseList.appendChild(div);
+        });
+
+        // Improvements & Drills
+        const drillList = document.getElementById('drillList');
+        drillList.textContent = '';
+        (report.improvements || []).forEach((imp, idx) => {
+          const div = document.createElement('div');
+          div.className = 'drill-item';
+
+          const head = document.createElement('div');
+          head.className = 'drill-head';
+          const title = document.createElement('strong');
+          title.textContent = `${idx + 1}. ${imp.title}`;
+          head.appendChild(title);
+
+          const why = document.createElement('p');
+          const whyLabel = document.createElement('strong');
+          whyLabel.textContent = 'Why it matters: ';
+          why.append(whyLabel, document.createTextNode(imp.why || ''));
+
+          const drill = document.createElement('p');
+          const drillLabel = document.createElement('strong');
+          drillLabel.textContent = 'Drill: ';
+          drill.append(drillLabel, document.createTextNode(imp.drill || ''));
+
+          const cue = document.createElement('div');
+          cue.className = 'cue-box';
+          cue.textContent = `Coaching Cue: "${imp.cue || ''}"`;
+
+          div.append(head, why, drill, cue);
+          drillList.appendChild(div);
+        });
+
+        // Avenues of Attack
+        const attack = report.avenuesOfAttack || {};
+        document.getElementById('attackHeadline').textContent = `⚔️ ${attack.headline || (isBatting ? 'How to Bowl to This Batter' : 'How to Bat Against This Bowler')}`;
+        document.getElementById('attackModeBadge').textContent = isBatting ? 'Bowling Plan vs. Batter' : 'Batting Plan vs. Bowler';
+        document.getElementById('attackSummary').textContent = attack.summary || '';
+        document.getElementById('pitchMapTitle').textContent = isBatting ? 'Target Bowling Zones' : 'Target Lengths to Punish / Respect';
+        document.getElementById('plansHeading').textContent = isBatting ? '🎯 Dismissal & Pressure Sequences' : '🏏 Scoring & Counter-Attack Plans';
+        document.getElementById('tacticalExtrasHeading').textContent = isBatting ? '📍 Suggested Fielders & Matchup Cues' : '📍 Guard, Crease & Matchup Cues';
+
+        renderPitchMap(attack.pitchZones || [], meta.handedness || handednessSelect.value);
+
+        const plansList = document.getElementById('attackPlansList');
+        plansList.textContent = '';
+        (attack.plans || []).forEach(plan => {
+          const div = document.createElement('div');
+          div.className = 'plan-item';
+          const head = document.createElement('div');
+          head.className = 'plan-head';
+          const title = document.createElement('strong');
+          title.textContent = plan.title;
+          const tag = document.createElement('span');
+          tag.className = 'badge badge-blue';
+          tag.textContent = plan.tag || 'Plan';
+          head.append(title, tag);
+
+          const body = document.createElement('p');
+          body.textContent = plan.execution || '';
+          div.append(head, body);
+          plansList.appendChild(div);
+        });
+
+        const chipsEl = document.getElementById('fieldChips');
+        chipsEl.textContent = '';
+        (attack.fieldOrGuard || []).forEach(c => {
+          const chip = document.createElement('span');
+          chip.className = 'field-chip';
+          chip.textContent = c;
+          chipsEl.appendChild(chip);
+        });
+
+        renderBulletList('tacticalCuesList', attack.tacticalCues || []);
+      }
+
+      function renderBulletList(elementId, items) {
+        const ul = document.getElementById(elementId);
+        ul.textContent = '';
+        items.forEach(item => {
+          const li = document.createElement('li');
+          const strong = document.createElement('span');
+          strong.className = 'bullet-title';
+          strong.textContent = `${item.title}: `;
+          li.append(strong, document.createTextNode(item.detail || ''));
+          ul.appendChild(li);
+        });
+      }
+
+      // --- SVG TACTICAL PITCH MAP ---
+      function renderPitchMap(zones, handedness) {
+        const svg = document.getElementById('pitchMapSvg');
+        const ns = 'http://www.w3.org/2000/svg';
+        svg.textContent = '';
+
+        const el = (tag, attrs = {}, text = null) => {
+          const node = document.createElementNS(ns, tag);
+          Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
+          if (text !== null) node.textContent = text;
+          return node;
+        };
+
+        // Turf background
+        svg.appendChild(el('rect', { x: 0, y: 0, width: 220, height: 310, rx: 10, fill: '#1f4b27' }));
+        // Pitch strip
+        svg.appendChild(el('rect', { x: 42, y: 18, width: 136, height: 274, rx: 4, fill: '#b89f78', stroke: '#d8c3a0', 'stroke-width': 1 }));
+
+        // Length horizontal bands
+        const lengths = [
+          { y: 58, label: 'YORKER' },
+          { y: 105, label: 'FULL' },
+          { y: 165, label: 'GOOD' },
+          { y: 228, label: 'BACK OF LEN' },
+          { y: 274, label: 'SHORT' }
+        ];
+        lengths.forEach(l => {
+          svg.appendChild(el('line', { x1: 42, y1: l.y, x2: 178, y2: l.y, stroke: 'rgba(18,19,24,0.22)', 'stroke-dasharray': '3 3' }));
+          svg.appendChild(el('text', { x: 46, y: l.y - 4, fill: 'rgba(18,19,24,0.6)', 'font-size': 7.5, 'font-weight': 700 }, l.label));
+        });
+
+        // Popping crease & stumps at batter end (top)
+        svg.appendChild(el('line', { x1: 30, y1: 36, x2: 190, y2: 36, stroke: '#ffffff', 'stroke-width': 2 }));
+        [102, 110, 118].forEach(sx => {
+          svg.appendChild(el('circle', { cx: sx, cy: 24, r: 2.5, fill: '#222', stroke: '#fff', 'stroke-width': 1 }));
+        });
+
+        // Off / Leg labels based on handedness
+        const isRHB = handedness !== 'Left-handed';
+        svg.appendChild(el('text', { x: 20, y: 28, fill: '#cde7d0', 'font-size': 8.5, 'font-weight': 700, 'text-anchor': 'middle' }, isRHB ? 'LEG' : 'OFF'));
+        svg.appendChild(el('text', { x: 200, y: 28, fill: '#cde7d0', 'font-size': 8.5, 'font-weight': 700, 'text-anchor': 'middle' }, isRHB ? 'OFF' : 'LEG'));
+
+        // Plot zones
+        const colorMap = {
+          primary: { fill: 'rgba(239, 83, 80, 0.34)', stroke: '#ef5350' },
+          secondary: { fill: 'rgba(255, 183, 77, 0.32)', stroke: '#ffb74d' },
+          avoid: { fill: 'rgba(76, 175, 80, 0.30)', stroke: '#4caf50' }
+        };
+
+        zones.forEach((z, idx) => {
+          const style = colorMap[z.type] || colorMap.secondary;
+          const cx = 42 + Math.max(0.08, Math.min(0.92, Number(z.x) || 0.5)) * 136;
+          const cy = 36 + Math.max(0.06, Math.min(0.92, Number(z.y) || 0.5)) * 246;
+
+          const g = el('g');
+          const title = el('title', {}, `${z.label}: ${z.reason || ''}`);
+          g.appendChild(title);
+          g.appendChild(el('ellipse', { cx, cy, rx: 22, ry: 15, fill: style.fill, stroke: style.stroke, 'stroke-width': 2 }));
+          g.appendChild(el('circle', { cx, cy, r: 8, fill: '#121318', stroke: style.stroke, 'stroke-width': 1.5 }));
+          g.appendChild(el('text', { x: cx, y: cy + 3, fill: '#ffffff', 'font-size': 8.5, 'font-weight': 800, 'text-anchor': 'middle' }, String(idx + 1)));
+          svg.appendChild(g);
+        });
+      }
+
+      // --- EXPORT MARKDOWN ---
+      function exportMarkdownReport() {
+        const r = state.currentReport;
+        if (!r) return;
+        const m = r._meta || {};
+        const lines = [
+          `# Cricket Player Analysis Report`,
+          `**Discipline:** ${m.role} | **Handedness:** ${m.handedness} | **Style:** ${m.style} | **Format:** ${m.format}`,
+          ``,
+          `## Executive Summary`,
+          r.overview || '',
+          ``,
+          `## Technique Scorecard`,
+          ...(r.scorecard || []).map(s => `- **${s.metric}**: ${s.score}/10 — ${s.note}`),
+          ``,
+          `## Strengths`,
+          ...(r.strengths || []).map(s => `- **${s.title}**: ${s.detail}`),
+          ``,
+          `## Weaknesses & Technical Leaks`,
+          ...(r.weaknesses || []).map(w => `- **${w.title}**: ${w.detail}`),
+          ``,
+          `## Phase-by-Phase Breakdown`,
+          ...(r.phases || []).map(p => `- **${p.phase}** (${p.timestamp}): ${p.observation}`),
+          ``,
+          `## Coaching Adjustments & Drills`,
+          ...(r.improvements || []).map((i, idx) => `${idx + 1}. **${i.title}**\n   - *Why:* ${i.why}\n   - *Drill:* ${i.drill}\n   - *Cue:* "${i.cue}"`),
+          ``,
+          `## ${r.avenuesOfAttack?.headline || 'Avenues of Attack'}`,
+          r.avenuesOfAttack?.summary || '',
+          ``,
+          `### Tactical Plans`,
+          ...(r.avenuesOfAttack?.plans || []).map(p => `- **${p.title}** (${p.tag}): ${p.execution}`),
+          ``,
+          `### Field / Matchup Cues`,
+          `Tags: ${(r.avenuesOfAttack?.fieldOrGuard || []).join(', ')}`,
+          ...(r.avenuesOfAttack?.tacticalCues || []).map(c => `- **${c.title}**: ${c.detail}`)
+        ];
+
+        const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cricket-analysis-${m.role || 'report'}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      // --- DEMO REPORTS ---
+      function loadDemo(role) {
+        clearError();
+        setRole(role);
+
+        if (role === 'batting') {
+          handednessSelect.value = 'Right-handed';
+          styleSelect.value = 'Top-Order Anchor';
+          renderReport({
+            _meta: {
+              role: 'batting',
+              handedness: 'Right-handed',
+              style: 'Top-Order Anchor',
+              format: 'All-format / Club',
+              source: 'Sample Batter Demo',
+              timestamp: 'Demo'
+            },
+            overview: 'Balanced, compact right-handed batter with a high backlift and strong base through the off-side. Shows a slight head fall toward off-stump on full deliveries, creating a brief gap between bat and pad against sharp inward movement.',
+            scorecard: [
+              { metric: 'Head Stability', score: 6.5, note: 'Falls slightly across off-stump at impact.' },
+              { metric: 'Footwork & Base', score: 8.2, note: 'Crisp back-and-across trigger; strong front knee flex.' },
+              { metric: 'Bat Swing Path', score: 7.4, note: 'Comes down cleanly from 2nd slip, slight late closure.' },
+              { metric: 'Weight Transfer', score: 7.8, note: 'Good momentum into drives; occasionally early on slower balls.' },
+              { metric: 'Scoring Access', score: 8.5, note: 'Dominant through cover and square of the wicket on off.' }
+            ],
+            strengths: [
+              { title: 'Strong Off-Side Arc', detail: 'High hands and clean extension through extra cover punish anything pitched full and wide of off-stump.' },
+              { title: 'Decisive Back-Foot Punch', detail: 'Transfers weight cleanly onto the back foot against short-of-a-length deliveries outside off.' },
+              { title: 'Calm Pre-Ball Trigger', detail: 'Repeatable small back-and-across movement keeps the hands quiet until release.' }
+            ],
+            weaknesses: [
+              { title: 'Head Falling Over to Off-Side', detail: 'On fuller deliveries on middle-and-off, the head tilts past the front toe, making the batter play around the front pad (LBW/bowled risk).' },
+              { title: 'Early Bottom-Hand Dominance vs. Inswing', detail: 'Top hand loses control late in the swing when defending straight balls, closing the bat face too early.' },
+              { title: 'Cramped Pull Shot at the Ribcage', detail: 'Back-and-across trigger pins the front hip when attacked on a tight body line.' }
+            ],
+            phases: [
+              { phase: '1. Stance & Trigger', timestamp: '0.0s – 0.5s', observation: 'Athletic, shoulder-width stance with eyes level. Initiates a timely back-and-across press just before release.' },
+              { phase: '2. Backlift & Stride', timestamp: '0.5s – 0.9s', observation: 'Bat lifts toward 2nd slip. Front foot plants slightly closed, pointing toward mid-off instead of extra cover.' },
+              { phase: '3. Contact Zone', timestamp: '0.9s – 1.1s', observation: 'Meets the ball well under the eyes on off-stump drives, but head drifts right on straighter lines.' },
+              { phase: '4. Follow-Through', timestamp: '1.1s – 1.5s', observation: 'High finish with strong extension; balance occasionally spills slightly off-side.' }
+            ],
+            improvements: [
+              {
+                title: 'Keep Head Inside the Line of the Front Toe',
+                why: 'Eliminates falling over to off-stump and keeps the bat coming down straighter against inswing and nip-backers.',
+                drill: 'Underarm / side-arm top-hand-only straight drives along a chalk line from middle stump to the bowler, 3 sets of 12 balls.',
+                cue: 'Nose over front knee, not outside it'
+              },
+              {
+                title: 'Open the Front Foot Slightly Toward Extra Cover',
+                why: 'Prevents the front hip from locking up and lets the bat swing cleanly through mid-on when the ball shapes in.',
+                drill: 'Place a flat cone beside the front foot landing spot; hit 20 balls aiming strictly between mid-on and mid-off.',
+                cue: 'Lead with the elbow down the ground'
+              },
+              {
+                title: 'Create Room vs. Body-Line Short Balls',
+                why: 'Frees the arms to roll the wrists on the pull rather than getting jammed on the hip.',
+                drill: 'Tennis-ball rapid throwdowns aimed at the left shoulder; practice swaying or pivoting back-foot inside the line.',
+                cue: 'Clear the hip, hit down through square'
+              }
+            ],
+            avenuesOfAttack: {
+              headline: 'How to Bowl to This Batter',
+              summary: 'Deny width outside off-stump where they score effortlessly. Attack the stumps with full inswingers/nip-backers to exploit the head falling over, and pair it with a tight hip-high bouncer to cramp their back-and-across trigger.',
+              pitchZones: [
+                { label: 'Full on Middle-Off (Inswing)', type: 'primary', x: 0.52, y: 0.24, reason: 'Attacks front pad LBW / bowled as head falls across.' },
+                { label: 'Top of Off (4th Stump)', type: 'primary', x: 0.62, y: 0.44, reason: 'Forces unsure footwork and draws outside edge.' },
+                { label: 'Tight Ribcage Short Ball', type: 'secondary', x: 0.42, y: 0.76, reason: 'Cramps back-and-across trigger; induces mistimed splice.' },
+                { label: 'Full & Wide Outside Off', type: 'avoid', x: 0.80, y: 0.30, reason: 'Feeds their strongest cover-drive scoring arc.' }
+              ],
+              plans: [
+                { title: 'The Setup: Wide-to-Straight Trap', tag: 'Primary Plan', execution: 'Bowl 2 deliveries on a tight 4th/5th stump good length to pull their weight across, then pitch the 3rd ball fuller targeting middle-and-leg swinging back in for LBW/bowled.' },
+                { title: 'Body-Line Squeeze', tag: 'Setup Trap', execution: 'Bowl back-of-a-length aimed at the left hip/ribcage with a short mid-wicket and deep backward square leg to force awkward fends.' },
+                { title: 'Slower Off-Cutter into the Pitch', tag: 'Variation', execution: 'Because weight transfers early on drives, take pace off on a 6m length outside off to induce a checked loft to mid-off/cover.' }
+              ],
+              fieldOrGuard: ['1st Slip', 'Short Mid-Wicket (Catching)', 'Straight Mid-On', 'Cover Point (Saver)', 'Deep Backward Square'],
+              tacticalCues: [
+                { title: 'Protect the Cover Boundary Early', detail: 'Do not bowl half-volleys wider than 5th stump—one early boundary settles their hands.' },
+                { title: 'Bowl Around the Wicket (Pace)', detail: 'Left-arm seamers or right-armers coming around the wicket accentuate the angle back into the front pad.' },
+                { title: 'Spin Matchup', detail: 'Off-spinners should drift into middle stump and turn past the outside edge; leg-spinners can target the slider/googly at the stumps.' }
+              ]
+            }
+          });
+        } else {
+          handednessSelect.value = 'Right-handed';
+          styleSelect.value = 'Fast-Medium Seam / Swing';
+          renderReport({
+            _meta: {
+              role: 'bowling',
+              handedness: 'Right-handed',
+              style: 'Fast-Medium Seam / Swing',
+              format: 'All-format / Club',
+              source: 'Sample Bowler Demo',
+              timestamp: 'Demo'
+            },
+            overview: 'Rhythmic right-arm fast-medium bowler with a strong, upright seam presentation and lively bounce from a high release point. Front knee collapses slightly at front-foot contact, leaking 4–6 km/h of pace and causing occasional drags down the leg side.',
+            scorecard: [
+              { metric: 'Run-Up & Rhythm', score: 8.3, note: 'Smooth acceleration into the crease with good momentum.' },
+              { metric: 'Alignment & Gather', score: 7.4, note: 'Mostly semi-open; front arm pulls slightly wide early.' },
+              { metric: 'Front-Leg Brace', score: 5.8, note: 'Noticeable front-knee flexion absorbs energy at release.' },
+              { metric: 'Seam & Wrist', score: 8.6, note: 'Crisp upright seam with strong wrist snap behind the ball.' },
+              { metric: 'Follow-Through', score: 7.2, note: 'Slight fall-away to leg-side after release.' }
+            ],
+            strengths: [
+              { title: 'High Release & Upright Seam', detail: 'Consistently extracts steep bounce and late movement off the pitch on a good length.' },
+              { title: 'Smooth Approach Momentum', detail: 'Controlled run-up lets the bowler stay repeatable deep into spells.' },
+              { title: 'Dangerous Natural Away-Seamer', detail: 'Balls pitching on off-stump hold their line or seam away late past the outside edge.' }
+            ],
+            weaknesses: [
+              { title: 'Collapsing Front Knee at Contact', detail: 'Front leg bends under load instead of bracing, costing pace and making fuller deliveries drop slightly short.' },
+              { title: 'Front Arm Pulling Away to Leg-Side', detail: 'Head falls toward mid-wicket at release, dragging the bowling arm across and leaking full-ish balls onto the pads.' },
+              { title: 'Predictable Pace on Shorter Lengths', detail: 'When banging the ball in short, release height drops noticeably, telegraphing the bouncer early.' }
+            ],
+            phases: [
+              { phase: '1. Run-Up & Impulse Stride', timestamp: '0.0s – 0.8s', observation: 'Even stride length with upright posture; enters the crease with solid linear velocity.' },
+              { phase: '2. Back-Foot Contact & Gather', timestamp: '0.8s – 1.1s', observation: 'Back foot lands parallel to the crease; hands gather cleanly near the chest.' },
+              { phase: '3. Front-Foot Contact & Release', timestamp: '1.1s – 1.35s', observation: 'Front knee flexes ~25° on impact while the front arm pulls wide of the left hip, pulling the head slightly left.' },
+              { phase: '4. Follow-Through', timestamp: '1.35s – 1.8s', observation: 'Bowling arm finishes across the body, momentum drifts slightly off-line toward the leg side.' }
+            ],
+            improvements: [
+              {
+                title: 'Stabilize & Brace the Front Leg',
+                why: 'Turns linear run-up momentum into rotational whip, adding pace and consistent length.',
+                drill: 'Walk-in "pole-vault" front-leg brace drills (3 steps into a locked front knee) + eccentric single-leg drop squats.',
+                cue: 'Plant tall, hit the wall with the front leg'
+              },
+              {
+                title: 'Pull Front Arm Straight Down to the Hip',
+                why: 'Keeps the head stacked over the front knee and stops deliveries drifting onto the batter’s pads.',
+                drill: 'Target-line bowling with a visual cone straight down the pitch; keep eyes level on target through release.',
+                cue: 'Pull the elbow to the pocket, not out wide'
+              },
+              {
+                title: 'Disguise the Short Ball Height',
+                why: 'Prevents batters from picking up the length early and sitting back to pull.',
+                drill: 'Alternate 1 good-length ball and 1 back-of-a-length ball from the exact same wrist height using a high-target rope.',
+                cue: 'Same window, different hit point'
+              }
+            ],
+            avenuesOfAttack: {
+              headline: 'How to Bat Against This Bowler',
+              summary: 'Respect their hard good-length ball on 4th stump where the upright seam is most dangerous. Disrupt their collapsing front knee by standing slightly out of your crease to turn good lengths into drivable half-volleys, and cash in heavily on the leg-side drift caused by their falling head.',
+              pitchZones: [
+                { label: 'Leg-Side Drift (Full/Length)', type: 'primary', x: 0.30, y: 0.34, reason: 'Bowler falls away to leg—high-percentage flicks & clips.' },
+                { label: 'Short / Telegraph Bouncer', type: 'primary', x: 0.48, y: 0.80, reason: 'Lower release height telegraphs early; sit back and pull.' },
+                { label: 'Converted Half-Volley (Crease Advance)', type: 'secondary', x: 0.60, y: 0.24, reason: 'Standing 30cm out negates late seam and opens straight drives.' },
+                { label: 'Hard Good Length (4th Stump)', type: 'avoid', x: 0.65, y: 0.48, reason: 'Their most lethal zone—leave cleanly or defend with soft hands.' }
+              ],
+              plans: [
+                { title: 'Stand Out of Your Crease (30–40cm)', tag: 'Primary Plan', execution: 'Take guard slightly outside the popping crease to meet the ball before late seam movement develops and force the bowler to drag their length shorter.' },
+                { title: 'Wait for the Leg-Side Release Leak', tag: 'Scoring Option', execution: 'Hold your shape straight—because their front arm pulls wide, expect 1–2 balls per over to drift onto middle-and-leg for easy whips through mid-wicket.' },
+                { title: 'Watch the Front Arm for the Short Ball', tag: 'Counter-Attack', execution: 'Pick up the drop in release height early and transfer weight back to pull firmly in front of square.' }
+              ],
+              fieldOrGuard: ['Middle-and-Off Guard', '30cm Out of Crease', 'Target Mid-Wicket', 'Straight Drive', 'Leave 4th-Stump Good Length'],
+              tacticalCues: [
+                { title: 'Don’t Chase Width Early', detail: 'Their upright seam gets extra bounce on a 6–7m length; leave balls outside off-stump until they tire.' },
+                { title: 'Rotate Strike into the Leg Side', detail: 'Soft-hands nudges into vacant mid-wicket force them to over-correct wider outside off, opening up cut and cover-drive chances.' },
+                { title: 'Attack Later in the Spell', detail: 'Front-knee fatigue amplifies their fall-away after 3–4 overs, increasing loose half-volleys and leg-stump gifts.' }
+              ]
+            }
+          });
+        }
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
