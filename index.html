@@ -1142,6 +1142,35 @@
       margin-top: 4px;
     }
 
+    .focus-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .focus-chip {
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .focus-chip:hover {
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    .focus-chip.selected {
+      background: var(--pitch-soft);
+      border-color: var(--pitch);
+      color: #f7ead1;
+    }
+
     .field-chip {
       font-size: 0.74rem;
       padding: 4px 9px;
@@ -1461,6 +1490,11 @@
           </div>
 
           <div class="field full">
+            <label>Priority Focus Areas (Optional — Tap to Guide Analysis)</label>
+            <div class="focus-chips" id="focusChips" role="group" aria-label="Priority coaching focus areas"></div>
+          </div>
+
+          <div class="field full">
             <label for="notesInput">Coach / Player Focus Notes (Optional)</label>
             <textarea id="notesInput" placeholder="e.g., Struggles against full inswingers, head falling over to off-side, or losing pace in final overs..."></textarea>
           </div>
@@ -1680,6 +1714,7 @@
         nextClipId: 1,
         loopWindow: false,
         sampleCount: 12,
+        focusAreas: [],
         drawingEnabled: false,
         isDrawing: false,
         drawStart: null,
@@ -1692,6 +1727,29 @@
       function getActiveClip() {
         return state.clips.find(c => c.id === state.activeClipId) || null;
       }
+
+      const FOCUS_AREAS = {
+        batting: [
+          'Playing Off the Legs / Pads',
+          'Facing Inswing & LBW Risk',
+          'Head Stability & Balance',
+          'Power Hitting & Bat Speed',
+          'Short Ball & Pull Shot',
+          'Off-Side Drives & Bat Path',
+          'Footwork vs. Spin',
+          'Trigger Movement & Timing'
+        ],
+        bowling: [
+          'Increase Pace / Where Speed Is Lost',
+          'Line & Length Accuracy',
+          'Front-Leg Brace & Energy Transfer',
+          'Seam & Swing Presentation',
+          'Alignment & Injury Prevention',
+          'Spin, Drift & Flight',
+          'Follow-Through & Falling Away',
+          'Slower Balls & Variations'
+        ]
+      };
 
       const STYLE_OPTIONS = {
         batting: [
@@ -1760,6 +1818,7 @@
       const styleSelect = document.getElementById('styleSelect');
       const cameraAngleSelect = document.getElementById('cameraAngleSelect');
       const formatSelect = document.getElementById('formatSelect');
+      const focusChips = document.getElementById('focusChips');
       const notesInput = document.getElementById('notesInput');
       const analyzeBtn = document.getElementById('analyzeBtn');
       const errorBanner = document.getElementById('errorBanner');
@@ -1782,8 +1841,29 @@
       // --- INITIALIZE ---
       function init() {
         populateStyleOptions();
+        renderFocusChips();
         updateApiStatusUI();
         bindEvents();
+      }
+
+      function renderFocusChips() {
+        focusChips.textContent = '';
+        const options = FOCUS_AREAS[state.role] || [];
+        state.focusAreas = state.focusAreas.filter(f => options.includes(f));
+        options.forEach(area => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `focus-chip${state.focusAreas.includes(area) ? ' selected' : ''}`;
+          btn.textContent = area;
+          btn.setAttribute('aria-pressed', state.focusAreas.includes(area) ? 'true' : 'false');
+          btn.addEventListener('click', () => {
+            const idx = state.focusAreas.indexOf(area);
+            if (idx === -1) state.focusAreas.push(area);
+            else state.focusAreas.splice(idx, 1);
+            renderFocusChips();
+          });
+          focusChips.appendChild(btn);
+        });
       }
 
       function populateStyleOptions() {
@@ -2096,9 +2176,11 @@
 
       function setRole(role) {
         state.role = role;
+        state.focusAreas = [];
         roleBattingBtn.classList.toggle('active', role === 'batting');
         roleBowlingBtn.classList.toggle('active', role === 'bowling');
         populateStyleOptions();
+        renderFocusChips();
       }
 
       function openApiDialog() {
@@ -2822,8 +2904,12 @@
           ? `You are being given ${state.clips.length} SEPARATE CAMERA ANGLES of the SAME player (${clipSummary}). Cross-reference and synthesize all angles together into ONE unified biomechanical & tactical report (e.g., combine side-on stride/front-leg brace/head-over-knee with front-on/behind-bowler alignment, falling away, bat path, or seam position), noting which angle confirmed key findings.`
           : `Analyze the uploaded ${state.role.toUpperCase()} video/frames carefully.`;
 
+        const focusInstruction = state.focusAreas.length > 0
+          ? `\nPriority Coaching Focus Areas requested by the coach/player: ${state.focusAreas.join(', ')}.\nSpecifically inspect the mechanics driving these priority areas (e.g., where energy/pace is lost, accuracy leaks, or specific shot vulnerabilities), address them directly in Weaknesses, Improvements/Drills, and Avenues of Attack, while STILL reporting any other major biomechanical strengths or flaws clearly visible in the clip(s).`
+          : '';
+
         return `You are an elite international cricket biomechanics coach and tactical analyst.
-${multiAngleNote}
+${multiAngleNote}${focusInstruction}
 
 Player Context:
 - Discipline: ${state.role}
@@ -2831,6 +2917,7 @@ Player Context:
 - Style: ${styleSelect.value}
 - Uploaded Clips / Camera Angles: ${clipSummary || cameraAngleSelect.value}
 - Match Format: ${formatSelect.value}
+- Selected Focus Areas: ${state.focusAreas.length ? state.focusAreas.join(', ') : 'General full-action review'}
 - Coach/Player Notes: ${notesInput.value.trim() || 'None provided'}
 
 Be honest, specific, and grounded strictly in what is visible in the video/frames (mention camera limitations if a specific body part is partially occluded).
