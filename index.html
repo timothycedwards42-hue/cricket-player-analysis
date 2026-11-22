@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cricket Lab">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#121318">
   <title>Cricket Player Analysis — Biomechanics & Tactical Matchup Lab</title>
   <style>
     :root {
@@ -45,6 +50,8 @@
       display: flex;
       flex-direction: column;
       line-height: 1.5;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
 
     /* --- TOP BAR --- */
@@ -1541,6 +1548,119 @@
       display: block;
     }
 
+    /* --- MOBILE BOTTOM NAV & RESPONSIVE TOUCH UX --- */
+    nav.mobile-nav {
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 50;
+      background: rgba(27, 28, 36, 0.96);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border-strong);
+      padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    nav.mobile-nav button {
+      min-height: 44px;
+      justify-content: center;
+      font-size: 0.86rem;
+      border-radius: 999px;
+      background: var(--bg);
+      color: var(--text-muted);
+    }
+
+    nav.mobile-nav button.active {
+      background: var(--accent);
+      border-color: var(--accent-bright);
+      color: #fff;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .mobile-report-dot {
+      display: none;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-bright);
+      box-shadow: 0 0 6px var(--accent-bright);
+    }
+
+    .mobile-report-dot.ready {
+      display: inline-block;
+    }
+
+    .scrubber-row input[type="range"]::-webkit-slider-thumb {
+      width: 20px;
+      height: 20px;
+    }
+
+    .video-container:fullscreen,
+    .camera-preview-wrap:fullscreen {
+      aspect-ratio: auto;
+      width: 100vw;
+      height: 100vh;
+      border-radius: 0;
+      border: none;
+      background: #000;
+    }
+
+    .video-container:fullscreen video,
+    .camera-preview-wrap:fullscreen video {
+      object-fit: contain;
+    }
+
+    @media (max-width: 1080px) {
+      nav.mobile-nav {
+        display: grid;
+      }
+      main.workspace {
+        padding: 10px 10px calc(76px + env(safe-area-inset-bottom));
+      }
+      body.mobile-view-video .right-panel {
+        display: none;
+      }
+      body.mobile-view-report .left-panel {
+        display: none;
+      }
+    }
+
+    @media (max-width: 720px) {
+      header.top-bar {
+        padding: 8px 12px;
+        gap: 8px;
+      }
+      .brand span {
+        display: none;
+      }
+      .top-actions {
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 2px;
+      }
+      .top-actions > * {
+        flex-shrink: 0;
+      }
+      .transport-row button, .trim-row button {
+        min-height: 38px;
+        padding: 7px 10px;
+        font-size: 0.78rem;
+      }
+      .analyze-bar .btn-primary, #captureBufferBtn {
+        min-height: 46px;
+        font-size: 0.92rem;
+      }
+      dialog {
+        width: calc(100% - 16px) !important;
+        max-height: 92dvh;
+      }
+    }
+
     @media print {
       header.top-bar, .left-panel, .report-tabs {
         display: none !important;
@@ -1649,6 +1769,7 @@
                 <button type="button" class="btn-sm" id="captureFrameBtn" title="Bookmark current frame for AI analysis">📸 Pin Frame</button>
                 <button type="button" class="btn-sm" id="drawToggleBtn" title="Toggle telestrator drawing overlay">✏️ Draw</button>
                 <button type="button" class="btn-sm" id="clearDrawBtn" title="Clear drawings">Clear</button>
+                <button type="button" class="btn-sm" id="videoFullscreenBtn" title="Fullscreen video player">⛶</button>
               </div>
             </div>
 
@@ -1884,6 +2005,12 @@
     </section>
   </main>
 
+  <!-- MOBILE / TABLET BOTTOM VIEW SWITCHER -->
+  <nav class="mobile-nav" aria-label="Switch between Video Studio and Report">
+    <button type="button" id="mobileTabVideo" class="active">🎬 Video &amp; Setup</button>
+    <button type="button" id="mobileTabReport">📊 Report <span class="mobile-report-dot" id="mobileReportDot"></span></button>
+  </nav>
+
   <!-- GEMINI API SETTINGS DIALOG -->
   <dialog id="apiDialog" aria-labelledby="apiDialogTitle">
     <div class="dialog-header">
@@ -1934,11 +2061,12 @@
       <h3 id="cameraDialogTitle">🎥 Live Camera Preview &amp; Rolling Buffer</h3>
       <div class="btn-group">
         <button type="button" class="btn-sm btn-active" id="toggleCrosshairBtn" title="Toggle stumps &amp; pitch alignment guide">🎯 Guide</button>
+        <button type="button" class="btn-sm" id="camFullscreenBtn" title="Fullscreen live camera preview">⛶</button>
         <button type="button" class="btn-sm btn-ghost" id="closeCameraDialogBtn" aria-label="Close">✕</button>
       </div>
     </div>
     <div class="dialog-body">
-      <div class="camera-preview-wrap">
+      <div class="camera-preview-wrap" id="cameraPreviewWrap">
         <video id="cameraPreview" autoplay playsinline muted></video>
         <!-- Stumps & Pitch Alignment Crosshair Overlay -->
         <svg class="camera-crosshair active" id="cameraCrosshair" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true">
@@ -2289,13 +2417,53 @@
       const modelSelect = document.getElementById('modelSelect');
       const analysisModeSelect = document.getElementById('analysisModeSelect');
 
+      const mobileTabVideo = document.getElementById('mobileTabVideo');
+      const mobileTabReport = document.getElementById('mobileTabReport');
+      const mobileReportDot = document.getElementById('mobileReportDot');
+      const videoFullscreenBtn = document.getElementById('videoFullscreenBtn');
+      const camFullscreenBtn = document.getElementById('camFullscreenBtn');
+      const cameraPreviewWrap = document.getElementById('cameraPreviewWrap');
+
       // --- INITIALIZE ---
       function init() {
+        document.body.classList.add('mobile-view-video');
         populateStyleOptions();
         renderFocusChips();
         updateApiStatusUI();
         bindEvents();
         refreshSavedCount();
+      }
+
+      function setMobileView(view) {
+        const isReport = view === 'report';
+        document.body.classList.toggle('mobile-view-video', !isReport);
+        document.body.classList.toggle('mobile-view-report', isReport);
+        mobileTabVideo.classList.toggle('active', !isReport);
+        mobileTabReport.classList.toggle('active', isReport);
+        if (isReport) mobileReportDot.classList.remove('ready');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      async function toggleElementFullscreen(containerEl, videoEl) {
+        try {
+          if (document.fullscreenElement || document.webkitFullscreenElement) {
+            if (document.exitFullscreen) await document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            return;
+          }
+          if (containerEl && containerEl.requestFullscreen) {
+            await containerEl.requestFullscreen();
+          } else if (containerEl && containerEl.webkitRequestFullscreen) {
+            containerEl.webkitRequestFullscreen();
+          } else if (videoEl && videoEl.webkitEnterFullscreen) {
+            // iOS Safari native fullscreen video fallback
+            videoEl.webkitEnterFullscreen();
+          }
+        } catch (err) {
+          if (videoEl && videoEl.webkitEnterFullscreen) {
+            try { videoEl.webkitEnterFullscreen(); } catch {}
+          }
+        }
       }
 
       function renderFocusChips() {
@@ -2355,6 +2523,12 @@
 
       // --- EVENTS ---
       function bindEvents() {
+        // Mobile view tabs & Fullscreen toggles
+        mobileTabVideo.addEventListener('click', () => setMobileView('video'));
+        mobileTabReport.addEventListener('click', () => setMobileView('report'));
+        videoFullscreenBtn.addEventListener('click', () => toggleElementFullscreen(videoContainer, videoPlayer));
+        camFullscreenBtn.addEventListener('click', () => toggleElementFullscreen(cameraPreviewWrap, cameraPreview));
+
         // Role toggle
         roleBattingBtn.addEventListener('click', () => setRole('batting'));
         roleBowlingBtn.addEventListener('click', () => setRole('bowling'));
@@ -3862,6 +4036,7 @@ For each improvement's diagram (top-down net/pitch view):
           loadingState.classList.add('active');
           loadingTitle.textContent = title;
           loadingSubtitle.textContent = subtitle;
+          if (window.innerWidth <= 1080) setMobileView('report');
         } else {
           loadingState.classList.remove('active');
           if (!state.currentReport) reportEmpty.style.display = 'flex';
@@ -3929,6 +4104,11 @@ For each improvement's diagram (top-down net/pitch view):
         emailReportBtn.disabled = false;
         saveSessionBtn.disabled = false;
         speakReportBtn.disabled = false;
+        if (window.innerWidth <= 1080) {
+          setMobileView('report');
+        } else {
+          mobileReportDot.classList.add('ready');
+        }
 
         const meta = report._meta || {};
         const roleMode = meta.role || state.role;
