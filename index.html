@@ -1456,6 +1456,7 @@
       <div class="panel-header">
         <h2>🎬 Video Studio &amp; Player Profile</h2>
         <div class="btn-group">
+          <button type="button" class="btn-sm" id="liveBufferBtn" title="Live 10-second rolling dashcam buffer for instant LBW/shot replay">🔄 Rolling Buffer</button>
           <button type="button" class="btn-sm" id="recordVideoBtn" title="Record a clip directly from your phone or webcam">🎥 Record</button>
           <button type="button" class="btn-sm btn-ghost" id="changeVideoBtn" style="display:none;">+ Add Angle / Clip</button>
         </div>
@@ -1788,10 +1789,10 @@
     </div>
   </dialog>
 
-  <!-- LIVE CAMERA RECORDER DIALOG -->
-  <dialog id="cameraDialog" aria-labelledby="cameraDialogTitle" style="max-width:560px;">
+  <!-- LIVE CAMERA & ROLLING BUFFER DIALOG -->
+  <dialog id="cameraDialog" aria-labelledby="cameraDialogTitle" style="max-width:580px;">
     <div class="dialog-header">
-      <h3 id="cameraDialogTitle">🎥 Record Cricket Clip</h3>
+      <h3 id="cameraDialogTitle">🎥 Live Camera &amp; Rolling Buffer</h3>
       <button type="button" class="btn-sm btn-ghost" id="closeCameraDialogBtn" aria-label="Close">✕</button>
     </div>
     <div class="dialog-body">
@@ -1802,12 +1803,23 @@
           <span id="recTimer">REC 00:00</span>
         </div>
       </div>
-      <p class="help-text" id="cameraStatusText">Position your camera side-on or behind the bowler, then press Start Recording.</p>
+      <p class="help-text" id="cameraStatusText">Position your camera, then use Standard Recording or Rolling 10s Buffer for instant umpire replay.</p>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;">
+        <label style="display:flex; align-items:center; gap:7px; font-size:0.78rem; color:var(--text); cursor:pointer; text-transform:none; letter-spacing:0;">
+          <input type="checkbox" id="autoLbwOnCaptureChk" style="width:auto; accent-color:var(--accent-bright);">
+          Auto-run LBW Review on capture
+        </label>
+        <div class="btn-group">
+          <button type="button" class="btn-sm" id="toggleBufferBtn">🔄 Start 10s Buffer</button>
+          <button type="button" class="btn-sm btn-primary" id="captureBufferBtn" style="display:none;">☝️ Capture Last ~8s</button>
+        </div>
+      </div>
     </div>
     <div class="dialog-footer" style="justify-content:space-between;">
       <button type="button" id="flipCameraBtn">🔄 Flip Camera</button>
       <div class="btn-group">
-        <button type="button" class="btn-ghost" id="nativeCamFallbackBtn" title="Use your device's built-in Camera app">Use Native Camera</button>
+        <button type="button" class="btn-ghost" id="nativeCamFallbackBtn" title="Use your device's built-in Camera app">Native Camera</button>
         <button type="button" class="btn-primary" id="toggleRecordBtn">● Start Recording</button>
       </div>
     </div>
@@ -1909,6 +1921,7 @@
       const dropZone = document.getElementById('dropZone');
       const videoInput = document.getElementById('videoInput');
       const cameraInput = document.getElementById('cameraInput');
+      const liveBufferBtn = document.getElementById('liveBufferBtn');
       const recordVideoBtn = document.getElementById('recordVideoBtn');
       const dropRecordBtn = document.getElementById('dropRecordBtn');
       const cameraDialog = document.getElementById('cameraDialog');
@@ -1917,6 +1930,9 @@
       const recBadge = document.getElementById('recBadge');
       const recTimer = document.getElementById('recTimer');
       const toggleRecordBtn = document.getElementById('toggleRecordBtn');
+      const toggleBufferBtn = document.getElementById('toggleBufferBtn');
+      const captureBufferBtn = document.getElementById('captureBufferBtn');
+      const autoLbwOnCaptureChk = document.getElementById('autoLbwOnCaptureChk');
       const flipCameraBtn = document.getElementById('flipCameraBtn');
       const nativeCamFallbackBtn = document.getElementById('nativeCamFallbackBtn');
       const closeCameraDialogBtn = document.getElementById('closeCameraDialogBtn');
@@ -2117,6 +2133,15 @@
         };
         recordVideoBtn.addEventListener('click', triggerRecordFlow);
         dropRecordBtn.addEventListener('click', triggerRecordFlow);
+        liveBufferBtn.addEventListener('click', () => openCameraDialog(true));
+        toggleBufferBtn.addEventListener('click', toggleRollingBuffer);
+        captureBufferBtn.addEventListener('click', captureRollingBufferClip);
+        window.addEventListener('keydown', (e) => {
+          if (cameraDialog.open && camState.isBuffering && (e.code === 'Space' || e.key === 'Enter')) {
+            e.preventDefault();
+            captureRollingBufferClip();
+          }
+        });
         cameraInput.addEventListener('change', () => {
           const files = Array.from(cameraInput.files || []).filter(isVideoFile);
           if (files.length > 0) addVideoFiles(files);
@@ -2449,23 +2474,36 @@
         }
       }
 
-      // --- LIVE CAMERA RECORDER ---
+      // --- LIVE CAMERA RECORDER & ROLLING 10s BUFFER ---
       const camState = {
         stream: null,
         recorder: null,
         chunks: [],
         facingMode: 'environment',
         isRecording: false,
+        isBuffering: false,
+        autoStartBuffer: false,
+        bufferRecorders: [], // up to 2 staggered { rec, chunks, startedAt, mime, active }
+        bufferTimers: [],
+        lastCompletedBlob: null,
+        lastCompletedMime: 'video/webm',
         timerId: null,
         startedAt: 0
       };
 
-      function openCameraDialog() {
+      function getBestVideoMime() {
+        const mimeCandidates = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+        return mimeCandidates.find(m => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) || '';
+      }
+
+      function openCameraDialog(autoBuffer = false) {
         clearError();
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
           cameraInput.click();
           return;
         }
+        camState.autoStartBuffer = Boolean(autoBuffer);
+        autoLbwOnCaptureChk.checked = state.role === 'lbw' || autoBuffer;
         cameraDialog.showModal();
         startCameraStream();
       }
@@ -2474,20 +2512,162 @@
         stopCameraStream();
         cameraStatusText.textContent = 'Requesting camera access...';
         toggleRecordBtn.disabled = true;
+        toggleBufferBtn.disabled = true;
         try {
           camState.stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: camState.facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: true
           });
           cameraPreview.srcObject = camState.stream;
-          cameraStatusText.textContent = 'Camera ready. Press Start Recording to capture a batting or bowling clip.';
           toggleRecordBtn.disabled = false;
+          toggleBufferBtn.disabled = false;
+          if (camState.autoStartBuffer) {
+            camState.autoStartBuffer = false;
+            startRollingBuffer();
+          } else {
+            cameraStatusText.textContent = 'Camera ready. Use Standard Recording or Rolling 10s Buffer for instant umpire replay.';
+          }
         } catch (err) {
-          cameraStatusText.textContent = `Camera unavailable (${err.message}). On desktop or file://, use HTTPS (e.g. GitHub Pages) or click "Use Native Camera".`;
+          cameraStatusText.textContent = `Camera unavailable (${err.message}). Live camera requires HTTPS (e.g. GitHub Pages) or click "Native Camera".`;
+        }
+      }
+
+      function stopRollingBuffer() {
+        camState.bufferTimers.forEach(id => clearTimeout(id));
+        camState.bufferTimers = [];
+        camState.bufferRecorders.forEach(slot => {
+          slot.active = false;
+          if (slot.rec && slot.rec.state !== 'inactive') {
+            try { slot.rec.stop(); } catch {}
+          }
+        });
+        camState.bufferRecorders = [];
+        camState.isBuffering = false;
+        camState.lastCompletedBlob = null;
+        captureBufferBtn.style.display = 'none';
+        toggleBufferBtn.textContent = '🔄 Start 10s Buffer';
+        toggleBufferBtn.classList.remove('btn-active');
+        toggleRecordBtn.disabled = !camState.stream;
+        if (!camState.isRecording) recBadge.classList.remove('active');
+      }
+
+      function spawnBufferSlot(slotIndex) {
+        if (!camState.isBuffering || !camState.stream) return;
+        const mime = getBestVideoMime();
+        let rec;
+        try {
+          rec = mime ? new MediaRecorder(camState.stream, { mimeType: mime }) : new MediaRecorder(camState.stream);
+        } catch {
+          try { rec = new MediaRecorder(camState.stream); } catch { return; }
+        }
+
+        const slot = { rec, chunks: [], startedAt: Date.now(), mime: rec.mimeType || mime || 'video/webm', active: true };
+        camState.bufferRecorders[slotIndex] = slot;
+
+        rec.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) slot.chunks.push(e.data);
+        };
+        rec.onstop = () => {
+          if (slot.chunks.length > 0) {
+            const b = new Blob(slot.chunks, { type: slot.mime });
+            if (b.size > 0) {
+              camState.lastCompletedBlob = b;
+              camState.lastCompletedMime = slot.mime;
+            }
+          }
+          if (slot.active && camState.isBuffering) {
+            spawnBufferSlot(slotIndex);
+          }
+        };
+
+        try {
+          rec.start();
+          // Rotate every 10 seconds so each segment stays clean and self-contained
+          const tId = setTimeout(() => {
+            if (slot.active && camState.isBuffering && rec.state !== 'inactive') {
+              try { rec.stop(); } catch {}
+            }
+          }, 10000);
+          camState.bufferTimers.push(tId);
+        } catch {
+          // Browser may limit to 1 simultaneous MediaRecorder; slot 0 continues cleanly
+        }
+      }
+
+      function startRollingBuffer() {
+        if (!camState.stream || camState.isRecording) return;
+        stopRollingBuffer();
+        camState.isBuffering = true;
+        toggleRecordBtn.disabled = true;
+        toggleBufferBtn.textContent = '⏹ Stop Buffer';
+        toggleBufferBtn.classList.add('btn-active');
+        captureBufferBtn.style.display = 'inline-flex';
+        recBadge.classList.add('active');
+        recTimer.textContent = 'BUFFERING (LIVE)';
+        cameraStatusText.textContent = 'Rolling 10s dashcam active! Tap "Capture Last ~8s" (or press Spacebar / Bluetooth clicker) on any appeal.';
+
+        // Slot 0 starts now; Slot 1 starts 5s later for continuous 5–10s overlap
+        spawnBufferSlot(0);
+        const staggerId = setTimeout(() => {
+          if (camState.isBuffering) spawnBufferSlot(1);
+        }, 5000);
+        camState.bufferTimers.push(staggerId);
+      }
+
+      function toggleRollingBuffer() {
+        if (camState.isBuffering) stopRollingBuffer();
+        else startRollingBuffer();
+      }
+
+      function captureRollingBufferClip() {
+        if (!camState.isBuffering) return;
+        const autoRunLbw = autoLbwOnCaptureChk.checked;
+        const activeSlots = camState.bufferRecorders
+          .filter(s => s && s.rec && s.rec.state === 'recording')
+          .sort((a, b) => a.startedAt - b.startedAt); // oldest active slot has longest recent window (5–10s)
+
+        const bestSlot = activeSlots[0];
+        const elapsedMs = bestSlot ? Date.now() - bestSlot.startedAt : 0;
+
+        const finishWithBlob = (blob, mime) => {
+          if (!blob || blob.size === 0) return;
+          const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+          const file = new File([blob], `buffer-replay-${state.clips.length + 1}.${ext}`, { type: mime });
+          if (autoRunLbw) {
+            setRole('lbw');
+          }
+          addVideoFiles([file]);
+          if (autoRunLbw && state.apiKey) {
+            setTimeout(() => runAnalysis(), 900);
+          }
+        };
+
+        // If active slot just rotated (< 2.5s) and we have a freshly completed 10s segment, use it
+        if ((!bestSlot || elapsedMs < 2500) && camState.lastCompletedBlob) {
+          const blob = camState.lastCompletedBlob;
+          const mime = camState.lastCompletedMime;
+          closeCameraDialog();
+          finishWithBlob(blob, mime);
+          return;
+        }
+
+        if (bestSlot) {
+          camState.isBuffering = false;
+          camState.bufferTimers.forEach(id => clearTimeout(id));
+          camState.bufferTimers = [];
+          camState.bufferRecorders.forEach(s => { if (s) s.active = false; });
+
+          bestSlot.rec.onstop = () => {
+            const blob = new Blob(bestSlot.chunks, { type: bestSlot.mime });
+            closeCameraDialog();
+            finishWithBlob(blob, bestSlot.mime);
+          };
+          try { bestSlot.rec.stop(); } catch { closeCameraDialog(); }
         }
       }
 
       function stopCameraStream() {
+        stopRollingBuffer();
         if (camState.timerId) {
           clearInterval(camState.timerId);
           camState.timerId = null;
@@ -2513,11 +2693,10 @@
       }
 
       function toggleCameraRecording() {
-        if (!camState.stream) return;
+        if (!camState.stream || camState.isBuffering) return;
         if (!camState.isRecording) {
           camState.chunks = [];
-          const mimeCandidates = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
-          const chosenMime = mimeCandidates.find(m => MediaRecorder.isTypeSupported(m)) || '';
+          const chosenMime = getBestVideoMime();
           try {
             camState.recorder = chosenMime
               ? new MediaRecorder(camState.stream, { mimeType: chosenMime })
@@ -2541,6 +2720,7 @@
 
           camState.recorder.start();
           camState.isRecording = true;
+          toggleBufferBtn.disabled = true;
           camState.startedAt = Date.now();
           recBadge.classList.add('active');
           recTimer.textContent = 'REC 00:00';
