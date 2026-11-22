@@ -1452,6 +1452,67 @@
     .drs-light.amber { border-color: rgba(255, 183, 77, 0.65); background: rgba(255, 183, 77, 0.1); }
     .drs-light.amber .drs-light-val { color: #ffe082; }
 
+    /* --- SAVED SESSIONS LIST --- */
+    .session-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    .session-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      transition: border-color 0.15s;
+    }
+
+    .session-row:hover {
+      border-color: var(--border-strong);
+    }
+
+    .session-thumb {
+      width: 64px;
+      height: 40px;
+      border-radius: 4px;
+      object-fit: cover;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+    }
+
+    .session-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .session-title {
+      font-size: 0.84rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-meta {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
     .help-text {
       font-size: 0.77rem;
       color: var(--text-muted);
@@ -1516,6 +1577,7 @@
         <span class="status-dot"></span>
         <span id="apiStatusText">AI Key Not Set</span>
       </button>
+      <button type="button" id="historyBtn" title="View or save sessions locally on this device">📚 Saved (<span id="savedCount">0</span>)</button>
       <button type="button" id="loadBatterDemoBtn">Demo: Batter</button>
       <button type="button" id="loadBowlerDemoBtn">Demo: Bowler</button>
       <button type="button" id="loadLbwDemoBtn">Demo: LBW</button>
@@ -1693,6 +1755,7 @@
       <div class="panel-header">
         <h2 id="reportTitle">📊 Coaching &amp; Tactical Matchup Report</h2>
         <div class="btn-group">
+          <button type="button" class="btn-sm" id="saveSessionBtn" disabled title="Save this report &amp; clips locally on this device">💾 Save</button>
           <button type="button" class="btn-sm" id="speakReportBtn" disabled title="Read verdict &amp; key cues aloud (great for smart glasses Bluetooth audio)">🔊 Read Aloud</button>
           <span class="badge badge-pitch" id="reportSourceBadge" style="display:none;">Ready</span>
         </div>
@@ -1982,6 +2045,42 @@
     </div>
   </dialog>
 
+  <!-- ON-DEVICE SAVED SESSIONS DIALOG (IndexedDB) -->
+  <dialog id="historyDialog" aria-labelledby="historyDialogTitle" style="max-width:620px;">
+    <div class="dialog-header">
+      <h3 id="historyDialogTitle">📚 Saved Sessions (On-Device Storage)</h3>
+      <button type="button" class="btn-sm btn-ghost" id="closeHistoryDialogBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <!-- Save Current Session Box -->
+      <div id="saveCurrentBox" style="display:none; flex-direction:column; gap:8px; background:var(--bg); border:1px solid rgba(76,175,80,0.4); border-radius:var(--radius-sm); padding:10px 12px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="sessionNameInput" placeholder="Session name (e.g. Sam — Off-Side Drives)" style="flex:1; min-width:180px;">
+          <button type="button" class="btn-primary" id="confirmSaveSessionBtn">💾 Save Session</button>
+        </div>
+        <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.76rem; color:var(--text-muted); cursor:pointer;">
+          <input type="checkbox" id="saveRawVideoChk" style="width:auto; accent-color:var(--accent-bright);">
+          Also store raw video file(s) on device (uses more storage; unchecked saves lightweight keyframes + full report)
+        </label>
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="text" id="historySearchInput" placeholder="Filter saved sessions by player, discipline, or style...">
+      </div>
+
+      <div class="session-list" id="sessionList"></div>
+      <p class="help-text" id="historyStatusText">Stored privately in your browser’s IndexedDB on this device.</p>
+    </div>
+    <div class="dialog-footer" style="justify-content:space-between; flex-wrap:wrap;">
+      <div class="btn-group">
+        <button type="button" class="btn-sm" id="exportBackupBtn">⬇️ Backup JSON</button>
+        <button type="button" class="btn-sm" id="importBackupBtn">⬆️ Import Backup</button>
+        <input type="file" id="importBackupInput" accept="application/json,.json" hidden>
+      </div>
+      <button type="button" class="btn-ghost" id="closeHistoryFooterBtn">Done</button>
+    </div>
+  </dialog>
+
   <script>
     (() => {
       // Auto-migrate retired or invalid model IDs saved in localStorage
@@ -2153,6 +2252,17 @@
       const reportContent = document.getElementById('reportContent');
       const reportSourceBadge = document.getElementById('reportSourceBadge');
       const speakReportBtn = document.getElementById('speakReportBtn');
+      const saveSessionBtn = document.getElementById('saveSessionBtn');
+      const historyBtn = document.getElementById('historyBtn');
+      const savedCountEl = document.getElementById('savedCount');
+      const historyDialog = document.getElementById('historyDialog');
+      const saveCurrentBox = document.getElementById('saveCurrentBox');
+      const sessionNameInput = document.getElementById('sessionNameInput');
+      const saveRawVideoChk = document.getElementById('saveRawVideoChk');
+      const historySearchInput = document.getElementById('historySearchInput');
+      const sessionListEl = document.getElementById('sessionList');
+      const historyStatusText = document.getElementById('historyStatusText');
+      const importBackupInput = document.getElementById('importBackupInput');
       const emailReportBtn = document.getElementById('emailReportBtn');
       const exportReportBtn = document.getElementById('exportReportBtn');
       const emailDialog = document.getElementById('emailDialog');
@@ -2185,6 +2295,7 @@
         renderFocusChips();
         updateApiStatusUI();
         bindEvents();
+        refreshSavedCount();
       }
 
       function renderFocusChips() {
@@ -2559,8 +2670,25 @@
         document.getElementById('emptyBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
         document.getElementById('emptyLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
         speakReportBtn.addEventListener('click', toggleSpeakReport);
+        saveSessionBtn.addEventListener('click', () => openHistoryDialog(true));
+        historyBtn.addEventListener('click', () => openHistoryDialog(false));
         emailReportBtn.addEventListener('click', openEmailDialog);
         exportReportBtn.addEventListener('click', exportMarkdownReport);
+
+        // Saved Sessions (IndexedDB) Dialog events
+        document.getElementById('closeHistoryDialogBtn').addEventListener('click', () => historyDialog.close());
+        document.getElementById('closeHistoryFooterBtn').addEventListener('click', () => historyDialog.close());
+        historyDialog.addEventListener('click', (e) => {
+          if (e.target === historyDialog) historyDialog.close();
+        });
+        document.getElementById('confirmSaveSessionBtn').addEventListener('click', saveCurrentSession);
+        historySearchInput.addEventListener('input', renderSavedSessionsList);
+        document.getElementById('exportBackupBtn').addEventListener('click', exportSessionsBackup);
+        document.getElementById('importBackupBtn').addEventListener('click', () => importBackupInput.click());
+        importBackupInput.addEventListener('change', () => {
+          if (importBackupInput.files?.[0]) importSessionsBackup(importBackupInput.files[0]);
+          importBackupInput.value = '';
+        });
 
         // Email Dialog events
         document.getElementById('closeEmailDialogBtn').addEventListener('click', () => emailDialog.close());
@@ -3799,6 +3927,7 @@ For each improvement's diagram (top-down net/pitch view):
         reportContent.classList.add('active');
         exportReportBtn.disabled = false;
         emailReportBtn.disabled = false;
+        saveSessionBtn.disabled = false;
         speakReportBtn.disabled = false;
 
         const meta = report._meta || {};
@@ -4311,6 +4440,286 @@ For each improvement's diagram (top-down net/pitch view):
           g.appendChild(el('text', { x: cx, y: cy + 3, fill: '#ffffff', 'font-size': 8.5, 'font-weight': 800, 'text-anchor': 'middle' }, String(idx + 1)));
           svg.appendChild(g);
         });
+      }
+
+      // --- ON-DEVICE STORAGE (IndexedDB) ---
+      const DB_NAME = 'cricket_player_analysis_db';
+      const DB_STORE = 'sessions';
+      let cachedSessions = [];
+
+      function openSessionsDb() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(DB_NAME, 1);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) {
+              db.createObjectStore(DB_STORE, { keyPath: 'id' });
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function getAllSessions() {
+        const db = await openSessionsDb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(DB_STORE, 'readonly');
+          const req = tx.objectStore(DB_STORE).getAll();
+          req.onsuccess = () => {
+            const list = (req.result || []).sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+            resolve(list);
+          };
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function putSession(record) {
+        const db = await openSessionsDb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(DB_STORE, 'readwrite');
+          tx.objectStore(DB_STORE).put(record);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+
+      async function deleteSessionById(id) {
+        const db = await openSessionsDb();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(DB_STORE, 'readwrite');
+          tx.objectStore(DB_STORE).delete(id);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+
+      async function refreshSavedCount() {
+        try {
+          cachedSessions = await getAllSessions();
+          savedCountEl.textContent = String(cachedSessions.length);
+        } catch {
+          savedCountEl.textContent = '0';
+        }
+      }
+
+      async function openHistoryDialog(focusSave = false) {
+        await refreshSavedCount();
+        const hasReport = Boolean(state.currentReport);
+        saveCurrentBox.style.display = hasReport ? 'flex' : 'none';
+        if (hasReport) {
+          const m = state.currentReport._meta || {};
+          const roleLabel = m.role === 'lbw' ? 'LBW Review' : m.role === 'bowling' ? 'Bowling' : 'Batting';
+          if (!sessionNameInput.value.trim() || focusSave) {
+            sessionNameInput.value = `${roleLabel} — ${m.style || ''} (${new Date().toLocaleDateString()})`;
+          }
+          saveRawVideoChk.disabled = state.clips.length === 0;
+          if (state.clips.length === 0) saveRawVideoChk.checked = false;
+        }
+        renderSavedSessionsList();
+        historyDialog.showModal();
+        if (focusSave && hasReport) {
+          sessionNameInput.focus();
+          sessionNameInput.select();
+        }
+      }
+
+      async function saveCurrentSession() {
+        if (!state.currentReport) return;
+        const name = sessionNameInput.value.trim() || `Session ${new Date().toLocaleDateString()}`;
+        const includeVideo = saveRawVideoChk.checked && state.clips.length > 0;
+        const m = state.currentReport._meta || {};
+
+        const firstFrame = state.clips[0]?.frames?.[0]?.dataUrl || null;
+        const clipsMeta = state.clips.map(c => ({
+          name: c.name,
+          angle: c.angle,
+          duration: c.duration,
+          frames: c.frames
+        }));
+        const videoBlobs = includeVideo
+          ? state.clips.map(c => ({ name: c.name, angle: c.angle, type: c.file.type, blob: c.file }))
+          : [];
+
+        const record = {
+          id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          savedAt: new Date().toISOString(),
+          playerName: name,
+          role: m.role || state.role,
+          handedness: m.handedness || handednessSelect.value,
+          style: m.style || styleSelect.value,
+          thumbnail: firstFrame,
+          clipsMeta,
+          includeVideo,
+          videoBlobs,
+          report: state.currentReport
+        };
+
+        try {
+          await putSession(record);
+          await refreshSavedCount();
+          renderSavedSessionsList();
+          historyStatusText.textContent = `✓ Saved "${name}" locally on this device.`;
+        } catch (err) {
+          historyStatusText.textContent = `Could not save session: ${err.message}`;
+        }
+      }
+
+      function loadSavedSession(session) {
+        if (!session || !session.report) return;
+        // Clear current clips & load saved raw videos if attached
+        state.clips.forEach(c => URL.revokeObjectURL(c.url));
+        state.clips = [];
+        state.activeClipId = null;
+
+        if (session.includeVideo && Array.isArray(session.videoBlobs) && session.videoBlobs.length > 0) {
+          const restoredFiles = session.videoBlobs.map(vb =>
+            new File([vb.blob], vb.name || 'saved-clip.mp4', { type: vb.type || 'video/mp4' })
+          );
+          addVideoFiles(restoredFiles);
+          // Restore saved camera angles & keyframes
+          state.clips.forEach((clip, i) => {
+            if (session.videoBlobs[i]?.angle) clip.angle = session.videoBlobs[i].angle;
+            if (session.clipsMeta?.[i]?.frames?.length) clip.frames = session.clipsMeta[i].frames;
+          });
+          renderClipTabs();
+          renderFilmstrip();
+        } else {
+          videoPlayer.pause();
+          videoPlayer.removeAttribute('src');
+          videoPlayer.load();
+          videoStage.classList.remove('active');
+          dropZone.style.display = 'block';
+          changeVideoBtn.style.display = 'none';
+          renderClipTabs();
+          renderFilmstrip();
+        }
+
+        if (session.role) setRole(session.role);
+        if (session.handedness) handednessSelect.value = session.handedness;
+        if (session.style && Array.from(styleSelect.options).some(o => o.value === session.style)) {
+          styleSelect.value = session.style;
+        }
+
+        const reportCopy = JSON.parse(JSON.stringify(session.report));
+        reportCopy._meta = {
+          ...(reportCopy._meta || {}),
+          source: `Saved · ${new Date(session.savedAt).toLocaleDateString()}`
+        };
+        renderReport(reportCopy);
+        historyDialog.close();
+      }
+
+      function renderSavedSessionsList() {
+        const q = (historySearchInput.value || '').trim().toLowerCase();
+        const filtered = cachedSessions.filter(s => {
+          if (!q) return true;
+          return `${s.playerName} ${s.role} ${s.style} ${s.handedness}`.toLowerCase().includes(q);
+        });
+
+        sessionListEl.textContent = '';
+        if (filtered.length === 0) {
+          const empty = document.createElement('p');
+          empty.className = 'help-text';
+          empty.style.textAlign = 'center';
+          empty.style.padding = '18px 8px';
+          empty.textContent = cachedSessions.length === 0
+            ? 'No saved sessions yet. Analyze a clip (or load a Demo) and click Save Session above.'
+            : 'No saved sessions match your filter.';
+          sessionListEl.appendChild(empty);
+          return;
+        }
+
+        filtered.forEach(s => {
+          const row = document.createElement('div');
+          row.className = 'session-row';
+
+          if (s.thumbnail) {
+            const img = document.createElement('img');
+            img.className = 'session-thumb';
+            img.src = s.thumbnail;
+            img.alt = s.playerName;
+            row.appendChild(img);
+          } else {
+            const icon = document.createElement('div');
+            icon.className = 'session-thumb';
+            icon.textContent = s.role === 'lbw' ? '☝️' : s.role === 'bowling' ? '⚡' : '🏏';
+            row.appendChild(icon);
+          }
+
+          const info = document.createElement('div');
+          info.className = 'session-info';
+          const title = document.createElement('div');
+          title.className = 'session-title';
+          title.textContent = s.playerName;
+          const meta = document.createElement('div');
+          meta.className = 'session-meta';
+          const dt = new Date(s.savedAt).toLocaleDateString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          const storageTag = s.includeVideo ? '🎬 Video + Report' : (s.clipsMeta?.length ? '🖼️ Keyframes + Report' : '📄 Report Only');
+          meta.textContent = `${dt} · ${s.role.toUpperCase()} · ${storageTag}`;
+          info.append(title, meta);
+
+          const actions = document.createElement('div');
+          actions.className = 'btn-group';
+          const openBtn = document.createElement('button');
+          openBtn.type = 'button';
+          openBtn.className = 'btn-sm btn-primary';
+          openBtn.textContent = 'Open';
+          openBtn.addEventListener('click', () => loadSavedSession(s));
+
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'btn-sm btn-ghost';
+          delBtn.textContent = '×';
+          delBtn.title = 'Delete saved session';
+          delBtn.addEventListener('click', async () => {
+            await deleteSessionById(s.id);
+            await refreshSavedCount();
+            renderSavedSessionsList();
+          });
+
+          actions.append(openBtn, delBtn);
+          row.append(info, actions);
+          sessionListEl.appendChild(row);
+        });
+      }
+
+      async function exportSessionsBackup() {
+        await refreshSavedCount();
+        if (cachedSessions.length === 0) {
+          historyStatusText.textContent = 'No saved sessions to back up yet.';
+          return;
+        }
+        // Export lightweight portable JSON (reports + keyframes, omitting binary video blobs)
+        const portable = cachedSessions.map(({ videoBlobs, ...rest }) => ({ ...rest, includeVideo: false, videoBlobs: [] }));
+        const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), sessions: portable }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cricket-analysis-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        historyStatusText.textContent = `✓ Exported ${portable.length} session(s) to JSON backup.`;
+      }
+
+      async function importSessionsBackup(file) {
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const list = Array.isArray(parsed.sessions) ? parsed.sessions : Array.isArray(parsed) ? parsed : [];
+          let imported = 0;
+          for (const s of list) {
+            if (s && s.id && s.report) {
+              await putSession(s);
+              imported++;
+            }
+          }
+          await refreshSavedCount();
+          renderSavedSessionsList();
+          historyStatusText.textContent = `✓ Imported ${imported} saved session(s).`;
+        } catch (err) {
+          historyStatusText.textContent = `Backup import failed: ${err.message}`;
+        }
       }
 
       // --- EMAIL COACHING & TRAINING PLAN ---
