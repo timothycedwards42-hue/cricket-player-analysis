@@ -217,6 +217,11 @@
       overflow: hidden;
     }
 
+    .panel.drag-over-panel {
+      border-color: var(--accent-bright);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
     .panel-header {
       padding: 12px 16px;
       border-bottom: 1px solid var(--border);
@@ -281,6 +286,58 @@
 
     .video-stage.active {
       display: flex;
+    }
+
+    .clip-tabs-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .clip-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+
+    .clip-pill:hover {
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    .clip-pill.active {
+      background: var(--accent-glow);
+      border-color: var(--accent-bright);
+      color: #d8f8da;
+    }
+
+    .clip-pill-remove {
+      display: inline-grid;
+      place-items: center;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: inherit;
+      font-size: 0.7rem;
+      line-height: 1;
+    }
+
+    .clip-pill-remove:hover {
+      background: var(--danger);
+      color: #fff;
     }
 
     .video-container {
@@ -1139,6 +1196,66 @@
       gap: 8px;
     }
 
+    .camera-preview-wrap {
+      position: relative;
+      background: #000;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      aspect-ratio: 16 / 9;
+    }
+
+    .camera-preview-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .rec-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(18, 19, 24, 0.85);
+      border: 1px solid rgba(239, 83, 80, 0.7);
+      color: #ffcdd2;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .rec-badge.active {
+      display: inline-flex;
+    }
+
+    .rec-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      animation: recPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes recPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.25; }
+    }
+
+    .btn-danger {
+      background: #c62828;
+      border-color: var(--danger);
+      color: #fff;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #d32f2f;
+    }
+
     .help-text {
       font-size: 0.77rem;
       color: var(--text-muted);
@@ -1214,20 +1331,30 @@
     <section class="panel left-panel" aria-label="Video Upload and Player Configuration">
       <div class="panel-header">
         <h2>🎬 Video Studio &amp; Player Profile</h2>
-        <button type="button" class="btn-sm btn-ghost" id="changeVideoBtn" style="display:none;">Change Video</button>
+        <div class="btn-group">
+          <button type="button" class="btn-sm" id="recordVideoBtn" title="Record a clip directly from your phone or webcam">🎥 Record</button>
+          <button type="button" class="btn-sm btn-ghost" id="changeVideoBtn" style="display:none;">+ Add Angle / Clip</button>
+        </div>
       </div>
 
       <div class="panel-body">
         <!-- Drop Zone -->
-        <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload cricket batting or bowling video">
+        <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload cricket batting or bowling videos">
           <div class="drop-zone-icon">📹</div>
-          <h3>Drop a Batting or Bowling Video Here</h3>
-          <p>MP4, MOV, or WebM &bull; Click to browse &bull; Runs locally in your browser</p>
-          <input type="file" id="videoInput" accept="video/*" hidden>
+          <h3>Drop One or More Batting/Bowling Videos Here</h3>
+          <p>MP4, MOV, or WebM &bull; Upload multiple camera angles (e.g. Side-on + Front-on) for combined analysis</p>
+          <p style="margin-top:6px; font-size:0.74rem; color:var(--pitch);">Mac Photos tip: Click to browse, then open <strong>Media → Photos</strong> in the left sidebar (or paste with ⌘V)</p>
+          <div style="margin-top:12px;">
+            <button type="button" class="btn-sm btn-primary" id="dropRecordBtn">🎥 Record Video with Camera</button>
+          </div>
+          <input type="file" id="videoInput" accept="video/*,.mov,.mp4,.m4v,.webm" multiple hidden>
+          <input type="file" id="cameraInput" accept="video/*" capture="environment" hidden>
         </div>
 
         <!-- Active Video Player + Telestrator -->
         <div class="video-stage" id="videoStage">
+          <div class="clip-tabs-bar" id="clipTabsBar"></div>
+
           <div class="video-container">
             <video id="videoPlayer" playsinline preload="metadata"></video>
             <canvas id="telestrator"></canvas>
@@ -1314,7 +1441,7 @@
           </div>
 
           <div class="field">
-            <label for="cameraAngleSelect">Camera Angle</label>
+            <label for="cameraAngleSelect">Camera Angle (Active Clip)</label>
             <select id="cameraAngleSelect">
               <option value="Side-on">Side-on</option>
               <option value="Front-on (Umpire / Keeper view)">Front-on (Umpire / Keeper view)</option>
@@ -1509,6 +1636,31 @@
     </div>
   </dialog>
 
+  <!-- LIVE CAMERA RECORDER DIALOG -->
+  <dialog id="cameraDialog" aria-labelledby="cameraDialogTitle" style="max-width:560px;">
+    <div class="dialog-header">
+      <h3 id="cameraDialogTitle">🎥 Record Cricket Clip</h3>
+      <button type="button" class="btn-sm btn-ghost" id="closeCameraDialogBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="camera-preview-wrap">
+        <video id="cameraPreview" autoplay playsinline muted></video>
+        <div class="rec-badge" id="recBadge">
+          <span class="rec-dot"></span>
+          <span id="recTimer">REC 00:00</span>
+        </div>
+      </div>
+      <p class="help-text" id="cameraStatusText">Position your camera side-on or behind the bowler, then press Start Recording.</p>
+    </div>
+    <div class="dialog-footer" style="justify-content:space-between;">
+      <button type="button" id="flipCameraBtn">🔄 Flip Camera</button>
+      <div class="btn-group">
+        <button type="button" class="btn-ghost" id="nativeCamFallbackBtn" title="Use your device's built-in Camera app">Use Native Camera</button>
+        <button type="button" class="btn-primary" id="toggleRecordBtn">● Start Recording</button>
+      </div>
+    </div>
+  </dialog>
+
   <script>
     (() => {
       // Auto-migrate retired or invalid model IDs saved in localStorage
@@ -1523,23 +1675,23 @@
       // --- STATE ---
       const state = {
         role: 'batting', // 'batting' | 'bowling'
-        videoFile: null,
-        videoUrl: null,
-        frames: [], // { time: number, dataUrl: string, label: string }
-        trimStart: 0,
-        trimEnd: null,
-        trimCustom: false,
+        clips: [], // { id, file, url, name, angle, duration, trimStart, trimEnd, trimCustom, frames: [], drawings: [] }
+        activeClipId: null,
+        nextClipId: 1,
         loopWindow: false,
         sampleCount: 12,
         drawingEnabled: false,
         isDrawing: false,
         drawStart: null,
-        drawings: [], // { x1, y1, x2, y2 }
         currentReport: null,
         apiKey: localStorage.getItem('cpa_gemini_api_key') || '',
         model: migratedModel,
         analysisMode: localStorage.getItem('cpa_analysis_mode') || 'auto'
       };
+
+      function getActiveClip() {
+        return state.clips.find(c => c.id === state.activeClipId) || null;
+      }
 
       const STYLE_OPTIONS = {
         batting: [
@@ -1562,7 +1714,20 @@
       // --- DOM ELEMENTS ---
       const dropZone = document.getElementById('dropZone');
       const videoInput = document.getElementById('videoInput');
+      const cameraInput = document.getElementById('cameraInput');
+      const recordVideoBtn = document.getElementById('recordVideoBtn');
+      const dropRecordBtn = document.getElementById('dropRecordBtn');
+      const cameraDialog = document.getElementById('cameraDialog');
+      const cameraPreview = document.getElementById('cameraPreview');
+      const cameraStatusText = document.getElementById('cameraStatusText');
+      const recBadge = document.getElementById('recBadge');
+      const recTimer = document.getElementById('recTimer');
+      const toggleRecordBtn = document.getElementById('toggleRecordBtn');
+      const flipCameraBtn = document.getElementById('flipCameraBtn');
+      const nativeCamFallbackBtn = document.getElementById('nativeCamFallbackBtn');
+      const closeCameraDialogBtn = document.getElementById('closeCameraDialogBtn');
       const videoStage = document.getElementById('videoStage');
+      const clipTabsBar = document.getElementById('clipTabsBar');
       const videoPlayer = document.getElementById('videoPlayer');
       const changeVideoBtn = document.getElementById('changeVideoBtn');
       const videoScrubber = document.getElementById('videoScrubber');
@@ -1658,7 +1823,15 @@
         roleBattingBtn.addEventListener('click', () => setRole('batting'));
         roleBowlingBtn.addEventListener('click', () => setRole('bowling'));
 
-        // Drop zone & file input
+        const isVideoFile = (f) =>
+          Boolean(f) && (
+            (f.type && f.type.startsWith('video/')) ||
+            /\.(mov|mp4|m4v|webm|mkv|avi|3gp|mts|mpeg|mpg)$/i.test(f.name || '')
+          );
+
+        const leftPanel = document.querySelector('.left-panel');
+
+        // Drop zone, full-panel drag-and-drop, file input & paste
         dropZone.addEventListener('click', () => videoInput.click());
         dropZone.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -1666,38 +1839,105 @@
             videoInput.click();
           }
         });
-        dropZone.addEventListener('dragover', (e) => {
+        leftPanel.addEventListener('dragover', (e) => {
           e.preventDefault();
           dropZone.classList.add('drag-over');
+          leftPanel.classList.add('drag-over-panel');
         });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-        dropZone.addEventListener('drop', (e) => {
+        leftPanel.addEventListener('dragleave', (e) => {
+          if (!leftPanel.contains(e.relatedTarget)) {
+            dropZone.classList.remove('drag-over');
+            leftPanel.classList.remove('drag-over-panel');
+          }
+        });
+        leftPanel.addEventListener('drop', (e) => {
           e.preventDefault();
           dropZone.classList.remove('drag-over');
-          const file = e.dataTransfer.files[0];
-          if (file && file.type.startsWith('video/')) handleVideoFile(file);
-          else showError('Please drop a valid video file (MP4, MOV, or WebM).');
+          leftPanel.classList.remove('drag-over-panel');
+          const files = Array.from(e.dataTransfer.files || []).filter(isVideoFile);
+          if (files.length > 0) {
+            addVideoFiles(files);
+          } else {
+            showError('No video file detected. On Mac, Apple Photos blocks direct drag-and-drop to browsers — click "+ Add Angle / Clip" (or the drop zone) and choose Media → Photos in the left sidebar of the Open dialog.');
+          }
         });
         videoInput.addEventListener('change', () => {
-          if (videoInput.files[0]) handleVideoFile(videoInput.files[0]);
+          const files = Array.from(videoInput.files || []).filter(isVideoFile);
+          if (files.length > 0) addVideoFiles(files);
+          videoInput.value = '';
+        });
+        window.addEventListener('paste', (e) => {
+          const items = Array.from(e.clipboardData?.files || []).filter(isVideoFile);
+          if (items.length > 0) {
+            e.preventDefault();
+            addVideoFiles(items);
+          }
         });
         changeVideoBtn.addEventListener('click', () => videoInput.click());
 
+        // Camera recording (Native Camera on mobile, Live Recorder modal on desktop)
+        const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const triggerRecordFlow = (e) => {
+          if (e) e.stopPropagation();
+          if (isMobileDevice) {
+            cameraInput.click();
+          } else {
+            openCameraDialog();
+          }
+        };
+        recordVideoBtn.addEventListener('click', triggerRecordFlow);
+        dropRecordBtn.addEventListener('click', triggerRecordFlow);
+        cameraInput.addEventListener('change', () => {
+          const files = Array.from(cameraInput.files || []).filter(isVideoFile);
+          if (files.length > 0) addVideoFiles(files);
+          cameraInput.value = '';
+        });
+        closeCameraDialogBtn.addEventListener('click', closeCameraDialog);
+        cameraDialog.addEventListener('cancel', (e) => {
+          e.preventDefault();
+          closeCameraDialog();
+        });
+        flipCameraBtn.addEventListener('click', () => {
+          camState.facingMode = camState.facingMode === 'environment' ? 'user' : 'environment';
+          startCameraStream();
+        });
+        nativeCamFallbackBtn.addEventListener('click', () => {
+          closeCameraDialog();
+          cameraInput.click();
+        });
+        toggleRecordBtn.addEventListener('click', toggleCameraRecording);
+
+        // Per-clip camera angle sync
+        cameraAngleSelect.addEventListener('change', () => {
+          const clip = getActiveClip();
+          if (clip) {
+            clip.angle = cameraAngleSelect.value;
+            renderClipTabs();
+          }
+        });
+
         // Video player controls
         videoPlayer.addEventListener('loadedmetadata', () => {
+          const clip = getActiveClip();
+          if (!clip) return;
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
           videoScrubber.max = videoPlayer.duration || 100;
-          state.trimStart = 0;
-          state.trimEnd = videoPlayer.duration || 0;
-          state.trimCustom = false;
+          clip.duration = videoPlayer.duration || 0;
+          if (clip.trimEnd === null) {
+            clip.trimStart = 0;
+            clip.trimEnd = clip.duration;
+          }
           updateTrimUI();
           updateTimeReadout();
           resizeTelestrator();
-          autoExtractKeyframes(state.sampleCount);
+          if (clip.frames.length === 0) {
+            autoExtractKeyframes(state.sampleCount);
+          }
         });
         videoPlayer.addEventListener('timeupdate', () => {
-          if (state.loopWindow && state.trimEnd && videoPlayer.currentTime >= state.trimEnd) {
-            videoPlayer.currentTime = state.trimStart;
+          const clip = getActiveClip();
+          if (clip && state.loopWindow && clip.trimEnd && videoPlayer.currentTime >= clip.trimEnd) {
+            videoPlayer.currentTime = clip.trimStart || 0;
           }
           videoScrubber.value = videoPlayer.currentTime;
           updateTimeReadout();
@@ -1710,9 +1950,10 @@
           updateTimeReadout();
         });
         playPauseBtn.addEventListener('click', () => {
+          const clip = getActiveClip();
           if (videoPlayer.paused) {
-            if (state.loopWindow && (videoPlayer.currentTime < state.trimStart || videoPlayer.currentTime >= state.trimEnd)) {
-              videoPlayer.currentTime = state.trimStart;
+            if (clip && state.loopWindow && (videoPlayer.currentTime < clip.trimStart || videoPlayer.currentTime >= clip.trimEnd)) {
+              videoPlayer.currentTime = clip.trimStart || 0;
             }
             videoPlayer.play();
           } else {
@@ -1733,25 +1974,27 @@
         captureFrameBtn.addEventListener('click', captureCurrentFrame);
         sampleCountSelect.addEventListener('change', () => {
           state.sampleCount = parseInt(sampleCountSelect.value, 10) || 12;
-          if (videoPlayer.duration) autoExtractKeyframes(state.sampleCount);
+          if (videoPlayer.duration && getActiveClip()) autoExtractKeyframes(state.sampleCount);
         });
         autoExtractBtn.addEventListener('click', () => autoExtractKeyframes(state.sampleCount));
 
         // Action window trim controls
         setStartBtn.addEventListener('click', () => {
-          if (!videoPlayer.duration) return;
+          const clip = getActiveClip();
+          if (!clip || !videoPlayer.duration) return;
           const t = videoPlayer.currentTime;
-          const end = state.trimEnd ?? videoPlayer.duration;
-          state.trimStart = Math.min(t, Math.max(0, end - 0.1));
-          state.trimCustom = true;
+          const end = clip.trimEnd ?? videoPlayer.duration;
+          clip.trimStart = Math.min(t, Math.max(0, end - 0.1));
+          clip.trimCustom = true;
           updateTrimUI();
           autoExtractKeyframes(state.sampleCount);
         });
         setEndBtn.addEventListener('click', () => {
-          if (!videoPlayer.duration) return;
+          const clip = getActiveClip();
+          if (!clip || !videoPlayer.duration) return;
           const t = videoPlayer.currentTime;
-          state.trimEnd = Math.max(t, Math.min(videoPlayer.duration, state.trimStart + 0.1));
-          state.trimCustom = true;
+          clip.trimEnd = Math.max(t, Math.min(videoPlayer.duration, (clip.trimStart || 0) + 0.1));
+          clip.trimCustom = true;
           updateTrimUI();
           autoExtractKeyframes(state.sampleCount);
         });
@@ -1760,10 +2003,11 @@
           loopWindowBtn.classList.toggle('btn-active', state.loopWindow);
         });
         resetTrimBtn.addEventListener('click', () => {
-          if (!videoPlayer.duration) return;
-          state.trimStart = 0;
-          state.trimEnd = videoPlayer.duration;
-          state.trimCustom = false;
+          const clip = getActiveClip();
+          if (!clip || !videoPlayer.duration) return;
+          clip.trimStart = 0;
+          clip.trimEnd = videoPlayer.duration;
+          clip.trimCustom = false;
           state.loopWindow = false;
           loopWindowBtn.classList.remove('btn-active');
           updateTrimUI();
@@ -1778,11 +2022,12 @@
           drawToggleBtn.classList.toggle('btn-active', state.drawingEnabled);
         });
         clearDrawBtn.addEventListener('click', () => {
-          state.drawings = [];
+          const clip = getActiveClip();
+          if (clip) clip.drawings = [];
           redrawTelestrator();
         });
         telestrator.addEventListener('pointerdown', (e) => {
-          if (!state.drawingEnabled) return;
+          if (!state.drawingEnabled || !getActiveClip()) return;
           state.isDrawing = true;
           const pt = getCanvasPoint(e);
           state.drawStart = pt;
@@ -1794,9 +2039,10 @@
           redrawTelestrator(state.drawStart, pt);
         });
         telestrator.addEventListener('pointerup', (e) => {
-          if (!state.isDrawing || !state.drawStart) return;
+          const clip = getActiveClip();
+          if (!clip || !state.isDrawing || !state.drawStart) return;
           const pt = getCanvasPoint(e);
-          state.drawings.push({ x1: state.drawStart.x, y1: state.drawStart.y, x2: pt.x, y2: pt.y });
+          clip.drawings.push({ x1: state.drawStart.x, y1: state.drawStart.y, x2: pt.x, y2: pt.y });
           state.isDrawing = false;
           state.drawStart = null;
           redrawTelestrator();
@@ -1953,22 +2199,250 @@
         }
       }
 
-      // --- VIDEO HANDLING & KEYFRAMES ---
-      function handleVideoFile(file) {
-        clearError();
-        if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
-        state.videoFile = file;
-        state.videoUrl = URL.createObjectURL(file);
-        state.frames = [];
-        state.drawings = [];
-        renderFilmstrip();
+      // --- LIVE CAMERA RECORDER ---
+      const camState = {
+        stream: null,
+        recorder: null,
+        chunks: [],
+        facingMode: 'environment',
+        isRecording: false,
+        timerId: null,
+        startedAt: 0
+      };
 
-        videoPlayer.src = state.videoUrl;
-        videoInput.value = '';
-        analyzeBtn.disabled = false;
+      function openCameraDialog() {
+        clearError();
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+          cameraInput.click();
+          return;
+        }
+        cameraDialog.showModal();
+        startCameraStream();
+      }
+
+      async function startCameraStream() {
+        stopCameraStream();
+        cameraStatusText.textContent = 'Requesting camera access...';
+        toggleRecordBtn.disabled = true;
+        try {
+          camState.stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: camState.facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true
+          });
+          cameraPreview.srcObject = camState.stream;
+          cameraStatusText.textContent = 'Camera ready. Press Start Recording to capture a batting or bowling clip.';
+          toggleRecordBtn.disabled = false;
+        } catch (err) {
+          cameraStatusText.textContent = `Camera unavailable (${err.message}). On desktop or file://, use HTTPS (e.g. GitHub Pages) or click "Use Native Camera".`;
+        }
+      }
+
+      function stopCameraStream() {
+        if (camState.timerId) {
+          clearInterval(camState.timerId);
+          camState.timerId = null;
+        }
+        if (camState.recorder && camState.recorder.state !== 'inactive') {
+          camState.recorder.stop();
+        }
+        if (camState.stream) {
+          camState.stream.getTracks().forEach(t => t.stop());
+          camState.stream = null;
+        }
+        cameraPreview.srcObject = null;
+        camState.isRecording = false;
+        recBadge.classList.remove('active');
+        toggleRecordBtn.textContent = '● Start Recording';
+        toggleRecordBtn.classList.remove('btn-danger');
+        toggleRecordBtn.classList.add('btn-primary');
+      }
+
+      function closeCameraDialog() {
+        stopCameraStream();
+        if (cameraDialog.open) cameraDialog.close();
+      }
+
+      function toggleCameraRecording() {
+        if (!camState.stream) return;
+        if (!camState.isRecording) {
+          camState.chunks = [];
+          const mimeCandidates = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+          const chosenMime = mimeCandidates.find(m => MediaRecorder.isTypeSupported(m)) || '';
+          try {
+            camState.recorder = chosenMime
+              ? new MediaRecorder(camState.stream, { mimeType: chosenMime })
+              : new MediaRecorder(camState.stream);
+          } catch {
+            camState.recorder = new MediaRecorder(camState.stream);
+          }
+
+          camState.recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) camState.chunks.push(e.data);
+          };
+          camState.recorder.onstop = () => {
+            const mime = camState.recorder.mimeType || chosenMime || 'video/webm';
+            const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+            const blob = new Blob(camState.chunks, { type: mime });
+            if (blob.size > 0) {
+              const file = new File([blob], `recorded-clip-${state.clips.length + 1}.${ext}`, { type: mime });
+              addVideoFiles([file]);
+            }
+          };
+
+          camState.recorder.start();
+          camState.isRecording = true;
+          camState.startedAt = Date.now();
+          recBadge.classList.add('active');
+          recTimer.textContent = 'REC 00:00';
+          toggleRecordBtn.textContent = '⏹ Stop & Add Clip';
+          toggleRecordBtn.classList.remove('btn-primary');
+          toggleRecordBtn.classList.add('btn-danger');
+          cameraStatusText.textContent = 'Recording... press Stop & Add Clip when the shot or delivery is complete.';
+
+          camState.timerId = setInterval(() => {
+            const secs = Math.floor((Date.now() - camState.startedAt) / 1000);
+            const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+            const ss = String(secs % 60).padStart(2, '0');
+            recTimer.textContent = `REC ${mm}:${ss}`;
+          }, 250);
+        } else {
+          const rec = camState.recorder;
+          camState.isRecording = false;
+          if (camState.timerId) {
+            clearInterval(camState.timerId);
+            camState.timerId = null;
+          }
+          if (rec && rec.state !== 'inactive') {
+            rec.stop();
+          }
+          setTimeout(() => {
+            if (camState.stream) {
+              camState.stream.getTracks().forEach(t => t.stop());
+              camState.stream = null;
+            }
+            cameraPreview.srcObject = null;
+            recBadge.classList.remove('active');
+            toggleRecordBtn.textContent = '● Start Recording';
+            toggleRecordBtn.classList.remove('btn-danger');
+            toggleRecordBtn.classList.add('btn-primary');
+            if (cameraDialog.open) cameraDialog.close();
+          }, 150);
+        }
+      }
+
+      // --- VIDEO HANDLING & MULTI-CLIP KEYFRAMES ---
+      const DEFAULT_ANGLES = [
+        'Side-on',
+        'Front-on (Umpire / Keeper view)',
+        'Behind the bowler',
+        'Diagonal / 45-degree'
+      ];
+
+      function addVideoFiles(files) {
+        clearError();
+        let firstNewId = null;
+        files.forEach((file) => {
+          const id = state.nextClipId++;
+          const defaultAngle = state.clips.length === 0
+            ? cameraAngleSelect.value
+            : DEFAULT_ANGLES[state.clips.length % DEFAULT_ANGLES.length];
+          const clip = {
+            id,
+            file,
+            url: URL.createObjectURL(file),
+            name: file.name,
+            angle: defaultAngle,
+            duration: 0,
+            trimStart: 0,
+            trimEnd: null,
+            trimCustom: false,
+            frames: [],
+            drawings: []
+          };
+          state.clips.push(clip);
+          if (firstNewId === null) firstNewId = id;
+        });
+
         dropZone.style.display = 'none';
         videoStage.classList.add('active');
         changeVideoBtn.style.display = 'inline-flex';
+        analyzeBtn.disabled = false;
+
+        if (firstNewId !== null) {
+          selectClip(firstNewId);
+        }
+        updateAnalyzeButtonLabel();
+      }
+
+      function selectClip(clipId) {
+        const clip = state.clips.find(c => c.id === clipId);
+        if (!clip) return;
+        state.activeClipId = clip.id;
+        cameraAngleSelect.value = clip.angle;
+        videoPlayer.pause();
+        videoPlayer.src = clip.url;
+        renderClipTabs();
+        renderFilmstrip();
+        updateTrimUI();
+        redrawTelestrator();
+      }
+
+      function removeClip(clipId) {
+        const idx = state.clips.findIndex(c => c.id === clipId);
+        if (idx === -1) return;
+        URL.revokeObjectURL(state.clips[idx].url);
+        state.clips.splice(idx, 1);
+
+        if (state.clips.length === 0) {
+          state.activeClipId = null;
+          videoPlayer.pause();
+          videoPlayer.removeAttribute('src');
+          videoPlayer.load();
+          videoStage.classList.remove('active');
+          dropZone.style.display = 'block';
+          changeVideoBtn.style.display = 'none';
+          renderClipTabs();
+          renderFilmstrip();
+        } else if (state.activeClipId === clipId) {
+          selectClip(state.clips[Math.max(0, idx - 1)].id);
+        } else {
+          renderClipTabs();
+        }
+        updateAnalyzeButtonLabel();
+      }
+
+      function renderClipTabs() {
+        clipTabsBar.textContent = '';
+        state.clips.forEach((clip, idx) => {
+          const pill = document.createElement('div');
+          pill.className = `clip-pill${clip.id === state.activeClipId ? ' active' : ''}`;
+          pill.title = `${clip.name} (${clip.angle})`;
+
+          const shortAngle = clip.angle.split(' (')[0];
+          const label = document.createElement('span');
+          label.textContent = `Clip ${idx + 1} · ${shortAngle}${clip.frames.length ? ` (${clip.frames.length}f)` : ''}`;
+
+          const rem = document.createElement('button');
+          rem.type = 'button';
+          rem.className = 'clip-pill-remove';
+          rem.textContent = '×';
+          rem.title = 'Remove clip';
+          rem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeClip(clip.id);
+          });
+
+          pill.addEventListener('click', () => selectClip(clip.id));
+          pill.append(label, rem);
+          clipTabsBar.appendChild(pill);
+        });
+      }
+
+      function updateAnalyzeButtonLabel() {
+        const n = state.clips.length;
+        analyzeBtn.textContent = n > 1
+          ? `✨ Analyze ${n} Angles Together & Avenues of Attack`
+          : '✨ Analyze Technique & Avenues of Attack';
       }
 
       function updateTimeReadout() {
@@ -1978,20 +2452,21 @@
       }
 
       function updateTrimUI() {
-        const dur = videoPlayer.duration || 0;
-        if (!dur) {
+        const clip = getActiveClip();
+        const dur = (clip && clip.duration) || videoPlayer.duration || 0;
+        if (!clip || !dur) {
           trimBarRange.style.left = '0%';
           trimBarRange.style.width = '100%';
           trimReadout.textContent = 'Window: Full clip';
           return;
         }
-        const start = Math.max(0, Math.min(state.trimStart || 0, dur));
-        const end = Math.max(start, Math.min(state.trimEnd ?? dur, dur));
+        const start = Math.max(0, Math.min(clip.trimStart || 0, dur));
+        const end = Math.max(start, Math.min(clip.trimEnd ?? dur, dur));
         const leftPct = (start / dur) * 100;
         const widthPct = Math.max(1, ((end - start) / dur) * 100);
         trimBarRange.style.left = `${leftPct}%`;
         trimBarRange.style.width = `${widthPct}%`;
-        if (state.trimCustom) {
+        if (clip.trimCustom) {
           trimReadout.textContent = `Window: ${start.toFixed(2)}s – ${end.toFixed(2)}s (${(end - start).toFixed(2)}s)`;
         } else {
           trimReadout.textContent = `Window: Full clip (${dur.toFixed(2)}s)`;
@@ -2029,78 +2504,126 @@
           tCtx.stroke();
         };
 
-        state.drawings.forEach(d => drawLine(d.x1, d.y1, d.x2, d.y2, '#4caf50'));
+        const clip = getActiveClip();
+        (clip?.drawings || []).forEach(d => drawLine(d.x1, d.y1, d.x2, d.y2, '#4caf50'));
         if (previewStart && previewEnd) {
           drawLine(previewStart.x, previewStart.y, previewEnd.x, previewEnd.y, '#ffb74d');
         }
       }
 
-      function grabVideoFrameDataUrl() {
+      function grabVideoFrameDataUrl(vEl = videoPlayer) {
         const canvas = document.createElement('canvas');
         const maxW = 720;
-        const vw = videoPlayer.videoWidth || 640;
-        const vh = videoPlayer.videoHeight || 360;
+        const vw = vEl.videoWidth || 640;
+        const vh = vEl.videoHeight || 360;
         const scale = Math.min(1, maxW / vw);
         canvas.width = Math.round(vw * scale);
         canvas.height = Math.round(vh * scale);
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(videoPlayer, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(vEl, 0, 0, canvas.width, canvas.height);
         return canvas.toDataURL('image/jpeg', 0.82);
       }
 
       function captureCurrentFrame() {
-        if (!videoPlayer.duration) return;
+        const clip = getActiveClip();
+        if (!clip || !videoPlayer.duration) return;
         const time = videoPlayer.currentTime;
-        const dataUrl = grabVideoFrameDataUrl();
-        state.frames.push({ time, dataUrl, label: `Pinned` });
-        state.frames.sort((a, b) => a.time - b.time);
+        const dataUrl = grabVideoFrameDataUrl(videoPlayer);
+        clip.frames.push({ time, dataUrl, label: 'Pinned' });
+        clip.frames.sort((a, b) => a.time - b.time);
         renderFilmstrip();
+        renderClipTabs();
       }
 
       async function autoExtractKeyframes(count = 12) {
+        const clip = getActiveClip();
         const dur = videoPlayer.duration;
-        if (!dur || !isFinite(dur)) return;
+        if (!clip || !dur || !isFinite(dur)) return;
 
         videoPlayer.pause();
         const prevTime = videoPlayer.currentTime;
-        const start = Math.max(0, Math.min(state.trimStart || 0, dur - 0.05));
-        const end = Math.max(start + 0.05, Math.min(state.trimEnd ?? dur, dur));
+        const start = Math.max(0, Math.min(clip.trimStart || 0, dur - 0.05));
+        const end = Math.max(start + 0.05, Math.min(clip.trimEnd ?? dur, dur));
         const span = Math.max(0.05, end - start);
 
-        const pinned = state.frames.filter(f => f.label === 'Pinned');
+        const pinned = clip.frames.filter(f => f.label === 'Pinned');
         const extracted = [];
 
         for (let i = 0; i < count; i++) {
           const ratio = count === 1 ? 0.5 : i / (count - 1);
           const t = Math.min(dur - 0.02, Math.max(0, start + span * ratio));
-          await seekVideo(t);
+          await seekVideo(videoPlayer, t);
           extracted.push({
             time: t,
-            dataUrl: grabVideoFrameDataUrl(),
+            dataUrl: grabVideoFrameDataUrl(videoPlayer),
             label: `F${i + 1}`
           });
         }
 
-        await seekVideo(prevTime);
-        state.frames = [...extracted, ...pinned].sort((a, b) => a.time - b.time);
+        await seekVideo(videoPlayer, prevTime);
+        clip.frames = [...extracted, ...pinned].sort((a, b) => a.time - b.time);
         renderFilmstrip();
+        renderClipTabs();
       }
 
-      function seekVideo(time) {
+      async function extractKeyframesOffscreen(clip, count = 12) {
+        return new Promise((resolve, reject) => {
+          const v = document.createElement('video');
+          v.muted = true;
+          v.playsInline = true;
+          v.preload = 'auto';
+          v.src = clip.url;
+
+          v.addEventListener('error', () => reject(new Error(`Could not decode clip "${clip.name}"`)), { once: true });
+          v.addEventListener('loadedmetadata', async () => {
+            try {
+              const dur = v.duration || 0;
+              clip.duration = dur;
+              if (clip.trimEnd === null) {
+                clip.trimStart = 0;
+                clip.trimEnd = dur;
+              }
+              const start = Math.max(0, Math.min(clip.trimStart || 0, dur - 0.05));
+              const end = Math.max(start + 0.05, Math.min(clip.trimEnd ?? dur, dur));
+              const span = Math.max(0.05, end - start);
+
+              const extracted = [];
+              for (let i = 0; i < count; i++) {
+                const ratio = count === 1 ? 0.5 : i / (count - 1);
+                const t = Math.min(dur - 0.02, Math.max(0, start + span * ratio));
+                await seekVideo(v, t);
+                extracted.push({
+                  time: t,
+                  dataUrl: grabVideoFrameDataUrl(v),
+                  label: `F${i + 1}`
+                });
+              }
+              clip.frames = extracted;
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          }, { once: true });
+        });
+      }
+
+      function seekVideo(vEl, time) {
         return new Promise((resolve) => {
           const onSeeked = () => {
-            videoPlayer.removeEventListener('seeked', onSeeked);
+            vEl.removeEventListener('seeked', onSeeked);
             resolve();
           };
-          videoPlayer.addEventListener('seeked', onSeeked, { once: true });
-          videoPlayer.currentTime = time;
+          vEl.addEventListener('seeked', onSeeked, { once: true });
+          vEl.currentTime = time;
         });
       }
 
       function renderFilmstrip() {
         filmstrip.textContent = '';
-        frameCount.textContent = String(state.frames.length);
-        state.frames.forEach((f, idx) => {
+        const clip = getActiveClip();
+        const frames = clip ? clip.frames : [];
+        frameCount.textContent = String(frames.length);
+        frames.forEach((f, idx) => {
           const card = document.createElement('div');
           card.className = 'frame-thumb';
           card.title = `Jump to ${f.time.toFixed(2)}s`;
@@ -2124,8 +2647,9 @@
           rem.title = 'Remove frame';
           rem.addEventListener('click', (e) => {
             e.stopPropagation();
-            state.frames.splice(idx, 1);
+            clip.frames.splice(idx, 1);
             renderFilmstrip();
+            renderClipTabs();
           });
 
           card.addEventListener('click', () => {
@@ -2142,53 +2666,76 @@
       async function runAnalysis() {
         clearError();
 
-        if (!state.videoFile) {
-          showError('Please upload a batting or bowling video first (or click "Demo: Batter" / "Demo: Bowler" in the top bar to preview).');
+        if (state.clips.length === 0) {
+          showError('Please upload at least one batting or bowling video first (or click "Demo: Batter" / "Demo: Bowler" in the top bar to preview).');
           return;
         }
 
         if (!state.apiKey) {
           openApiDialog();
-          showError('Add your Gemini API key in Settings to analyze your uploaded video with multimodal AI.');
+          showError('Add your Gemini API key in Settings to analyze your uploaded video(s) with multimodal AI.');
           return;
         }
 
-        setLoading(true, 'Preparing video frames...', 'Extracting biomechanical sequence for Gemini analysis.');
+        setLoading(true, 'Preparing video frames...', `Extracting biomechanical sequences across ${state.clips.length} clip${state.clips.length > 1 ? 's' : ''}.`);
 
         try {
-          if (state.frames.length === 0) {
-            await autoExtractKeyframes(state.sampleCount);
+          const isMultiClip = state.clips.length > 1;
+          // Ensure every clip has keyframes extracted
+          for (let i = 0; i < state.clips.length; i++) {
+            const clip = state.clips[i];
+            if (clip.frames.length === 0) {
+              setLoading(true, `Sampling Clip ${i + 1} of ${state.clips.length}...`, `Extracting ${state.sampleCount} frames from ${clip.name} (${clip.angle}).`);
+              if (clip.id === state.activeClipId && videoPlayer.duration) {
+                await autoExtractKeyframes(state.sampleCount);
+              } else {
+                await extractKeyframesOffscreen(clip, state.sampleCount);
+                renderClipTabs();
+              }
+            }
           }
 
-          const fileSizeMb = state.videoFile.size / (1024 * 1024);
-          // When user explicitly trims an Action Window in Auto mode, prefer the tightly-sampled high-density frames
-          const useFullVideo =
+          const singleClip = state.clips[0];
+          const fileSizeMb = singleClip.file.size / (1024 * 1024);
+          // Multi-clip always uses labeled keyframes across all angles so payload stays crisp & under API limits
+          const useFullVideo = !isMultiClip && (
             (state.analysisMode === 'video' && fileSizeMb <= 18) ||
-            (state.analysisMode === 'auto' && !state.trimCustom && fileSizeMb <= 15);
+            (state.analysisMode === 'auto' && !singleClip.trimCustom && fileSizeMb <= 15)
+          );
 
           const parts = [{ text: buildPrompt() }];
 
           if (useFullVideo) {
             setLoading(true, 'Encoding video clip...', `Sending full video (${fileSizeMb.toFixed(1)} MB) to ${state.model}.`);
-            const base64Video = await fileToBase64(state.videoFile);
+            const base64Video = await fileToBase64(singleClip.file);
             parts.push({
               inlineData: {
-                mimeType: state.videoFile.type || 'video/mp4',
+                mimeType: singleClip.file.type || 'video/mp4',
                 data: base64Video
               }
             });
           } else {
-            const winLabel = state.trimCustom
-              ? `from trimmed action window (${(state.trimStart || 0).toFixed(2)}s–${(state.trimEnd || 0).toFixed(2)}s)`
-              : 'across the clip';
-            setLoading(true, 'Analyzing keyframe sequence...', `Sending ${state.frames.length} timestamped frames ${winLabel} to ${state.model}.`);
-            state.frames.forEach((f, i) => {
-              parts.push({ text: `Frame ${i + 1} (${f.label}) at ${f.time.toFixed(2)}s:` });
+            const totalFrames = state.clips.reduce((sum, c) => sum + c.frames.length, 0);
+            const subtitle = isMultiClip
+              ? `Sending ${totalFrames} frames across ${state.clips.length} camera angles to ${state.model}.`
+              : `Sending ${totalFrames} timestamped frames to ${state.model}.`;
+            setLoading(true, 'Analyzing biomechanical sequences...', subtitle);
+
+            state.clips.forEach((clip, cIdx) => {
+              const winDesc = clip.trimCustom
+                ? `${(clip.trimStart || 0).toFixed(2)}s–${(clip.trimEnd || 0).toFixed(2)}s`
+                : `Full clip (${(clip.duration || 0).toFixed(2)}s)`;
               parts.push({
-                inlineData: {
-                  mimeType: 'image/jpeg',
-                  data: f.dataUrl.split(',')[1]
-                }
+                text: `=== CLIP ${cIdx + 1} of ${state.clips.length}: "${clip.name}" | Camera Angle: ${clip.angle} | Window: ${winDesc} ===`
+              });
+              clip.frames.forEach((f, fIdx) => {
+                parts.push({ text: `Clip ${cIdx + 1} (${clip.angle}) — Frame ${fIdx + 1} (${f.label}) at ${f.time.toFixed(2)}s:` });
+                parts.push({
+                  inlineData: {
+                    mimeType: 'image/jpeg',
+                    data: f.dataUrl.split(',')[1]
+                  }
+                });
               });
             });
           }
@@ -2233,7 +2780,9 @@
             handedness: handednessSelect.value,
             style: styleSelect.value,
             format: formatSelect.value,
-            source: `AI Analysis (${state.model})`,
+            source: isMultiClip
+              ? `AI Analysis · ${state.clips.length} Angles (${state.model})`
+              : `AI Analysis (${state.model})`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
 
@@ -2262,16 +2811,26 @@
           ? 'HOW TO BOWL TO THIS BATTER (dismissal plans, lines/lengths to target, field placements, variations, and zones to avoid bowling)'
           : 'HOW TO BAT AGAINST THIS BOWLER (scoring options, guard/trigger adjustments, deliveries to punish vs. respect, and ways to put this bowler under pressure)';
 
+        const clipSummary = state.clips.map((c, idx) => {
+          const win = c.trimCustom
+            ? `${(c.trimStart || 0).toFixed(2)}s–${(c.trimEnd || 0).toFixed(2)}s`
+            : 'Full clip';
+          return `Clip ${idx + 1}: ${c.angle} (${win})`;
+        }).join('; ');
+
+        const multiAngleNote = state.clips.length > 1
+          ? `You are being given ${state.clips.length} SEPARATE CAMERA ANGLES of the SAME player (${clipSummary}). Cross-reference and synthesize all angles together into ONE unified biomechanical & tactical report (e.g., combine side-on stride/front-leg brace/head-over-knee with front-on/behind-bowler alignment, falling away, bat path, or seam position), noting which angle confirmed key findings.`
+          : `Analyze the uploaded ${state.role.toUpperCase()} video/frames carefully.`;
+
         return `You are an elite international cricket biomechanics coach and tactical analyst.
-Analyze the uploaded ${state.role.toUpperCase()} video/frames carefully.
+${multiAngleNote}
 
 Player Context:
 - Discipline: ${state.role}
 - Handedness: ${handednessSelect.value}
 - Style: ${styleSelect.value}
-- Camera Angle: ${cameraAngleSelect.value}
+- Uploaded Clips / Camera Angles: ${clipSummary || cameraAngleSelect.value}
 - Match Format: ${formatSelect.value}
-- Focus Action Window: ${state.trimCustom ? `${(state.trimStart || 0).toFixed(2)}s to ${(state.trimEnd || 0).toFixed(2)}s` : 'Full clip'}
 - Coach/Player Notes: ${notesInput.value.trim() || 'None provided'}
 
 Be honest, specific, and grounded strictly in what is visible in the video/frames (mention camera limitations if a specific body part is partially occluded).
