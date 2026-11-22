@@ -1241,6 +1241,79 @@
       display: block;
     }
 
+    .camera-crosshair {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+    }
+
+    .camera-crosshair.active {
+      display: block;
+    }
+
+    .camera-hud-pill {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(18, 19, 24, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #e6ebf5;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+    }
+
+    .cam-controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      align-items: center;
+    }
+
+    @media (max-width: 520px) {
+      .cam-controls-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .zoom-target-dot {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      margin-left: -12px;
+      margin-top: -12px;
+      border: 2px solid var(--warning);
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.65);
+      pointer-events: none;
+      display: none;
+    }
+
+    .zoom-target-dot::after {
+      content: "";
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      background: var(--warning);
+    }
+
+    .zoom-target-dot.active {
+      display: block;
+    }
+
+    .video-container.aim-mode {
+      cursor: crosshair;
+      outline: 2px dashed var(--warning);
+    }
+
     .rec-badge {
       position: absolute;
       top: 10px;
@@ -1480,9 +1553,10 @@
         <div class="video-stage" id="videoStage">
           <div class="clip-tabs-bar" id="clipTabsBar"></div>
 
-          <div class="video-container">
+          <div class="video-container" id="videoContainer">
             <video id="videoPlayer" playsinline preload="metadata"></video>
             <canvas id="telestrator"></canvas>
+            <div class="zoom-target-dot" id="zoomTargetDot" title="Zoom focal point"></div>
           </div>
 
           <div class="video-controls-bar">
@@ -1530,11 +1604,12 @@
             <div class="filmstrip-header">
               <span>Keyframes queued for analysis (<strong id="frameCount">0</strong>)</span>
               <div class="btn-group">
-                <select id="zoomSelect" aria-label="Center crop zoom for wide-angle footage" title="Center crop zoom (great for wide-angle smart glasses footage)" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+                <select id="zoomSelect" aria-label="Center crop zoom for wide-angle footage" title="Crop zoom (great for wide-angle smart glasses footage)" style="width:auto; padding:3px 6px; font-size:0.74rem;">
                   <option value="1" selected>1× Zoom</option>
-                  <option value="2">2× Center</option>
-                  <option value="3">3× Center</option>
+                  <option value="2">2× Zoom</option>
+                  <option value="3">3× Zoom</option>
                 </select>
+                <button type="button" class="btn-sm" id="aimZoomBtn" title="Click on the batter or stumps in the video to set the zoom target">🎯 Aim</button>
                 <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
                   <option value="12" selected>12 frames</option>
                   <option value="16">16 frames</option>
@@ -1790,20 +1865,48 @@
   </dialog>
 
   <!-- LIVE CAMERA & ROLLING BUFFER DIALOG -->
-  <dialog id="cameraDialog" aria-labelledby="cameraDialogTitle" style="max-width:580px;">
+  <dialog id="cameraDialog" aria-labelledby="cameraDialogTitle" style="max-width:620px;">
     <div class="dialog-header">
-      <h3 id="cameraDialogTitle">🎥 Live Camera &amp; Rolling Buffer</h3>
-      <button type="button" class="btn-sm btn-ghost" id="closeCameraDialogBtn" aria-label="Close">✕</button>
+      <h3 id="cameraDialogTitle">🎥 Live Camera Preview &amp; Rolling Buffer</h3>
+      <div class="btn-group">
+        <button type="button" class="btn-sm btn-active" id="toggleCrosshairBtn" title="Toggle stumps &amp; pitch alignment guide">🎯 Guide</button>
+        <button type="button" class="btn-sm btn-ghost" id="closeCameraDialogBtn" aria-label="Close">✕</button>
+      </div>
     </div>
     <div class="dialog-body">
       <div class="camera-preview-wrap">
         <video id="cameraPreview" autoplay playsinline muted></video>
+        <!-- Stumps & Pitch Alignment Crosshair Overlay -->
+        <svg class="camera-crosshair active" id="cameraCrosshair" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true">
+          <line x1="80" y1="6" x2="80" y2="84" stroke="rgba(76, 175, 80, 0.7)" stroke-width="0.5" stroke-dasharray="2 2"/>
+          <line x1="20" y1="45" x2="140" y2="45" stroke="rgba(255, 183, 77, 0.55)" stroke-width="0.45" stroke-dasharray="2 2"/>
+          <rect x="64" y="24" width="32" height="44" rx="2" fill="none" stroke="rgba(199, 176, 136, 0.75)" stroke-width="0.6" stroke-dasharray="3 2"/>
+          <text x="80" y="21" fill="rgba(255,255,255,0.8)" font-size="3.6" font-weight="700" text-anchor="middle">STUMPS / BATTER ZONE</text>
+        </svg>
         <div class="rec-badge" id="recBadge">
           <span class="rec-dot"></span>
           <span id="recTimer">REC 00:00</span>
         </div>
+        <div class="camera-hud-pill" id="cameraHudPill">LIVE · 1.0×</div>
       </div>
-      <p class="help-text" id="cameraStatusText">Position your camera, then use Standard Recording or Rolling 10s Buffer for instant umpire replay.</p>
+
+      <div class="cam-controls-grid">
+        <div class="field">
+          <label for="cameraDeviceSelect">Camera / Lens Source</label>
+          <select id="cameraDeviceSelect">
+            <option value="">Default Rear / Main Camera</option>
+          </select>
+        </div>
+        <div class="field">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label for="cameraZoomSlider">Live Camera Zoom</label>
+            <span class="help-text" id="cameraZoomVal" style="font-variant-numeric:tabular-nums;">1.0×</span>
+          </div>
+          <input type="range" id="cameraZoomSlider" min="1" max="5" step="0.1" value="1" disabled style="accent-color:var(--accent-bright); cursor:pointer;">
+        </div>
+      </div>
+
+      <p class="help-text" id="cameraStatusText">Line up the batter &amp; stumps inside the target box, adjust zoom, then record or start the 10s Rolling Buffer.</p>
 
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px;">
         <label style="display:flex; align-items:center; gap:7px; font-size:0.78rem; color:var(--text); cursor:pointer; text-transform:none; letter-spacing:0;">
@@ -1845,6 +1948,9 @@
         loopWindow: false,
         sampleCount: 12,
         zoomLevel: 1,
+        zoomFocusX: 0.5,
+        zoomFocusY: 0.5,
+        aimZoomMode: false,
         focusAreas: [],
         isSpeaking: false,
         drawingEnabled: false,
@@ -1926,6 +2032,12 @@
       const dropRecordBtn = document.getElementById('dropRecordBtn');
       const cameraDialog = document.getElementById('cameraDialog');
       const cameraPreview = document.getElementById('cameraPreview');
+      const cameraCrosshair = document.getElementById('cameraCrosshair');
+      const toggleCrosshairBtn = document.getElementById('toggleCrosshairBtn');
+      const cameraHudPill = document.getElementById('cameraHudPill');
+      const cameraDeviceSelect = document.getElementById('cameraDeviceSelect');
+      const cameraZoomSlider = document.getElementById('cameraZoomSlider');
+      const cameraZoomVal = document.getElementById('cameraZoomVal');
       const cameraStatusText = document.getElementById('cameraStatusText');
       const recBadge = document.getElementById('recBadge');
       const recTimer = document.getElementById('recTimer');
@@ -1937,6 +2049,8 @@
       const nativeCamFallbackBtn = document.getElementById('nativeCamFallbackBtn');
       const closeCameraDialogBtn = document.getElementById('closeCameraDialogBtn');
       const videoStage = document.getElementById('videoStage');
+      const videoContainer = document.getElementById('videoContainer');
+      const zoomTargetDot = document.getElementById('zoomTargetDot');
       const clipTabsBar = document.getElementById('clipTabsBar');
       const videoPlayer = document.getElementById('videoPlayer');
       const changeVideoBtn = document.getElementById('changeVideoBtn');
@@ -1950,6 +2064,7 @@
       const autoExtractBtn = document.getElementById('autoExtractBtn');
       const sampleCountSelect = document.getElementById('sampleCountSelect');
       const zoomSelect = document.getElementById('zoomSelect');
+      const aimZoomBtn = document.getElementById('aimZoomBtn');
       const filmstrip = document.getElementById('filmstrip');
       const frameCount = document.getElementById('frameCount');
       const trimBarRange = document.getElementById('trimBarRange');
@@ -2153,8 +2268,20 @@
           closeCameraDialog();
         });
         flipCameraBtn.addEventListener('click', () => {
+          camState.selectedDeviceId = '';
           camState.facingMode = camState.facingMode === 'environment' ? 'user' : 'environment';
           startCameraStream();
+        });
+        cameraDeviceSelect.addEventListener('change', () => {
+          camState.selectedDeviceId = cameraDeviceSelect.value;
+          startCameraStream();
+        });
+        toggleCrosshairBtn.addEventListener('click', () => {
+          const on = cameraCrosshair.classList.toggle('active');
+          toggleCrosshairBtn.classList.toggle('btn-active', on);
+        });
+        cameraZoomSlider.addEventListener('input', () => {
+          applyLiveCameraZoom(parseFloat(cameraZoomSlider.value) || 1);
         });
         nativeCamFallbackBtn.addEventListener('click', () => {
           closeCameraDialog();
@@ -2227,10 +2354,50 @@
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
         });
         captureFrameBtn.addEventListener('click', captureCurrentFrame);
+        const applyVideoPreviewZoom = () => {
+          videoPlayer.style.transformOrigin = `${(state.zoomFocusX * 100).toFixed(1)}% ${(state.zoomFocusY * 100).toFixed(1)}%`;
+          videoPlayer.style.transform = state.zoomLevel > 1 ? `scale(${state.zoomLevel})` : '';
+          if (state.aimZoomMode) {
+            zoomTargetDot.style.left = `${(state.zoomFocusX * 100).toFixed(1)}%`;
+            zoomTargetDot.style.top = `${(state.zoomFocusY * 100).toFixed(1)}%`;
+            zoomTargetDot.classList.add('active');
+          } else {
+            zoomTargetDot.classList.remove('active');
+          }
+        };
         zoomSelect.addEventListener('change', () => {
           state.zoomLevel = parseFloat(zoomSelect.value) || 1;
-          videoPlayer.style.transform = state.zoomLevel > 1 ? `scale(${state.zoomLevel})` : '';
+          applyVideoPreviewZoom();
           if (videoPlayer.duration && getActiveClip()) autoExtractKeyframes(state.sampleCount);
+        });
+        aimZoomBtn.addEventListener('click', () => {
+          state.aimZoomMode = !state.aimZoomMode;
+          aimZoomBtn.classList.toggle('btn-active', state.aimZoomMode);
+          videoContainer.classList.toggle('aim-mode', state.aimZoomMode);
+          if (state.aimZoomMode) {
+            // Temporarily un-zoom preview while aiming so user can click exact target easily
+            videoPlayer.style.transform = '';
+            zoomTargetDot.style.left = `${(state.zoomFocusX * 100).toFixed(1)}%`;
+            zoomTargetDot.style.top = `${(state.zoomFocusY * 100).toFixed(1)}%`;
+            zoomTargetDot.classList.add('active');
+          } else {
+            applyVideoPreviewZoom();
+          }
+        });
+        videoContainer.addEventListener('click', (e) => {
+          if (!state.aimZoomMode || !getActiveClip()) return;
+          const rect = videoContainer.getBoundingClientRect();
+          state.zoomFocusX = Math.max(0.05, Math.min(0.95, (e.clientX - rect.left) / rect.width));
+          state.zoomFocusY = Math.max(0.05, Math.min(0.95, (e.clientY - rect.top) / rect.height));
+          if (state.zoomLevel === 1) {
+            state.zoomLevel = 2;
+            zoomSelect.value = '2';
+          }
+          state.aimZoomMode = false;
+          aimZoomBtn.classList.remove('btn-active');
+          videoContainer.classList.remove('aim-mode');
+          applyVideoPreviewZoom();
+          if (videoPlayer.duration) autoExtractKeyframes(state.sampleCount);
         });
         sampleCountSelect.addEventListener('change', () => {
           state.sampleCount = parseInt(sampleCountSelect.value, 10) || 12;
@@ -2480,6 +2647,8 @@
         recorder: null,
         chunks: [],
         facingMode: 'environment',
+        selectedDeviceId: '',
+        liveZoom: 1,
         isRecording: false,
         isBuffering: false,
         autoStartBuffer: false,
@@ -2494,6 +2663,53 @@
       function getBestVideoMime() {
         const mimeCandidates = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
         return mimeCandidates.find(m => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) || '';
+      }
+
+      async function populateCameraDevices(activeDeviceId = '') {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter(d => d.kind === 'videoinput');
+          cameraDeviceSelect.textContent = '';
+          if (videoInputs.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Default Camera';
+            cameraDeviceSelect.appendChild(opt);
+            return;
+          }
+          videoInputs.forEach((d, idx) => {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || `Camera ${idx + 1}`;
+            cameraDeviceSelect.appendChild(opt);
+          });
+          if (activeDeviceId && videoInputs.some(d => d.deviceId === activeDeviceId)) {
+            cameraDeviceSelect.value = activeDeviceId;
+          }
+        } catch {}
+      }
+
+      function updateCameraHud(width, height, zoomVal) {
+        const resPart = width && height ? `${width}×${height}` : 'LIVE';
+        cameraHudPill.textContent = `${resPart} · ${Number(zoomVal || 1).toFixed(1)}×`;
+      }
+
+      async function applyLiveCameraZoom(zoomVal) {
+        camState.liveZoom = zoomVal;
+        cameraZoomVal.textContent = `${zoomVal.toFixed(1)}×`;
+        const track = camState.stream?.getVideoTracks?.()[0];
+        if (!track) return;
+        const settings = track.getSettings ? track.getSettings() : {};
+        try {
+          await track.applyConstraints({ advanced: [{ zoom: zoomVal }] });
+          cameraPreview.style.transform = '';
+          updateCameraHud(settings.width, settings.height, zoomVal);
+        } catch {
+          // Hardware zoom unavailable; apply preview-only indicator
+          cameraPreview.style.transform = zoomVal > 1 ? `scale(${zoomVal})` : '';
+          updateCameraHud(settings.width, settings.height, zoomVal);
+        }
       }
 
       function openCameraDialog(autoBuffer = false) {
@@ -2513,19 +2729,50 @@
         cameraStatusText.textContent = 'Requesting camera access...';
         toggleRecordBtn.disabled = true;
         toggleBufferBtn.disabled = true;
+        cameraZoomSlider.disabled = true;
         try {
+          const videoConstraints = camState.selectedDeviceId
+            ? { deviceId: { exact: camState.selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+            : { facingMode: { ideal: camState.facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } };
+
           camState.stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: camState.facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            video: videoConstraints,
             audio: true
           });
           cameraPreview.srcObject = camState.stream;
+          cameraPreview.style.transform = '';
           toggleRecordBtn.disabled = false;
           toggleBufferBtn.disabled = false;
+
+          const track = camState.stream.getVideoTracks()[0];
+          const settings = track?.getSettings ? track.getSettings() : {};
+          const caps = track?.getCapabilities ? track.getCapabilities() : {};
+          await populateCameraDevices(settings.deviceId || camState.selectedDeviceId);
+
+          if (caps && caps.zoom) {
+            cameraZoomSlider.min = caps.zoom.min || 1;
+            cameraZoomSlider.max = Math.min(8, caps.zoom.max || 5);
+            cameraZoomSlider.step = caps.zoom.step || 0.1;
+            const curZoom = settings.zoom || caps.zoom.min || 1;
+            cameraZoomSlider.value = curZoom;
+            cameraZoomSlider.disabled = false;
+            cameraZoomVal.textContent = `${Number(curZoom).toFixed(1)}× (HW)`;
+            updateCameraHud(settings.width, settings.height, curZoom);
+          } else {
+            cameraZoomSlider.min = 1;
+            cameraZoomSlider.max = 3;
+            cameraZoomSlider.step = 0.1;
+            cameraZoomSlider.value = 1;
+            cameraZoomSlider.disabled = false;
+            cameraZoomVal.textContent = '1.0× (Preview)';
+            updateCameraHud(settings.width, settings.height, 1);
+          }
+
           if (camState.autoStartBuffer) {
             camState.autoStartBuffer = false;
             startRollingBuffer();
           } else {
-            cameraStatusText.textContent = 'Camera ready. Use Standard Recording or Rolling 10s Buffer for instant umpire replay.';
+            cameraStatusText.textContent = 'Live preview active — align stumps in the target box, adjust zoom, then record or start the 10s Buffer.';
           }
         } catch (err) {
           cameraStatusText.textContent = `Camera unavailable (${err.message}). Live camera requires HTTPS (e.g. GitHub Pages) or click "Native Camera".`;
@@ -2955,8 +3202,10 @@
         const zoom = Math.max(1, state.zoomLevel || 1);
         const cropW = vw / zoom;
         const cropH = vh / zoom;
-        const sx = (vw - cropW) / 2;
-        const sy = (vh - cropH) / 2;
+        const fx = Math.max(0, Math.min(1, state.zoomFocusX ?? 0.5));
+        const fy = Math.max(0, Math.min(1, state.zoomFocusY ?? 0.5));
+        const sx = Math.max(0, Math.min(vw - cropW, fx * vw - cropW / 2));
+        const sy = Math.max(0, Math.min(vh - cropH, fy * vh - cropH / 2));
         const scale = Math.min(1, maxW / cropW);
         canvas.width = Math.round(cropW * scale);
         canvas.height = Math.round(cropH * scale);
