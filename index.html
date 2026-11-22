@@ -574,7 +574,7 @@
 
     .segmented {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
@@ -1285,6 +1285,100 @@
       background: #d32f2f;
     }
 
+    /* --- TV-STYLE DRS LBW VERDICT CARD --- */
+    .drs-card {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      background: linear-gradient(135deg, #161822, #1f2230);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+
+    .drs-card.active {
+      display: flex;
+    }
+
+    .drs-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .drs-decision {
+      font-size: 1.05rem;
+      font-weight: 800;
+      padding: 5px 14px;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .drs-decision.out {
+      background: rgba(239, 83, 80, 0.22);
+      border: 1px solid var(--danger);
+      color: #ffcdd2;
+    }
+
+    .drs-decision.not-out {
+      background: rgba(76, 175, 80, 0.22);
+      border: 1px solid var(--accent-bright);
+      color: #c8f7ca;
+    }
+
+    .drs-decision.umpires-call {
+      background: rgba(255, 183, 77, 0.22);
+      border: 1px solid var(--warning);
+      color: #ffe082;
+    }
+
+    .drs-lights {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    @media (max-width: 640px) {
+      .drs-lights {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .drs-light {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      text-align: center;
+    }
+
+    .drs-light-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .drs-light-val {
+      font-size: 0.82rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .drs-light.red { border-color: rgba(239, 83, 80, 0.65); background: rgba(239, 83, 80, 0.1); }
+    .drs-light.red .drs-light-val { color: #ef9a9a; }
+    .drs-light.green { border-color: rgba(76, 175, 80, 0.65); background: rgba(76, 175, 80, 0.1); }
+    .drs-light.green .drs-light-val { color: #a5d6a7; }
+    .drs-light.amber { border-color: rgba(255, 183, 77, 0.65); background: rgba(255, 183, 77, 0.1); }
+    .drs-light.amber .drs-light-val { color: #ffe082; }
+
     .help-text {
       font-size: 0.77rem;
       color: var(--text-muted);
@@ -1351,6 +1445,7 @@
       </button>
       <button type="button" id="loadBatterDemoBtn">Demo: Batter</button>
       <button type="button" id="loadBowlerDemoBtn">Demo: Bowler</button>
+      <button type="button" id="loadLbwDemoBtn">Demo: LBW</button>
       <button type="button" id="exportReportBtn" disabled>Export Report</button>
     </div>
   </header>
@@ -1434,6 +1529,11 @@
             <div class="filmstrip-header">
               <span>Keyframes queued for analysis (<strong id="frameCount">0</strong>)</span>
               <div class="btn-group">
+                <select id="zoomSelect" aria-label="Center crop zoom for wide-angle footage" title="Center crop zoom (great for wide-angle smart glasses footage)" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+                  <option value="1" selected>1× Zoom</option>
+                  <option value="2">2× Center</option>
+                  <option value="3">3× Center</option>
+                </select>
                 <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
                   <option value="12" selected>12 frames</option>
                   <option value="16">16 frames</option>
@@ -1449,10 +1549,11 @@
         <!-- Player Profile Form -->
         <div class="form-grid">
           <div class="field full">
-            <label>Discipline</label>
-            <div class="segmented" role="group" aria-label="Player discipline">
+            <label>Discipline / Mode</label>
+            <div class="segmented" role="group" aria-label="Analysis mode">
               <button type="button" id="roleBattingBtn" class="active">🏏 Batting</button>
               <button type="button" id="roleBowlingBtn">⚡ Bowling</button>
+              <button type="button" id="roleLbwBtn">☝️ LBW Review</button>
             </div>
           </div>
 
@@ -1514,7 +1615,10 @@
     <section class="panel right-panel" aria-label="Analysis and Tactical Matchup Report">
       <div class="panel-header">
         <h2 id="reportTitle">📊 Coaching &amp; Tactical Matchup Report</h2>
-        <span class="badge badge-pitch" id="reportSourceBadge" style="display:none;">Ready</span>
+        <div class="btn-group">
+          <button type="button" class="btn-sm" id="speakReportBtn" disabled title="Read verdict &amp; key cues aloud (great for smart glasses Bluetooth audio)">🔊 Read Aloud</button>
+          <span class="badge badge-pitch" id="reportSourceBadge" style="display:none;">Ready</span>
+        </div>
       </div>
 
       <div class="panel-body" style="flex:1;">
@@ -1523,12 +1627,13 @@
           <div class="report-empty-icon">🎯</div>
           <h3>Upload a Clip to Unlock Technique &amp; Matchup Intelligence</h3>
           <p>
-            Get a biomechanical phase-by-phase breakdown, strengths &amp; weaknesses, actionable coaching drills, and a complete
-            <strong>Avenues of Attack</strong> game plan for how to bowl to this batter or bat against this bowler.
+            Get a biomechanical phase-by-phase breakdown, strengths &amp; weaknesses, actionable coaching drills, an
+            <strong>Avenues of Attack</strong> playbook, or an umpire-POV <strong>LBW DRS Review</strong>.
           </p>
           <div class="demo-row">
             <button type="button" class="btn-primary" id="emptyBatterDemoBtn">Preview Batter Report</button>
             <button type="button" id="emptyBowlerDemoBtn">Preview Bowler Report</button>
+            <button type="button" id="emptyLbwDemoBtn">Preview LBW Review</button>
           </div>
         </div>
 
@@ -1543,6 +1648,19 @@
 
         <!-- Populated Report -->
         <div class="report-content" id="reportContent">
+          <!-- TV-Style DRS LBW Verdict Banner (shown in LBW mode) -->
+          <div class="drs-card" id="drsVerdictCard">
+            <div class="drs-header">
+              <div>
+                <span class="badge badge-blue">☝️ Smart-Glasses / Umpire POV DRS Review</span>
+                <div class="help-text" id="drsConfidenceText" style="margin-top:4px;"></div>
+              </div>
+              <div class="drs-decision" id="drsDecisionBadge">OUT</div>
+            </div>
+            <div class="drs-lights" id="drsLightsGrid"></div>
+            <p id="drsRationale" style="font-size:0.83rem; color:#e5e8f5;"></p>
+            <p class="help-text" id="drsCaveat" style="font-style:italic;"></p>
+          </div>
           <div class="summary-banner">
             <div class="summary-meta">
               <div style="display:flex; gap:6px; flex-wrap:wrap;" id="reportBadges"></div>
@@ -1714,7 +1832,9 @@
         nextClipId: 1,
         loopWindow: false,
         sampleCount: 12,
+        zoomLevel: 1,
         focusAreas: [],
+        isSpeaking: false,
         drawingEnabled: false,
         isDrawing: false,
         drawStart: null,
@@ -1748,6 +1868,14 @@
           'Spin, Drift & Flight',
           'Follow-Through & Falling Away',
           'Slower Balls & Variations'
+        ],
+        lbw: [
+          'Pitching Line (Outside Leg Check)',
+          'Impact In-Line vs. Outside Off',
+          'Height / Going Over Stumps',
+          'Bat-First / Inside Edge Check',
+          'Shot Offered vs. No Shot',
+          'Swing / Seam Angle After Pitching'
         ]
       };
 
@@ -1766,6 +1894,14 @@
           'Off-Spin (Finger Spin)',
           'Leg-Spin / Wrist Spin',
           'Left-Arm Orthodox Spin'
+        ],
+        lbw: [
+          'Right-Arm Pace — Over the Wicket',
+          'Right-Arm Pace — Around the Wicket',
+          'Left-Arm Pace — Over the Wicket',
+          'Left-Arm Pace — Around the Wicket',
+          'Off-Spin / Left-Arm Orthodox',
+          'Leg-Spin / Wrist Spin'
         ]
       };
 
@@ -1797,6 +1933,7 @@
       const captureFrameBtn = document.getElementById('captureFrameBtn');
       const autoExtractBtn = document.getElementById('autoExtractBtn');
       const sampleCountSelect = document.getElementById('sampleCountSelect');
+      const zoomSelect = document.getElementById('zoomSelect');
       const filmstrip = document.getElementById('filmstrip');
       const frameCount = document.getElementById('frameCount');
       const trimBarRange = document.getElementById('trimBarRange');
@@ -1813,6 +1950,7 @@
 
       const roleBattingBtn = document.getElementById('roleBattingBtn');
       const roleBowlingBtn = document.getElementById('roleBowlingBtn');
+      const roleLbwBtn = document.getElementById('roleLbwBtn');
       const handednessSelect = document.getElementById('handednessSelect');
       const styleLabel = document.getElementById('styleLabel');
       const styleSelect = document.getElementById('styleSelect');
@@ -1829,7 +1967,14 @@
       const loadingSubtitle = document.getElementById('loadingSubtitle');
       const reportContent = document.getElementById('reportContent');
       const reportSourceBadge = document.getElementById('reportSourceBadge');
+      const speakReportBtn = document.getElementById('speakReportBtn');
       const exportReportBtn = document.getElementById('exportReportBtn');
+      const drsVerdictCard = document.getElementById('drsVerdictCard');
+      const drsConfidenceText = document.getElementById('drsConfidenceText');
+      const drsDecisionBadge = document.getElementById('drsDecisionBadge');
+      const drsLightsGrid = document.getElementById('drsLightsGrid');
+      const drsRationale = document.getElementById('drsRationale');
+      const drsCaveat = document.getElementById('drsCaveat');
 
       const apiDialog = document.getElementById('apiDialog');
       const apiStatusBtn = document.getElementById('apiStatusBtn');
@@ -1868,8 +2013,12 @@
 
       function populateStyleOptions() {
         styleSelect.textContent = '';
-        styleLabel.textContent = state.role === 'batting' ? 'Batting Role / Style' : 'Bowling Style';
-        STYLE_OPTIONS[state.role].forEach(opt => {
+        styleLabel.textContent = state.role === 'batting'
+          ? 'Batting Role / Style'
+          : state.role === 'bowling'
+            ? 'Bowling Style'
+            : 'Bowler Type & Angle';
+        (STYLE_OPTIONS[state.role] || []).forEach(opt => {
           const el = document.createElement('option');
           el.value = opt;
           el.textContent = opt;
@@ -1902,6 +2051,7 @@
         // Role toggle
         roleBattingBtn.addEventListener('click', () => setRole('batting'));
         roleBowlingBtn.addEventListener('click', () => setRole('bowling'));
+        roleLbwBtn.addEventListener('click', () => setRole('lbw'));
 
         const isVideoFile = (f) =>
           Boolean(f) && (
@@ -2052,6 +2202,11 @@
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
         });
         captureFrameBtn.addEventListener('click', captureCurrentFrame);
+        zoomSelect.addEventListener('change', () => {
+          state.zoomLevel = parseFloat(zoomSelect.value) || 1;
+          videoPlayer.style.transform = state.zoomLevel > 1 ? `scale(${state.zoomLevel})` : '';
+          if (videoPlayer.duration && getActiveClip()) autoExtractKeyframes(state.sampleCount);
+        });
         sampleCountSelect.addEventListener('change', () => {
           state.sampleCount = parseInt(sampleCountSelect.value, 10) || 12;
           if (videoPlayer.duration && getActiveClip()) autoExtractKeyframes(state.sampleCount);
@@ -2142,8 +2297,11 @@
         analyzeBtn.addEventListener('click', runAnalysis);
         document.getElementById('loadBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
         document.getElementById('loadBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
+        document.getElementById('loadLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
         document.getElementById('emptyBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
         document.getElementById('emptyBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
+        document.getElementById('emptyLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
+        speakReportBtn.addEventListener('click', toggleSpeakReport);
         exportReportBtn.addEventListener('click', exportMarkdownReport);
 
         // API Settings Dialog
@@ -2179,8 +2337,18 @@
         state.focusAreas = [];
         roleBattingBtn.classList.toggle('active', role === 'batting');
         roleBowlingBtn.classList.toggle('active', role === 'bowling');
+        roleLbwBtn.classList.toggle('active', role === 'lbw');
+        if (role === 'lbw') {
+          cameraAngleSelect.value = 'Front-on (Umpire / Keeper view)';
+          const clip = getActiveClip();
+          if (clip) {
+            clip.angle = cameraAngleSelect.value;
+            renderClipTabs();
+          }
+        }
         populateStyleOptions();
         renderFocusChips();
+        updateAnalyzeButtonLabel();
       }
 
       function openApiDialog() {
@@ -2522,6 +2690,12 @@
 
       function updateAnalyzeButtonLabel() {
         const n = state.clips.length;
+        if (state.role === 'lbw') {
+          analyzeBtn.textContent = n > 1
+            ? `☝️ Run LBW DRS Review (${n} Angles)`
+            : '☝️ Run LBW DRS Review';
+          return;
+        }
         analyzeBtn.textContent = n > 1
           ? `✨ Analyze ${n} Angles Together & Avenues of Attack`
           : '✨ Analyze Technique & Avenues of Attack';
@@ -2598,12 +2772,17 @@
         const maxW = 720;
         const vw = vEl.videoWidth || 640;
         const vh = vEl.videoHeight || 360;
-        const scale = Math.min(1, maxW / vw);
-        canvas.width = Math.round(vw * scale);
-        canvas.height = Math.round(vh * scale);
+        const zoom = Math.max(1, state.zoomLevel || 1);
+        const cropW = vw / zoom;
+        const cropH = vh / zoom;
+        const sx = (vw - cropW) / 2;
+        const sy = (vh - cropH) / 2;
+        const scale = Math.min(1, maxW / cropW);
+        canvas.width = Math.round(cropW * scale);
+        canvas.height = Math.round(cropH * scale);
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(vEl, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', 0.82);
+        ctx.drawImage(vEl, sx, sy, cropW, cropH, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.84);
       }
 
       function captureCurrentFrame() {
@@ -2889,41 +3068,58 @@
 
       function buildPrompt() {
         const isBatting = state.role === 'batting';
-        const attackPerspective = isBatting
-          ? 'HOW TO BOWL TO THIS BATTER (dismissal plans, lines/lengths to target, field placements, variations, and zones to avoid bowling)'
-          : 'HOW TO BAT AGAINST THIS BOWLER (scoring options, guard/trigger adjustments, deliveries to punish vs. respect, and ways to put this bowler under pressure)';
+        const isLbw = state.role === 'lbw';
+        const attackPerspective = isLbw
+          ? 'HOW THE BOWLER CAN REPEAT THIS THREAT AND HOW THE BATTER MUST ADJUST TO AVOID LBW ON THIS LINE/LENGTH'
+          : isBatting
+            ? 'HOW TO BOWL TO THIS BATTER (dismissal plans, lines/lengths to target, field placements, variations, and zones to avoid bowling)'
+            : 'HOW TO BAT AGAINST THIS BOWLER (scoring options, guard/trigger adjustments, deliveries to punish vs. respect, and ways to put this bowler under pressure)';
 
         const clipSummary = state.clips.map((c, idx) => {
           const win = c.trimCustom
             ? `${(c.trimStart || 0).toFixed(2)}s–${(c.trimEnd || 0).toFixed(2)}s`
             : 'Full clip';
-          return `Clip ${idx + 1}: ${c.angle} (${win})`;
+          return `Clip ${idx + 1}: ${c.angle} (${win}${state.zoomLevel > 1 ? `, ${state.zoomLevel}x center zoom` : ''})`;
         }).join('; ');
 
         const multiAngleNote = state.clips.length > 1
-          ? `You are being given ${state.clips.length} SEPARATE CAMERA ANGLES of the SAME player (${clipSummary}). Cross-reference and synthesize all angles together into ONE unified biomechanical & tactical report (e.g., combine side-on stride/front-leg brace/head-over-knee with front-on/behind-bowler alignment, falling away, bat path, or seam position), noting which angle confirmed key findings.`
-          : `Analyze the uploaded ${state.role.toUpperCase()} video/frames carefully.`;
+          ? `You are being given ${state.clips.length} SEPARATE CAMERA ANGLES of the SAME delivery/player (${clipSummary}). Cross-reference and synthesize all angles together into ONE unified report, noting which angle confirmed key findings.`
+          : isLbw
+            ? `Perform an official MCC Law 36 LBW Umpire Review on the uploaded delivery from umpire/POV footage. Carefully judge Pitching, Impact (and whether a genuine shot was offered), Bat/Inside Edge first, and projected Wickets height/line based on crease depth, knee-roll height, and seam/swing trajectory. Be honest about visual uncertainty if camera resolution/angle limits precision.`
+            : `Analyze the uploaded ${state.role.toUpperCase()} video/frames carefully.`;
 
         const focusInstruction = state.focusAreas.length > 0
-          ? `\nPriority Coaching Focus Areas requested by the coach/player: ${state.focusAreas.join(', ')}.\nSpecifically inspect the mechanics driving these priority areas (e.g., where energy/pace is lost, accuracy leaks, or specific shot vulnerabilities), address them directly in Weaknesses, Improvements/Drills, and Avenues of Attack, while STILL reporting any other major biomechanical strengths or flaws clearly visible in the clip(s).`
+          ? `\nPriority Focus Areas requested: ${state.focusAreas.join(', ')}.\nSpecifically inspect the mechanics or LBW criteria driving these priority areas, address them directly in Weaknesses, Improvements/Drills, and Avenues of Attack, while STILL reporting any other major observations clearly visible in the clip(s).`
           : '';
 
-        return `You are an elite international cricket biomechanics coach and tactical analyst.
+        const lbwSchemaBlock = isLbw ? `
+  "lbwVerdict": {
+    "decision": "OUT | NOT OUT | UMPIRE'S CALL",
+    "confidence": "e.g. 78% visual confidence (Umpire POV estimate)",
+    "pitching": { "label": "IN LINE | OUTSIDE OFF | OUTSIDE LEG", "color": "red | amber | green" },
+    "impact": { "label": "IN LINE | OUTSIDE OFF (NO SHOT) | OUTSIDE OFF (SHOT)", "color": "red | amber | green" },
+    "batEdge": { "label": "NO BAT DETECTED | POSSIBLE EDGE | BAT FIRST", "color": "red | amber | green" },
+    "wickets": { "label": "HITTING | UMPIRE'S CALL | MISSING", "color": "red | amber | green" },
+    "rationale": "2-3 sentence clear MCC Law 36 explanation of the decision.",
+    "caveat": "1-sentence honest note on camera/frame-rate limitations vs Hawk-Eye."
+  },` : '';
+
+        return `You are an elite international cricket ${isLbw ? 'third umpire (MCC Law 36 specialist) and biomechanics analyst' : 'biomechanics coach and tactical analyst'}.
 ${multiAngleNote}${focusInstruction}
 
 Player Context:
-- Discipline: ${state.role}
-- Handedness: ${handednessSelect.value}
-- Style: ${styleSelect.value}
+- Mode: ${isLbw ? 'LBW Umpire Review (MCC Law 36)' : state.role}
+- Batter Handedness: ${handednessSelect.value}
+- Style / Bowler Angle: ${styleSelect.value}
 - Uploaded Clips / Camera Angles: ${clipSummary || cameraAngleSelect.value}
 - Match Format: ${formatSelect.value}
-- Selected Focus Areas: ${state.focusAreas.length ? state.focusAreas.join(', ') : 'General full-action review'}
-- Coach/Player Notes: ${notesInput.value.trim() || 'None provided'}
+- Selected Focus Areas: ${state.focusAreas.length ? state.focusAreas.join(', ') : 'General review'}
+- Coach/Umpire Notes: ${notesInput.value.trim() || 'None provided'}
 
-Be honest, specific, and grounded strictly in what is visible in the video/frames (mention camera limitations if a specific body part is partially occluded).
+Be honest, specific, and grounded strictly in what is visible in the video/frames (mention camera limitations if a specific body part or ball impact is partially occluded).
 Return ONLY valid JSON matching this exact schema:
-{
-  "overview": "2-3 sentence executive summary of the player's action/technique.",
+{${lbwSchemaBlock}
+  "overview": "2-3 sentence executive summary.",
   "scorecard": [
     { "metric": "Short pillar name (5 items total)", "score": 7.5, "note": "Brief 1-line observation" }
   ],
@@ -3010,16 +3206,104 @@ For each improvement's diagram (top-down net/pitch view):
         }
       }
 
+      function toggleSpeakReport() {
+        if (!('speechSynthesis' in window)) {
+          showError('Speech playback is not supported in this browser.');
+          return;
+        }
+        if (state.isSpeaking) {
+          window.speechSynthesis.cancel();
+          state.isSpeaking = false;
+          speakReportBtn.textContent = '🔊 Read Aloud';
+          speakReportBtn.classList.remove('btn-active');
+          return;
+        }
+        const r = state.currentReport;
+        if (!r) return;
+
+        const chunks = [];
+        if (r.lbwVerdict) {
+          const v = r.lbwVerdict;
+          chunks.push(`LBW Review decision: ${v.decision}.`);
+          chunks.push(`Pitching: ${v.pitching?.label || ''}. Impact: ${v.impact?.label || ''}. Bat check: ${v.batEdge?.label || ''}. Wickets: ${v.wickets?.label || ''}.`);
+          if (v.rationale) chunks.push(v.rationale);
+        } else {
+          if (r.overview) chunks.push(r.overview);
+          if (r.weaknesses?.[0]) chunks.push(`Key weakness: ${r.weaknesses[0].title}. ${r.weaknesses[0].detail}`);
+          if (r.improvements?.[0]) chunks.push(`Top coaching cue: ${r.improvements[0].cue || r.improvements[0].title}.`);
+          if (r.avenuesOfAttack?.summary) chunks.push(`Matchup plan: ${r.avenuesOfAttack.summary}`);
+        }
+
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(chunks.join(' '));
+        utter.rate = 1.02;
+        utter.onend = () => {
+          state.isSpeaking = false;
+          speakReportBtn.textContent = '🔊 Read Aloud';
+          speakReportBtn.classList.remove('btn-active');
+        };
+        utter.onerror = utter.onend;
+
+        state.isSpeaking = true;
+        speakReportBtn.textContent = '⏹ Stop Audio';
+        speakReportBtn.classList.add('btn-active');
+        window.speechSynthesis.speak(utter);
+      }
+
       function renderReport(report) {
+        if (state.isSpeaking && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          state.isSpeaking = false;
+          speakReportBtn.textContent = '🔊 Read Aloud';
+          speakReportBtn.classList.remove('btn-active');
+        }
         state.currentReport = report;
         analyzeBtn.disabled = false;
         loadingState.classList.remove('active');
         reportEmpty.style.display = 'none';
         reportContent.classList.add('active');
         exportReportBtn.disabled = false;
+        speakReportBtn.disabled = false;
 
         const meta = report._meta || {};
-        const isBatting = (meta.role || state.role) === 'batting';
+        const roleMode = meta.role || state.role;
+        const isBatting = roleMode === 'batting';
+        const isLbw = roleMode === 'lbw';
+
+        // TV-Style DRS Verdict Banner
+        if (report.lbwVerdict) {
+          const v = report.lbwVerdict;
+          drsVerdictCard.classList.add('active');
+          drsConfidenceText.textContent = v.confidence || 'Umpire POV Visual Estimate';
+          const decUpper = String(v.decision || 'UMPIRE\'S CALL').toUpperCase();
+          drsDecisionBadge.textContent = decUpper === 'OUT' ? '☝️ OUT' : decUpper === 'NOT OUT' ? '✋ NOT OUT' : '⚖️ UMPIRE\'S CALL';
+          drsDecisionBadge.className = `drs-decision ${decUpper === 'OUT' ? 'out' : decUpper === 'NOT OUT' ? 'not-out' : 'umpires-call'}`;
+
+          drsLightsGrid.textContent = '';
+          [
+            { title: 'Pitching', data: v.pitching },
+            { title: 'Impact', data: v.impact },
+            { title: 'Bat / Edge', data: v.batEdge },
+            { title: 'Wickets', data: v.wickets }
+          ].forEach(item => {
+            const box = document.createElement('div');
+            const c = item.data?.color || 'amber';
+            box.className = `drs-light ${c}`;
+            const l1 = document.createElement('span');
+            l1.className = 'drs-light-label';
+            l1.textContent = item.title;
+            const l2 = document.createElement('span');
+            l2.className = 'drs-light-val';
+            l2.textContent = item.data?.label || 'N/A';
+            box.append(l1, l2);
+            drsLightsGrid.appendChild(box);
+          });
+
+          drsRationale.textContent = v.rationale || '';
+          drsCaveat.textContent = v.caveat ? `Note: ${v.caveat}` : '';
+        } else {
+          drsVerdictCard.classList.remove('active');
+        }
 
         reportSourceBadge.style.display = 'inline-flex';
         reportSourceBadge.textContent = meta.source || 'Analysis Ready';
@@ -3028,7 +3312,7 @@ For each improvement's diagram (top-down net/pitch view):
         const badgesEl = document.getElementById('reportBadges');
         badgesEl.textContent = '';
         [
-          { text: isBatting ? '🏏 Batting' : '⚡ Bowling', cls: 'badge-green' },
+          { text: isLbw ? '☝️ LBW Review' : isBatting ? '🏏 Batting' : '⚡ Bowling', cls: isLbw ? 'badge-red' : 'badge-green' },
           { text: meta.handedness || handednessSelect.value, cls: 'badge-pitch' },
           { text: meta.style || styleSelect.value, cls: 'badge-blue' },
           { text: meta.format || formatSelect.value, cls: 'badge-amber' }
@@ -3043,9 +3327,11 @@ For each improvement's diagram (top-down net/pitch view):
         document.getElementById('reportOverview').textContent = report.overview || '';
 
         // Attack tab label
-        document.getElementById('attackTabBtn').textContent = isBatting
-          ? '⚔️ How to Bowl to Them'
-          : '⚔️ How to Bat Against Them';
+        document.getElementById('attackTabBtn').textContent = isLbw
+          ? '⚖️ Umpire & Matchup Notes'
+          : isBatting
+            ? '⚔️ How to Bowl to Them'
+            : '⚔️ How to Bat Against Them';
 
         // Scorecard
         const scoreGrid = document.getElementById('scorecardGrid');
@@ -3699,7 +3985,7 @@ For each improvement's diagram (top-down net/pitch view):
               ]
             }
           });
-        } else {
+        } else if (role === 'bowling') {
           handednessSelect.value = 'Right-handed';
           styleSelect.value = 'Fast-Medium Seam / Swing';
           renderReport({
@@ -3843,6 +4129,99 @@ For each improvement's diagram (top-down net/pitch view):
                 { title: 'Don’t Chase Width Early', detail: 'Their upright seam gets extra bounce on a 6–7m length; leave balls outside off-stump until they tire.' },
                 { title: 'Rotate Strike into the Leg Side', detail: 'Soft-hands nudges into vacant mid-wicket force them to over-correct wider outside off, opening up cut and cover-drive chances.' },
                 { title: 'Attack Later in the Spell', detail: 'Front-knee fatigue amplifies their fall-away after 3–4 overs, increasing loose half-volleys and leg-stump gifts.' }
+              ]
+            }
+          });
+        } else {
+          handednessSelect.value = 'Right-handed';
+          styleSelect.value = 'Right-Arm Pace — Over the Wicket';
+          renderReport({
+            _meta: {
+              role: 'lbw',
+              handedness: 'Right-handed',
+              style: 'Right-Arm Pace — Over the Wicket',
+              format: 'All-format / Club',
+              source: 'Sample LBW DRS Demo',
+              timestamp: 'Demo'
+            },
+            lbwVerdict: {
+              decision: 'OUT',
+              confidence: '82% visual confidence (Umpire POV estimate)',
+              pitching: { label: 'IN LINE (MIDDLE-OFF)', color: 'red' },
+              impact: { label: 'IN LINE (MIDDLE)', color: 'red' },
+              batEdge: { label: 'NO BAT DETECTED', color: 'red' },
+              wickets: { label: 'HITTING MIDDLE-LEG', color: 'red' },
+              rationale: 'Full delivery pitches on middle-and-off and nips back slightly. The batter plays across the line with their head falling off-side, struck below the knee roll directly in front of middle stump with no visible bat deflection.',
+              caveat: 'Single-lens POV footage estimates post-impact projection visually rather than calibrated Hawk-Eye stereo tracking.'
+            },
+            overview: 'Classic front-pad LBW from an umpire POV: full delivery pitching in line on middle-and-off, catching the right-handed batter playing around the front pad with impact below the knee roll.',
+            scorecard: [
+              { metric: 'Pitching Line', score: 9.0, note: 'Clearly inside the line of off and leg stump.' },
+              { metric: 'Impact Line', score: 8.8, note: 'Struck squarely in front of middle stump.' },
+              { metric: 'Height Projection', score: 8.4, note: 'Impact below knee roll; comfortably hitting stumps.' },
+              { metric: 'Bat/Pad Separation', score: 8.0, note: 'Bat passes outside the line of the ball.' },
+              { metric: 'Trajectory Clarity', score: 7.5, note: '2× center zoom makes seam angle easy to read.' }
+            ],
+            strengths: [
+              { title: 'Bowler: Full & Straight Seam Presentation', detail: 'Pitched full enough to take height out of the equation and force a front-foot decision.' },
+              { title: 'Umpire POV Alignment', detail: 'Eye-level angle directly behind the non-striker’s stumps gives an unobstructed read of pitching and impact.' }
+            ],
+            weaknesses: [
+              { title: 'Batter: Head Falling Outside Off-Stump', detail: 'Head tilts right of the front toe, causing the bat to close early across the line of middle stump.' },
+              { title: 'Batter: Closed Front Foot', detail: 'Front boot plants pointing toward mid-off, blocking the bat swing through mid-on.' }
+            ],
+            phases: [
+              { phase: '1. Pitching Point', timestamp: '0.62s', observation: 'Ball lands full (~4.5m from stumps) on middle-and-off stump line.' },
+              { phase: '2. Pad Impact', timestamp: '0.78s', observation: 'Struck on the front pad shin/below knee roll in line with middle stump; bat comes down outside the ball.' },
+              { phase: '3. Projected Path', timestamp: '0.78s – 0.90s', observation: 'Minimal bounce from full length; angle continues into the middle third of middle-and-leg stump.' }
+            ],
+            improvements: [
+              {
+                title: 'Play Straighter Through Mid-On Against Full Inswing',
+                priority: 'High',
+                drillName: 'Top-Hand Straight-Bat Pad Protection Drill',
+                why: 'Eliminates playing around the front pad when attacked on middle-and-off.',
+                equipment: ['2 Target Cones', 'Underarm / Side-Arm Feeder'],
+                steps: [
+                  'Set two cones forming a straight gate down the pitch from middle stump.',
+                  'Receive full balls swinging into middle-and-leg while keeping your head strictly inside your front toe.',
+                  'Present the full face of the bat back through the cone gate before rolling wrists.'
+                ],
+                reps: '3 sets × 12 balls',
+                checkpoint: 'Bat travels straight behind the line of the ball instead of closing toward square leg.',
+                cue: 'Show the maker’s name down the pitch',
+                videoSearchQuery: 'cricket batting how to stop getting out lbw playing straight drill',
+                diagram: {
+                  caption: 'Keep bat path straight through the middle-stump cone gate to defeat full inswing.',
+                  elements: [
+                    { type: 'player', x: 0.50, y: 0.18, label: 'Batter' },
+                    { type: 'cone', x: 0.39, y: 0.52, label: 'Gate' },
+                    { type: 'cone', x: 0.61, y: 0.52, label: 'Gate' },
+                    { type: 'coach', x: 0.50, y: 0.86, label: 'Feeder' }
+                  ],
+                  arrows: [
+                    { fromX: 0.54, fromY: 0.80, toX: 0.50, toY: 0.25, style: 'ball' },
+                    { fromX: 0.50, fromY: 0.25, toX: 0.50, toY: 0.62, style: 'shot' }
+                  ]
+                }
+              }
+            ],
+            avenuesOfAttack: {
+              headline: 'Umpire & Matchup Breakdown',
+              summary: 'For the bowler, this full middle-and-off inswinger is a high-percentage wicket ball against this batter. For the batter, opening the front toe slightly and holding the head inside the line immediately turns this LBW threat into a straight drive.',
+              pitchZones: [
+                { label: 'Pitching Spot (Full Middle-Off)', type: 'primary', x: 0.54, y: 0.26, reason: 'In line pitching takes outside-leg out of play.' },
+                { label: 'Pad Impact (Middle Stump)', type: 'primary', x: 0.50, y: 0.14, reason: 'Struck in line below knee roll — high LBW probability.' },
+                { label: 'Too Wide Outside Off', type: 'avoid', x: 0.78, y: 0.30, reason: 'Impact outside off with a shot offered is Not Out.' }
+              ],
+              plans: [
+                { title: 'Bowler Repeat Plan', tag: 'Primary Plan', execution: 'Keep the ball full (~4–5m) targeting middle-and-off with a straight mid-on and short mid-wicket in place.' },
+                { title: 'Batter Counter-Adjustment', tag: 'Counter-Attack', execution: 'Take a middle-stump guard, keep the head stacked over the front knee, and drive straight past the bowler.' }
+              ],
+              fieldOrGuard: ['Pitching: In Line', 'Impact: In Line', 'Below Knee Roll', 'No Bat First', 'Wickets: Hitting'],
+              tacticalCues: [
+                { title: 'Smart Glasses Tip', detail: 'Use 2× or 3× Center Zoom and trim the Action Window to the 0.8s around pitching and impact for the sharpest DRS read.' },
+                { title: 'Audio Check', detail: 'Tap Read Aloud to hear the verdict hands-free through your smart glasses Bluetooth speakers.' }
               ]
             }
           });
