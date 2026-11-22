@@ -353,6 +353,41 @@
       flex-wrap: wrap;
     }
 
+    .trim-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .trim-bar-track {
+      position: relative;
+      height: 5px;
+      background: var(--surface-elevated);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .trim-bar-range {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0%;
+      width: 100%;
+      background: linear-gradient(90deg, var(--accent-bright), var(--info));
+      border-radius: 999px;
+    }
+
+    .trim-readout {
+      font-size: 0.73rem;
+      color: var(--pitch);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
     .btn-group {
       display: inline-flex;
       align-items: center;
@@ -1204,6 +1239,10 @@
               <span class="time-readout" id="timeReadout">0.00s / 0.00s</span>
             </div>
 
+            <div class="trim-bar-track" title="Active action window">
+              <div class="trim-bar-range" id="trimBarRange"></div>
+            </div>
+
             <div class="transport-row">
               <div class="btn-group">
                 <button type="button" class="btn-sm" id="playPauseBtn">▶ Play</button>
@@ -1223,12 +1262,29 @@
                 <button type="button" class="btn-sm" id="clearDrawBtn" title="Clear drawings">Clear</button>
               </div>
             </div>
+
+            <div class="trim-row">
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="setStartBtn" title="Mark start of shot or delivery">[ Set Start</button>
+                <button type="button" class="btn-sm" id="setEndBtn" title="Mark end of shot or delivery">Set End ]</button>
+                <button type="button" class="btn-sm" id="loopWindowBtn" title="Loop playback inside the action window">🔁 Loop</button>
+                <button type="button" class="btn-sm btn-ghost" id="resetTrimBtn" title="Reset action window to full video">Reset</button>
+              </div>
+              <span class="trim-readout" id="trimReadout">Window: Full clip</span>
+            </div>
           </div>
 
           <div class="filmstrip-section">
             <div class="filmstrip-header">
               <span>Keyframes queued for analysis (<strong id="frameCount">0</strong>)</span>
-              <button type="button" class="btn-sm btn-ghost" id="autoExtractBtn">Auto-Sample 8 Frames</button>
+              <div class="btn-group">
+                <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+                  <option value="12" selected>12 frames</option>
+                  <option value="16">16 frames</option>
+                  <option value="24">24 frames</option>
+                </select>
+                <button type="button" class="btn-sm btn-ghost" id="autoExtractBtn">Sample Window</button>
+              </div>
             </div>
             <div class="filmstrip" id="filmstrip"></div>
           </div>
@@ -1428,11 +1484,14 @@
       </div>
 
       <div class="field">
-        <label for="modelSelect">Gemini Model</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <label for="modelSelect">Gemini Model</label>
+          <button type="button" class="btn-sm btn-ghost" id="refreshModelsBtn">↻ Load Available Models</button>
+        </div>
         <select id="modelSelect">
-          <option value="gemini-3.8-flash">gemini-3.8-flash (Fast, Multimodal — Recommended)</option>
-          <option value="gemini-3.8-pro">gemini-3.8-pro (Deeper Biomechanical Reasoning)</option>
+          <option value="gemini-3.8-flash">gemini-3.8-flash (Fast, Multimodal)</option>
         </select>
+        <span class="help-text" id="modelsStatusText">Open settings with a valid API key to fetch your account's exact available models.</span>
       </div>
 
       <div class="field">
@@ -1452,13 +1511,11 @@
 
   <script>
     (() => {
-      // Auto-migrate deprecated 2.5 model IDs saved in localStorage
+      // Auto-migrate retired or invalid model IDs saved in localStorage
       const savedModelRaw = localStorage.getItem('cpa_gemini_model') || 'gemini-3.8-flash';
-      const migratedModel = savedModelRaw === 'gemini-2.5-pro'
-        ? 'gemini-3.8-pro'
-        : savedModelRaw.startsWith('gemini-2.5-')
-          ? 'gemini-3.8-flash'
-          : savedModelRaw;
+      const migratedModel = (savedModelRaw.startsWith('gemini-2.5-') || savedModelRaw === 'gemini-3.8-pro')
+        ? 'gemini-3.8-flash'
+        : savedModelRaw;
       if (migratedModel !== savedModelRaw) {
         localStorage.setItem('cpa_gemini_model', migratedModel);
       }
@@ -1469,6 +1526,11 @@
         videoFile: null,
         videoUrl: null,
         frames: [], // { time: number, dataUrl: string, label: string }
+        trimStart: 0,
+        trimEnd: null,
+        trimCustom: false,
+        loopWindow: false,
+        sampleCount: 12,
         drawingEnabled: false,
         isDrawing: false,
         drawStart: null,
@@ -1511,8 +1573,15 @@
       const speedSelect = document.getElementById('speedSelect');
       const captureFrameBtn = document.getElementById('captureFrameBtn');
       const autoExtractBtn = document.getElementById('autoExtractBtn');
+      const sampleCountSelect = document.getElementById('sampleCountSelect');
       const filmstrip = document.getElementById('filmstrip');
       const frameCount = document.getElementById('frameCount');
+      const trimBarRange = document.getElementById('trimBarRange');
+      const trimReadout = document.getElementById('trimReadout');
+      const setStartBtn = document.getElementById('setStartBtn');
+      const setEndBtn = document.getElementById('setEndBtn');
+      const loopWindowBtn = document.getElementById('loopWindowBtn');
+      const resetTrimBtn = document.getElementById('resetTrimBtn');
 
       const telestrator = document.getElementById('telestrator');
       const tCtx = telestrator.getContext('2d');
@@ -1618,11 +1687,18 @@
         videoPlayer.addEventListener('loadedmetadata', () => {
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
           videoScrubber.max = videoPlayer.duration || 100;
+          state.trimStart = 0;
+          state.trimEnd = videoPlayer.duration || 0;
+          state.trimCustom = false;
+          updateTrimUI();
           updateTimeReadout();
           resizeTelestrator();
-          autoExtractKeyframes(8);
+          autoExtractKeyframes(state.sampleCount);
         });
         videoPlayer.addEventListener('timeupdate', () => {
+          if (state.loopWindow && state.trimEnd && videoPlayer.currentTime >= state.trimEnd) {
+            videoPlayer.currentTime = state.trimStart;
+          }
           videoScrubber.value = videoPlayer.currentTime;
           updateTimeReadout();
         });
@@ -1634,8 +1710,14 @@
           updateTimeReadout();
         });
         playPauseBtn.addEventListener('click', () => {
-          if (videoPlayer.paused) videoPlayer.play();
-          else videoPlayer.pause();
+          if (videoPlayer.paused) {
+            if (state.loopWindow && (videoPlayer.currentTime < state.trimStart || videoPlayer.currentTime >= state.trimEnd)) {
+              videoPlayer.currentTime = state.trimStart;
+            }
+            videoPlayer.play();
+          } else {
+            videoPlayer.pause();
+          }
         });
         stepBackBtn.addEventListener('click', () => {
           videoPlayer.pause();
@@ -1649,7 +1731,44 @@
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
         });
         captureFrameBtn.addEventListener('click', captureCurrentFrame);
-        autoExtractBtn.addEventListener('click', () => autoExtractKeyframes(8));
+        sampleCountSelect.addEventListener('change', () => {
+          state.sampleCount = parseInt(sampleCountSelect.value, 10) || 12;
+          if (videoPlayer.duration) autoExtractKeyframes(state.sampleCount);
+        });
+        autoExtractBtn.addEventListener('click', () => autoExtractKeyframes(state.sampleCount));
+
+        // Action window trim controls
+        setStartBtn.addEventListener('click', () => {
+          if (!videoPlayer.duration) return;
+          const t = videoPlayer.currentTime;
+          const end = state.trimEnd ?? videoPlayer.duration;
+          state.trimStart = Math.min(t, Math.max(0, end - 0.1));
+          state.trimCustom = true;
+          updateTrimUI();
+          autoExtractKeyframes(state.sampleCount);
+        });
+        setEndBtn.addEventListener('click', () => {
+          if (!videoPlayer.duration) return;
+          const t = videoPlayer.currentTime;
+          state.trimEnd = Math.max(t, Math.min(videoPlayer.duration, state.trimStart + 0.1));
+          state.trimCustom = true;
+          updateTrimUI();
+          autoExtractKeyframes(state.sampleCount);
+        });
+        loopWindowBtn.addEventListener('click', () => {
+          state.loopWindow = !state.loopWindow;
+          loopWindowBtn.classList.toggle('btn-active', state.loopWindow);
+        });
+        resetTrimBtn.addEventListener('click', () => {
+          if (!videoPlayer.duration) return;
+          state.trimStart = 0;
+          state.trimEnd = videoPlayer.duration;
+          state.trimCustom = false;
+          state.loopWindow = false;
+          loopWindowBtn.classList.remove('btn-active');
+          updateTrimUI();
+          autoExtractKeyframes(state.sampleCount);
+        });
 
         // Telestrator drawing
         window.addEventListener('resize', resizeTelestrator);
@@ -1718,6 +1837,9 @@
           updateApiStatusUI();
           apiDialog.close();
         });
+        document.getElementById('refreshModelsBtn').addEventListener('click', () => {
+          fetchAvailableModels(apiKeyInput.value.trim());
+        });
         document.getElementById('clearApiKeyBtn').addEventListener('click', () => {
           state.apiKey = '';
           apiKeyInput.value = '';
@@ -1735,9 +1857,100 @@
 
       function openApiDialog() {
         apiKeyInput.value = state.apiKey;
-        modelSelect.value = state.model;
         analysisModeSelect.value = state.analysisMode;
+        if (!Array.from(modelSelect.options).some(o => o.value === state.model)) {
+          const opt = document.createElement('option');
+          opt.value = state.model;
+          opt.textContent = state.model;
+          modelSelect.appendChild(opt);
+        }
+        modelSelect.value = state.model;
         apiDialog.showModal();
+        if (state.apiKey) {
+          fetchAvailableModels(state.apiKey);
+        }
+      }
+
+      async function fetchAvailableModels(key) {
+        const statusEl = document.getElementById('modelsStatusText');
+        const refreshBtn = document.getElementById('refreshModelsBtn');
+        if (!key) {
+          statusEl.textContent = 'Enter your Gemini API key above, then click Load Available Models.';
+          return;
+        }
+        refreshBtn.disabled = true;
+        statusEl.textContent = 'Fetching available Gemini models for your API key...';
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=100`);
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error?.message || `HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          const usable = (data.models || [])
+            .filter(m =>
+              Array.isArray(m.supportedGenerationMethods) &&
+              m.supportedGenerationMethods.includes('generateContent') &&
+              /^models\/gemini-/i.test(m.name) &&
+              !/(embedding|tts|imagen|veo|robotics|computer-use|audio-only)/i.test(m.name)
+            )
+            .map(m => ({
+              id: m.name.replace(/^models\//, ''),
+              label: m.displayName ? `${m.name.replace(/^models\//, '')} — ${m.displayName}` : m.name.replace(/^models\//, '')
+            }))
+            .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+
+          if (usable.length === 0) {
+            statusEl.textContent = 'No generateContent Gemini models returned for this key.';
+            return;
+          }
+
+          const previous = modelSelect.value || state.model;
+          const isRecommended = (id) =>
+            /(pro|flash)/i.test(id) &&
+            !/(lite|live|exp|nano|learnlm|gemma|thinking|-\d{3}$|-\d{2}-\d{4}|-\d{4}-\d{2}|-\d{2}-\d{2}$)/i.test(id);
+
+          const recommended = usable.filter(m => isRecommended(m.id));
+          const others = usable.filter(m => !isRecommended(m.id));
+
+          modelSelect.textContent = '';
+          const appendGroup = (groupLabel, list) => {
+            if (!list.length) return;
+            const grp = document.createElement('optgroup');
+            grp.label = groupLabel;
+            list.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m.id;
+              opt.textContent = m.label;
+              grp.appendChild(opt);
+            });
+            modelSelect.appendChild(grp);
+          };
+
+          if (recommended.length > 0) {
+            appendGroup('Recommended (Pro & Flash)', recommended);
+            appendGroup('Other Available Models', others);
+          } else {
+            usable.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m.id;
+              opt.textContent = m.label;
+              modelSelect.appendChild(opt);
+            });
+          }
+
+          if (usable.some(m => m.id === previous)) {
+            modelSelect.value = previous;
+          } else {
+            const preferred = recommended.find(m => /pro/i.test(m.id)) || recommended[0] || usable.find(m => /flash/i.test(m.id)) || usable[0];
+            modelSelect.value = preferred.id;
+          }
+          statusEl.textContent = `Loaded ${recommended.length} recommended (${usable.length} total) models from your account.`;
+        } catch (err) {
+          statusEl.textContent = `Could not load models: ${err.message}`;
+        } finally {
+          refreshBtn.disabled = false;
+        }
       }
 
       // --- VIDEO HANDLING & KEYFRAMES ---
@@ -1762,6 +1975,27 @@
         const cur = videoPlayer.currentTime || 0;
         const dur = videoPlayer.duration || 0;
         timeReadout.textContent = `${cur.toFixed(2)}s / ${dur.toFixed(2)}s`;
+      }
+
+      function updateTrimUI() {
+        const dur = videoPlayer.duration || 0;
+        if (!dur) {
+          trimBarRange.style.left = '0%';
+          trimBarRange.style.width = '100%';
+          trimReadout.textContent = 'Window: Full clip';
+          return;
+        }
+        const start = Math.max(0, Math.min(state.trimStart || 0, dur));
+        const end = Math.max(start, Math.min(state.trimEnd ?? dur, dur));
+        const leftPct = (start / dur) * 100;
+        const widthPct = Math.max(1, ((end - start) / dur) * 100);
+        trimBarRange.style.left = `${leftPct}%`;
+        trimBarRange.style.width = `${widthPct}%`;
+        if (state.trimCustom) {
+          trimReadout.textContent = `Window: ${start.toFixed(2)}s – ${end.toFixed(2)}s (${(end - start).toFixed(2)}s)`;
+        } else {
+          trimReadout.textContent = `Window: Full clip (${dur.toFixed(2)}s)`;
+        }
       }
 
       function resizeTelestrator() {
@@ -1823,27 +2057,32 @@
         renderFilmstrip();
       }
 
-      async function autoExtractKeyframes(count = 8) {
+      async function autoExtractKeyframes(count = 12) {
         const dur = videoPlayer.duration;
         if (!dur || !isFinite(dur)) return;
 
         videoPlayer.pause();
         const prevTime = videoPlayer.currentTime;
-        const extracted = [];
-        const step = dur / (count + 1);
+        const start = Math.max(0, Math.min(state.trimStart || 0, dur - 0.05));
+        const end = Math.max(start + 0.05, Math.min(state.trimEnd ?? dur, dur));
+        const span = Math.max(0.05, end - start);
 
-        for (let i = 1; i <= count; i++) {
-          const t = Math.min(dur - 0.05, Math.max(0, step * i));
+        const pinned = state.frames.filter(f => f.label === 'Pinned');
+        const extracted = [];
+
+        for (let i = 0; i < count; i++) {
+          const ratio = count === 1 ? 0.5 : i / (count - 1);
+          const t = Math.min(dur - 0.02, Math.max(0, start + span * ratio));
           await seekVideo(t);
           extracted.push({
             time: t,
             dataUrl: grabVideoFrameDataUrl(),
-            label: `F${i}`
+            label: `F${i + 1}`
           });
         }
 
         await seekVideo(prevTime);
-        state.frames = extracted;
+        state.frames = [...extracted, ...pinned].sort((a, b) => a.time - b.time);
         renderFilmstrip();
       }
 
@@ -1918,13 +2157,14 @@
 
         try {
           if (state.frames.length === 0) {
-            await autoExtractKeyframes(8);
+            await autoExtractKeyframes(state.sampleCount);
           }
 
           const fileSizeMb = state.videoFile.size / (1024 * 1024);
+          // When user explicitly trims an Action Window in Auto mode, prefer the tightly-sampled high-density frames
           const useFullVideo =
             (state.analysisMode === 'video' && fileSizeMb <= 18) ||
-            (state.analysisMode === 'auto' && fileSizeMb <= 15);
+            (state.analysisMode === 'auto' && !state.trimCustom && fileSizeMb <= 15);
 
           const parts = [{ text: buildPrompt() }];
 
@@ -1938,7 +2178,10 @@
               }
             });
           } else {
-            setLoading(true, 'Analyzing keyframe sequence...', `Sending ${state.frames.length} timestamped frames to ${state.model}.`);
+            const winLabel = state.trimCustom
+              ? `from trimmed action window (${(state.trimStart || 0).toFixed(2)}s–${(state.trimEnd || 0).toFixed(2)}s)`
+              : 'across the clip';
+            setLoading(true, 'Analyzing keyframe sequence...', `Sending ${state.frames.length} timestamped frames ${winLabel} to ${state.model}.`);
             state.frames.forEach((f, i) => {
               parts.push({ text: `Frame ${i + 1} (${f.label}) at ${f.time.toFixed(2)}s:` });
               parts.push({
@@ -1951,17 +2194,29 @@
           }
 
           const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts }],
-              generationConfig: {
-                temperature: 0.35,
-                responseMimeType: 'application/json'
-              }
-            })
+          const requestBody = JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: {
+              temperature: 0.35,
+              responseMimeType: 'application/json'
+            }
           });
+
+          let res;
+          const retryDelays = [2500, 5000];
+          for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+            res = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: requestBody
+            });
+            if (res.ok || (res.status !== 503 && res.status !== 429) || attempt === retryDelays.length) {
+              break;
+            }
+            const waitMs = retryDelays[attempt];
+            setLoading(true, `Gemini busy (${res.status}) — retrying...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
+            await new Promise(r => setTimeout(r, waitMs));
+          }
 
           if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
@@ -2016,6 +2271,7 @@ Player Context:
 - Style: ${styleSelect.value}
 - Camera Angle: ${cameraAngleSelect.value}
 - Match Format: ${formatSelect.value}
+- Focus Action Window: ${state.trimCustom ? `${(state.trimStart || 0).toFixed(2)}s to ${(state.trimEnd || 0).toFixed(2)}s` : 'Full clip'}
 - Coach/Player Notes: ${notesInput.value.trim() || 'None provided'}
 
 Be honest, specific, and grounded strictly in what is visible in the video/frames (mention camera limitations if a specific body part is partially occluded).
