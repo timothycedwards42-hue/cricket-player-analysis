@@ -1519,6 +1519,7 @@
       <button type="button" id="loadBatterDemoBtn">Demo: Batter</button>
       <button type="button" id="loadBowlerDemoBtn">Demo: Bowler</button>
       <button type="button" id="loadLbwDemoBtn">Demo: LBW</button>
+      <button type="button" id="emailReportBtn" disabled>✉️ Email Plan</button>
       <button type="button" id="exportReportBtn" disabled>Export Report</button>
     </div>
   </header>
@@ -1928,6 +1929,59 @@
     </div>
   </dialog>
 
+  <!-- EMAIL COACHING & TRAINING PLAN DIALOG -->
+  <dialog id="emailDialog" aria-labelledby="emailDialogTitle" style="max-width:600px;">
+    <div class="dialog-header">
+      <h3 id="emailDialogTitle">✉️ Email Coaching Advice &amp; Training Plan</h3>
+      <button type="button" class="btn-sm btn-ghost" id="closeEmailDialogBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="form-grid">
+        <div class="field">
+          <label for="emailToInput">Recipient Email(s)</label>
+          <input type="text" id="emailToInput" placeholder="player@example.com" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="emailPlayerNameInput">Player Name (Optional)</label>
+          <input type="text" id="emailPlayerNameInput" placeholder="e.g. Sam">
+        </div>
+        <div class="field full">
+          <label for="emailSubjectInput">Subject</label>
+          <input type="text" id="emailSubjectInput">
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:0.78rem; color:var(--text-muted);">
+        <label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
+          <input type="checkbox" id="emailIncSummary" checked style="width:auto; accent-color:var(--accent-bright);"> Summary &amp; Scorecard
+        </label>
+        <label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
+          <input type="checkbox" id="emailIncSW" checked style="width:auto; accent-color:var(--accent-bright);"> Strengths &amp; Weaknesses
+        </label>
+        <label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
+          <input type="checkbox" id="emailIncDrills" checked style="width:auto; accent-color:var(--accent-bright);"> Training Plan &amp; Drills
+        </label>
+        <label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer;">
+          <input type="checkbox" id="emailIncAttack" checked style="width:auto; accent-color:var(--accent-bright);"> Avenues of Attack
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="emailBodyPreview">Email Preview (Editable)</label>
+        <textarea id="emailBodyPreview" style="min-height:210px; font-size:0.78rem; line-height:1.45;"></textarea>
+      </div>
+
+      <p class="help-text" id="emailStatusHint">Opens a pre-filled draft in your Mail app or Gmail — or copy the full text to paste anywhere.</p>
+    </div>
+    <div class="dialog-footer" style="justify-content:space-between; flex-wrap:wrap;">
+      <button type="button" id="copyEmailBtn">📋 Copy Email Text</button>
+      <div class="btn-group">
+        <button type="button" id="openGmailBtn">📬 Open in Gmail</button>
+        <button type="button" class="btn-primary" id="openMailtoBtn">✉️ Open in Mail App</button>
+      </div>
+    </div>
+  </dialog>
+
   <script>
     (() => {
       // Auto-migrate retired or invalid model IDs saved in localStorage
@@ -2099,7 +2153,18 @@
       const reportContent = document.getElementById('reportContent');
       const reportSourceBadge = document.getElementById('reportSourceBadge');
       const speakReportBtn = document.getElementById('speakReportBtn');
+      const emailReportBtn = document.getElementById('emailReportBtn');
       const exportReportBtn = document.getElementById('exportReportBtn');
+      const emailDialog = document.getElementById('emailDialog');
+      const emailToInput = document.getElementById('emailToInput');
+      const emailPlayerNameInput = document.getElementById('emailPlayerNameInput');
+      const emailSubjectInput = document.getElementById('emailSubjectInput');
+      const emailBodyPreview = document.getElementById('emailBodyPreview');
+      const emailStatusHint = document.getElementById('emailStatusHint');
+      const emailIncSummary = document.getElementById('emailIncSummary');
+      const emailIncSW = document.getElementById('emailIncSW');
+      const emailIncDrills = document.getElementById('emailIncDrills');
+      const emailIncAttack = document.getElementById('emailIncAttack');
       const drsVerdictCard = document.getElementById('drsVerdictCard');
       const drsConfidenceText = document.getElementById('drsConfidenceText');
       const drsDecisionBadge = document.getElementById('drsDecisionBadge');
@@ -2494,7 +2559,48 @@
         document.getElementById('emptyBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
         document.getElementById('emptyLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
         speakReportBtn.addEventListener('click', toggleSpeakReport);
+        emailReportBtn.addEventListener('click', openEmailDialog);
         exportReportBtn.addEventListener('click', exportMarkdownReport);
+
+        // Email Dialog events
+        document.getElementById('closeEmailDialogBtn').addEventListener('click', () => emailDialog.close());
+        emailDialog.addEventListener('click', (e) => {
+          if (e.target === emailDialog) emailDialog.close();
+        });
+        [emailPlayerNameInput, emailIncSummary, emailIncSW, emailIncDrills, emailIncAttack].forEach(ctrl => {
+          ctrl.addEventListener('input', populateEmailDraft);
+          ctrl.addEventListener('change', populateEmailDraft);
+        });
+        document.getElementById('copyEmailBtn').addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(`Subject: ${emailSubjectInput.value}\n\n${emailBodyPreview.value}`);
+            emailStatusHint.textContent = '✓ Full email copied to clipboard!';
+          } catch {
+            emailBodyPreview.select();
+            document.execCommand('copy');
+            emailStatusHint.textContent = '✓ Full email copied to clipboard!';
+          }
+        });
+        document.getElementById('openMailtoBtn').addEventListener('click', () => {
+          const to = emailToInput.value.trim();
+          const subject = emailSubjectInput.value.trim();
+          let body = emailBodyPreview.value;
+          // Some desktop/mobile mail clients clip mailto URLs over ~1900 chars; copy full text too if long
+          if (encodeURIComponent(body).length > 1850) {
+            navigator.clipboard?.writeText(body).catch(() => {});
+            body = body.slice(0, 1450) + '\n\n[Full training plan also copied to your clipboard — press Paste if truncated]';
+            emailStatusHint.textContent = 'Opening Mail app (full text also copied to clipboard in case your mail app clips long drafts).';
+          }
+          window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        });
+        document.getElementById('openGmailBtn').addEventListener('click', () => {
+          const to = emailToInput.value.trim();
+          const subject = emailSubjectInput.value.trim();
+          const body = emailBodyPreview.value;
+          const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+          window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+          emailStatusHint.textContent = 'Opened pre-filled draft in Gmail.';
+        });
 
         // API Settings Dialog
         apiStatusBtn.addEventListener('click', openApiDialog);
@@ -3692,6 +3798,7 @@ For each improvement's diagram (top-down net/pitch view):
         reportEmpty.style.display = 'none';
         reportContent.classList.add('active');
         exportReportBtn.disabled = false;
+        emailReportBtn.disabled = false;
         speakReportBtn.disabled = false;
 
         const meta = report._meta || {};
@@ -4204,6 +4311,91 @@ For each improvement's diagram (top-down net/pitch view):
           g.appendChild(el('text', { x: cx, y: cy + 3, fill: '#ffffff', 'font-size': 8.5, 'font-weight': 800, 'text-anchor': 'middle' }, String(idx + 1)));
           svg.appendChild(g);
         });
+      }
+
+      // --- EMAIL COACHING & TRAINING PLAN ---
+      function openEmailDialog() {
+        if (!state.currentReport) return;
+        emailStatusHint.textContent = 'Opens a pre-filled draft in your Mail app or Gmail — or copy the full text to paste anywhere.';
+        populateEmailDraft();
+        emailDialog.showModal();
+        emailToInput.focus();
+      }
+
+      function populateEmailDraft() {
+        const r = state.currentReport;
+        if (!r) return;
+        const m = r._meta || {};
+        const name = emailPlayerNameInput.value.trim();
+        const roleLabel = m.role === 'lbw' ? 'LBW Review' : m.role === 'bowling' ? 'Bowling' : 'Batting';
+
+        emailSubjectInput.value = name
+          ? `Cricket ${roleLabel} Coaching & Training Plan — ${name}`
+          : `Cricket ${roleLabel} Coaching & Training Plan`;
+
+        const lines = [];
+        lines.push(name ? `Hi ${name},` : `Hi,`);
+        lines.push('');
+        lines.push(`Here is your cricket ${roleLabel.toLowerCase()} video analysis (${m.handedness || ''} · ${m.style || ''}) along with your priority drills and training plan:`);
+
+        if (r.lbwVerdict) {
+          const v = r.lbwVerdict;
+          lines.push('');
+          lines.push(`=== LBW DRS VERDICT: ${v.decision} ===`);
+          lines.push(`Pitching: ${v.pitching?.label || ''} | Impact: ${v.impact?.label || ''} | Bat: ${v.batEdge?.label || ''} | Wickets: ${v.wickets?.label || ''}`);
+          if (v.rationale) lines.push(v.rationale);
+        }
+
+        if (emailIncSummary.checked) {
+          lines.push('');
+          lines.push('=== SUMMARY & SCORECARD ===');
+          if (r.overview) lines.push(r.overview);
+          (r.scorecard || []).forEach(s => {
+            lines.push(`- ${s.metric}: ${s.score}/10 — ${s.note}`);
+          });
+        }
+
+        if (emailIncSW.checked) {
+          lines.push('');
+          lines.push('=== STRENGTHS ===');
+          (r.strengths || []).forEach(s => lines.push(`+ ${s.title}: ${s.detail}`));
+          lines.push('');
+          lines.push('=== AREAS TO IMPROVE ===');
+          (r.weaknesses || []).forEach(w => lines.push(`- ${w.title}: ${w.detail}`));
+        }
+
+        if (emailIncDrills.checked) {
+          lines.push('');
+          lines.push('=== TRAINING PLAN & NET DRILLS ===');
+          (r.improvements || []).forEach((imp, idx) => {
+            lines.push('');
+            lines.push(`${idx + 1}. ${imp.title}${imp.drillName ? ` (${imp.drillName})` : ''}${imp.reps ? ` — ${imp.reps}` : ''}`);
+            if (imp.why) lines.push(`   Why: ${imp.why}`);
+            if (Array.isArray(imp.equipment) && imp.equipment.length) lines.push(`   Gear: ${imp.equipment.join(', ')}`);
+            if (Array.isArray(imp.steps) && imp.steps.length) {
+              imp.steps.forEach((st, si) => lines.push(`   ${si + 1}) ${st.replace(/^Step\s*\d+\s*[:.-]\s*/i, '')}`));
+            } else if (imp.drill) {
+              lines.push(`   Drill: ${imp.drill}`);
+            }
+            if (imp.checkpoint) lines.push(`   Success Check: ${imp.checkpoint}`);
+            if (imp.cue) lines.push(`   Cue: "${imp.cue}"`);
+            const ytQ = imp.videoSearchQuery || `cricket coaching drill ${imp.drillName || imp.title}`;
+            lines.push(`   Drill Videos: https://www.youtube.com/results?search_query=${encodeURIComponent(ytQ)}`);
+          });
+        }
+
+        if (emailIncAttack.checked && r.avenuesOfAttack) {
+          lines.push('');
+          lines.push(`=== ${(r.avenuesOfAttack.headline || 'AVENUES OF ATTACK').toUpperCase()} ===`);
+          if (r.avenuesOfAttack.summary) lines.push(r.avenuesOfAttack.summary);
+          (r.avenuesOfAttack.plans || []).forEach(p => {
+            lines.push(`- ${p.title} (${p.tag}): ${p.execution}`);
+          });
+        }
+
+        lines.push('');
+        lines.push('Generated via Cricket Player Analysis');
+        emailBodyPreview.value = lines.join('\n');
       }
 
       // --- EXPORT MARKDOWN ---
