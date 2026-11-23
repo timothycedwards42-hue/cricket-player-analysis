@@ -1517,6 +1517,81 @@
     .drs-light.amber { border-color: rgba(255, 183, 77, 0.65); background: rgba(255, 183, 77, 0.1); }
     .drs-light.amber .drs-light-val { color: #ffe082; }
 
+    .drs-light.pending {
+      opacity: 0.35;
+      border-color: var(--border);
+      background: var(--bg);
+      transform: scale(0.96);
+    }
+
+    .drs-light.revealed {
+      animation: drsLightReveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    .drs-light.red.revealed { box-shadow: 0 0 14px rgba(239, 83, 80, 0.35); }
+    .drs-light.green.revealed { box-shadow: 0 0 14px rgba(76, 175, 80, 0.35); }
+    .drs-light.amber.revealed { box-shadow: 0 0 14px rgba(255, 183, 77, 0.35); }
+
+    @keyframes drsLightReveal {
+      0% { opacity: 0.35; transform: scale(0.92); }
+      60% { opacity: 1; transform: scale(1.05); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .drs-decision.pending {
+      opacity: 0.25;
+      transform: scale(0.85);
+    }
+
+    .drs-decision.stamped {
+      animation: drsStampIn 0.48s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes drsStampIn {
+      0% { opacity: 0; transform: scale(1.35); }
+      65% { opacity: 1; transform: scale(0.95); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .drs-stage-wrap {
+      background: radial-gradient(circle at 50% 25%, #1d3a24, #0f131a 82%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .drs-stage-wrap svg {
+      width: 100%;
+      max-width: 380px;
+      height: auto;
+      display: block;
+    }
+
+    @keyframes drsDrawPath {
+      from { stroke-dashoffset: var(--path-len, 200); }
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes drsRipple {
+      0% { r: 3; opacity: 0.95; stroke-width: 2.5; }
+      100% { r: 16; opacity: 0; stroke-width: 0.5; }
+    }
+
+    @keyframes drsPopIn {
+      0% { opacity: 0; transform: scale(0.4); }
+      70% { opacity: 1; transform: scale(1.15); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes drsBailFly {
+      0% { transform: translate(0, 0) rotate(0deg); }
+      100% { transform: translate(6px, -11px) rotate(32deg); }
+    }
+
     /* --- SAVED SESSIONS LIST --- */
     .session-list {
       display: flex;
@@ -2000,10 +2075,16 @@
           <div class="drs-card" id="drsVerdictCard">
             <div class="drs-header">
               <div>
-                <span class="badge badge-blue">☝️ Smart-Glasses / Umpire POV DRS Review</span>
+                <span class="badge badge-blue">☝️ TV-Style DRS Ball-Tracking Review</span>
                 <div class="help-text" id="drsConfidenceText" style="margin-top:4px;"></div>
               </div>
-              <div class="drs-decision" id="drsDecisionBadge">OUT</div>
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="replayDrsBtn" title="Replay ball-tracking animation">▶ Replay DRS</button>
+                <div class="drs-decision" id="drsDecisionBadge">OUT</div>
+              </div>
+            </div>
+            <div class="drs-stage-wrap">
+              <svg id="drsStageSvg" viewBox="0 0 340 195" aria-label="Animated Hawk-Eye style LBW ball tracking"></svg>
             </div>
             <div class="drs-lights" id="drsLightsGrid"></div>
             <p id="drsRationale" style="font-size:0.83rem; color:#e5e8f5;"></p>
@@ -2501,6 +2582,8 @@
       const drsConfidenceText = document.getElementById('drsConfidenceText');
       const drsDecisionBadge = document.getElementById('drsDecisionBadge');
       const drsLightsGrid = document.getElementById('drsLightsGrid');
+      const drsStageSvg = document.getElementById('drsStageSvg');
+      const replayDrsBtn = document.getElementById('replayDrsBtn');
       const drsRationale = document.getElementById('drsRationale');
       const drsCaveat = document.getElementById('drsCaveat');
 
@@ -2962,6 +3045,11 @@
         document.getElementById('emptyBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
         document.getElementById('emptyLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
         speakReportBtn.addEventListener('click', toggleSpeakReport);
+        replayDrsBtn.addEventListener('click', () => {
+          if (state.currentReport?.lbwVerdict) {
+            playDrsAnimation(state.currentReport.lbwVerdict, state.currentReport._meta?.handedness || handednessSelect.value);
+          }
+        });
         saveSessionBtn.addEventListener('click', () => openHistoryDialog(true));
         historyBtn.addEventListener('click', () => openHistoryDialog(false));
         emailReportBtn.addEventListener('click', openEmailDialog);
@@ -4288,38 +4376,16 @@ For each improvement's diagram (top-down net/pitch view):
         const isBatting = roleMode === 'batting';
         const isLbw = roleMode === 'lbw';
 
-        // TV-Style DRS Verdict Banner
+        // TV-Style DRS Verdict Banner + Animated Ball-Tracking Reveal
         if (report.lbwVerdict) {
           const v = report.lbwVerdict;
           drsVerdictCard.classList.add('active');
           drsConfidenceText.textContent = v.confidence || 'Umpire POV Visual Estimate';
-          const decUpper = String(v.decision || 'UMPIRE\'S CALL').toUpperCase();
-          drsDecisionBadge.textContent = decUpper === 'OUT' ? '☝️ OUT' : decUpper === 'NOT OUT' ? '✋ NOT OUT' : '⚖️ UMPIRE\'S CALL';
-          drsDecisionBadge.className = `drs-decision ${decUpper === 'OUT' ? 'out' : decUpper === 'NOT OUT' ? 'not-out' : 'umpires-call'}`;
-
-          drsLightsGrid.textContent = '';
-          [
-            { title: 'Pitching', data: v.pitching },
-            { title: 'Impact', data: v.impact },
-            { title: 'Bat / Edge', data: v.batEdge },
-            { title: 'Wickets', data: v.wickets }
-          ].forEach(item => {
-            const box = document.createElement('div');
-            const c = item.data?.color || 'amber';
-            box.className = `drs-light ${c}`;
-            const l1 = document.createElement('span');
-            l1.className = 'drs-light-label';
-            l1.textContent = item.title;
-            const l2 = document.createElement('span');
-            l2.className = 'drs-light-val';
-            l2.textContent = item.data?.label || 'N/A';
-            box.append(l1, l2);
-            drsLightsGrid.appendChild(box);
-          });
-
           drsRationale.textContent = v.rationale || '';
           drsCaveat.textContent = v.caveat ? `Note: ${v.caveat}` : '';
+          playDrsAnimation(v, meta.handedness || handednessSelect.value);
         } else {
+          clearDrsAnimationTimers();
           drsVerdictCard.classList.remove('active');
         }
 
@@ -4797,6 +4863,234 @@ For each improvement's diagram (top-down net/pitch view):
           g.appendChild(el('text', { x: cx, y: cy + 3, fill: '#ffffff', 'font-size': 8.5, 'font-weight': 800, 'text-anchor': 'middle' }, String(idx + 1)));
           svg.appendChild(g);
         });
+      }
+
+      // --- TV-STYLE ANIMATED DRS BALL-TRACKING REVEAL ---
+      let drsAnimTimers = [];
+
+      function clearDrsAnimationTimers() {
+        drsAnimTimers.forEach(id => clearTimeout(id));
+        drsAnimTimers = [];
+      }
+
+      function playDrsAnimation(v, handedness) {
+        clearDrsAnimationTimers();
+        const isRHB = handedness !== 'Left-handed';
+        // Off-side is right (+dx) for RHB, left (-dx) for LHB
+        const offDir = isRHB ? 1 : -1;
+
+        const pitchLbl = String(v.pitching?.label || '').toUpperCase();
+        const impactLbl = String(v.impact?.label || '').toUpperCase();
+        const wicketsLbl = String(v.wickets?.label || '').toUpperCase();
+        const decUpper = String(v.decision || 'UMPIRE\'S CALL').toUpperCase();
+
+        // Compute perspective coordinates (stumps centered at x=170, y=54..84)
+        const startX = 170 + offDir * 18;
+        const startY = 186;
+
+        const pitchX = pitchLbl.includes('OUTSIDE LEG')
+          ? 170 - offDir * 36
+          : pitchLbl.includes('OUTSIDE OFF')
+            ? 170 + offDir * 34
+            : 170 + offDir * 6;
+        const pitchY = 132;
+
+        const impactX = impactLbl.includes('OUTSIDE LEG')
+          ? 170 - offDir * 24
+          : impactLbl.includes('OUTSIDE OFF')
+            ? 170 + offDir * 26
+            : 170 + offDir * 2;
+        const impactY = 96;
+
+        const isHitting = wicketsLbl.includes('HITTING');
+        const isUmpiresCall = wicketsLbl.includes('UMPIRE');
+        const isOver = wicketsLbl.includes('OVER') || wicketsLbl.includes('HEIGHT');
+        const stumpX = isHitting
+          ? 170 - offDir * 4
+          : isUmpiresCall
+            ? 170 + offDir * 15
+            : isOver
+              ? 170
+              : 170 - offDir * 32;
+        const stumpY = isOver ? 34 : isUmpiresCall ? 54 : 66;
+
+        const colorHex = (c) => c === 'red' ? '#ef5350' : c === 'green' ? '#4caf50' : '#ffb74d';
+        const projColor = colorHex(v.wickets?.color || (isHitting ? 'red' : isUmpiresCall ? 'amber' : 'green'));
+
+        // Reset decision badge to pending
+        drsDecisionBadge.textContent = 'REVIEWING...';
+        drsDecisionBadge.className = 'drs-decision pending';
+
+        // Build 4 lights in pending state first
+        const lightsMeta = [
+          { title: 'Pitching', data: v.pitching },
+          { title: 'Impact', data: v.impact },
+          { title: 'Bat / Edge', data: v.batEdge },
+          { title: 'Wickets', data: v.wickets }
+        ];
+        drsLightsGrid.textContent = '';
+        const lightEls = lightsMeta.map(item => {
+          const box = document.createElement('div');
+          const c = item.data?.color || 'amber';
+          box.className = `drs-light ${c} pending`;
+          const l1 = document.createElement('span');
+          l1.className = 'drs-light-label';
+          l1.textContent = item.title;
+          const l2 = document.createElement('span');
+          l2.className = 'drs-light-val';
+          l2.textContent = '—';
+          box.append(l1, l2);
+          drsLightsGrid.appendChild(box);
+          return { box, l2, val: item.data?.label || 'N/A' };
+        });
+
+        // Build 3D-perspective broadcast SVG pitch & stumps
+        const ns = 'http://www.w3.org/2000/svg';
+        drsStageSvg.textContent = '';
+        const el = (tag, attrs = {}, text = null) => {
+          const node = document.createElementNS(ns, tag);
+          Object.entries(attrs).forEach(([k, val]) => node.setAttribute(k, val));
+          if (text !== null) node.textContent = text;
+          return node;
+        };
+
+        // Perspective pitch surface
+        drsStageSvg.appendChild(el('polygon', {
+          points: '115,82 225,82 308,192 32,192',
+          fill: '#9e8864',
+          stroke: '#cdb996',
+          'stroke-width': 1
+        }));
+
+        // Shaded stump-to-stump LBW corridor (TV Hawk-Eye mat)
+        drsStageSvg.appendChild(el('polygon', {
+          points: '154,82 186,82 206,192 134,192',
+          fill: 'rgba(79, 195, 247, 0.16)',
+          stroke: 'rgba(79, 195, 247, 0.45)',
+          'stroke-width': 1,
+          'stroke-dasharray': '3 3'
+        }));
+
+        // Popping crease
+        drsStageSvg.appendChild(el('line', { x1: 92, y1: 102, x2: 248, y2: 102, stroke: '#ffffff', 'stroke-width': 1.8, opacity: 0.85 }));
+
+        // OFF / LEG labels
+        drsStageSvg.appendChild(el('text', { x: 46, y: 92, fill: '#b8d8be', 'font-size': 9, 'font-weight': 700, 'text-anchor': 'middle' }, isRHB ? 'LEG SIDE' : 'OFF SIDE'));
+        drsStageSvg.appendChild(el('text', { x: 294, y: 92, fill: '#b8d8be', 'font-size': 9, 'font-weight': 700, 'text-anchor': 'middle' }, isRHB ? 'OFF SIDE' : 'LEG SIDE'));
+
+        // 3 Stumps + 2 Bails
+        const stumpXs = [157, 170, 183];
+        const stumpNodes = stumpXs.map(sx => {
+          const s = el('rect', { x: sx - 2, y: 46, width: 4, height: 37, rx: 1.5, fill: '#f3dfa8', stroke: '#7a6337', 'stroke-width': 0.8 });
+          drsStageSvg.appendChild(s);
+          return s;
+        });
+        const bail1 = el('rect', { x: 157, y: 44, width: 12, height: 2.5, rx: 1, fill: '#ffe8b6' });
+        const bail2 = el('rect', { x: 171, y: 44, width: 12, height: 2.5, rx: 1, fill: '#ffe8b6' });
+        drsStageSvg.append(bail1, bail2);
+
+        // Layer group for animated tracks
+        const trackLayer = el('g');
+        drsStageSvg.appendChild(trackLayer);
+
+        // STAGE 1: Delivery flight -> Pitching Spot
+        const p1 = el('path', {
+          d: `M ${startX} ${startY} Q ${(startX + pitchX) / 2} ${(startY + pitchY) / 2 - 14} ${pitchX} ${pitchY}`,
+          fill: 'none',
+          stroke: '#ffffff',
+          'stroke-width': 2.6,
+          'stroke-linecap': 'round'
+        });
+        p1.style.setProperty('--path-len', '160');
+        p1.style.strokeDasharray = '160';
+        p1.style.strokeDashoffset = '160';
+        p1.style.animation = 'drsDrawPath 0.65s ease-out forwards';
+        trackLayer.appendChild(p1);
+
+        const revealLight = (idx) => {
+          const item = lightEls[idx];
+          if (!item) return;
+          item.l2.textContent = item.val;
+          item.box.classList.remove('pending');
+          item.box.classList.add('revealed');
+        };
+
+        drsAnimTimers.push(setTimeout(() => {
+          const pColor = colorHex(v.pitching?.color || 'amber');
+          const ripple = el('circle', { cx: pitchX, cy: pitchY, r: 4, fill: 'none', stroke: pColor, 'stroke-width': 2 });
+          ripple.style.animation = 'drsRipple 0.85s ease-out forwards';
+          const dot = el('circle', { cx: pitchX, cy: pitchY, r: 4.5, fill: pColor, stroke: '#fff', 'stroke-width': 1.2 });
+          const tag = el('text', { x: pitchX, y: pitchY + 15, fill: '#fff', 'font-size': 8, 'font-weight': 700, 'text-anchor': 'middle' }, 'PITCH');
+          trackLayer.append(ripple, dot, tag);
+          revealLight(0);
+        }, 620));
+
+        // STAGE 2: Pitching -> Pad Impact
+        drsAnimTimers.push(setTimeout(() => {
+          const p2 = el('line', {
+            x1: pitchX, y1: pitchY, x2: impactX, y2: impactY,
+            stroke: '#ffd54f',
+            'stroke-width': 2.8,
+            'stroke-linecap': 'round'
+          });
+          p2.style.setProperty('--path-len', '90');
+          p2.style.strokeDasharray = '90';
+          p2.style.strokeDashoffset = '90';
+          p2.style.animation = 'drsDrawPath 0.55s ease-out forwards';
+          trackLayer.appendChild(p2);
+        }, 820));
+
+        drsAnimTimers.push(setTimeout(() => {
+          const iColor = colorHex(v.impact?.color || 'amber');
+          const ripple = el('circle', { cx: impactX, cy: impactY, r: 4, fill: 'none', stroke: iColor, 'stroke-width': 2 });
+          ripple.style.animation = 'drsRipple 0.85s ease-out forwards';
+          const dot = el('circle', { cx: impactX, cy: impactY, r: 5.5, fill: iColor, stroke: '#fff', 'stroke-width': 1.4 });
+          const tag = el('text', { x: impactX + (offDir * 24), y: impactY + 3, fill: '#ffe082', 'font-size': 8, 'font-weight': 700, 'text-anchor': 'middle' }, 'IMPACT');
+          trackLayer.append(ripple, dot, tag);
+          revealLight(1);
+        }, 1350));
+
+        drsAnimTimers.push(setTimeout(() => {
+          revealLight(2);
+        }, 1620));
+
+        // STAGE 3: Projected Hawk-Eye Path -> Stumps
+        drsAnimTimers.push(setTimeout(() => {
+          const p3 = el('line', {
+            x1: impactX, y1: impactY, x2: stumpX, y2: stumpY,
+            stroke: projColor,
+            'stroke-width': 3,
+            'stroke-dasharray': '5 3',
+            'stroke-linecap': 'round'
+          });
+          p3.style.setProperty('--path-len', '95');
+          p3.style.strokeDashoffset = '95';
+          p3.style.animation = 'drsDrawPath 0.55s ease-out forwards';
+          trackLayer.appendChild(p3);
+        }, 1780));
+
+        drsAnimTimers.push(setTimeout(() => {
+          const hitRing = el('circle', { cx: stumpX, cy: stumpY, r: 7, fill: projColor, opacity: 0.9, stroke: '#fff', 'stroke-width': 1.5 });
+          const hitPulse = el('circle', { cx: stumpX, cy: stumpY, r: 6, fill: 'none', stroke: projColor, 'stroke-width': 2.5 });
+          hitPulse.style.animation = 'drsRipple 0.9s ease-out forwards';
+          trackLayer.append(hitPulse, hitRing);
+
+          if (isHitting) {
+            // Glow hit stumps red and pop bails!
+            stumpNodes.forEach(s => s.setAttribute('fill', '#ef5350'));
+            bail1.style.animation = 'drsBailFly 0.45s ease-out forwards';
+            bail2.style.animation = 'drsBailFly 0.45s ease-out 0.05s forwards';
+          } else if (isUmpiresCall) {
+            stumpNodes[isRHB ? 2 : 0].setAttribute('fill', '#ffb74d');
+          }
+          revealLight(3);
+        }, 2320));
+
+        // STAGE 4: Final Broadcast Verdict Stamp
+        drsAnimTimers.push(setTimeout(() => {
+          drsDecisionBadge.textContent = decUpper === 'OUT' ? '☝️ OUT' : decUpper === 'NOT OUT' ? '✋ NOT OUT' : '⚖️ UMPIRE\'S CALL';
+          drsDecisionBadge.className = `drs-decision ${decUpper === 'OUT' ? 'out' : decUpper === 'NOT OUT' ? 'not-out' : 'umpires-call'} stamped`;
+        }, 2580));
       }
 
       // --- ON-DEVICE STORAGE (IndexedDB) ---
