@@ -2131,9 +2131,11 @@
                 </select>
                 <button type="button" class="btn-sm" id="aimZoomBtn" title="Click on the batter or stumps in the video to set the zoom target">🎯 Aim</button>
                 <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
-                  <option value="12" selected>12 frames</option>
+                  <option value="12">12 frames</option>
                   <option value="16">16 frames</option>
+                  <option value="20" selected>20 frames</option>
                   <option value="24">24 frames</option>
+                  <option value="30">30 frames</option>
                 </select>
                 <button type="button" class="btn-sm btn-ghost" id="autoExtractBtn">Sample Window</button>
               </div>
@@ -2642,7 +2644,7 @@
         activeClipId: null,
         nextClipId: 1,
         loopWindow: false,
-        sampleCount: 12,
+        sampleCount: 20,
         zoomLevel: 1,
         zoomFocusX: 0.5,
         zoomFocusY: 0.5,
@@ -3309,17 +3311,27 @@
           updateAnalyzeButtonLabel();
         });
 
-        // Bowling Speed Gun controls
+        // Bowling Speed Gun controls (auto-pins exact release & arrival frames for AI)
+        const pinSpecialFrame = (clip, label, time) => {
+          const dataUrl = grabVideoFrameDataUrl(videoPlayer);
+          clip.frames = clip.frames.filter(f => f.label !== label);
+          clip.frames.push({ time, dataUrl, label });
+          clip.frames.sort((a, b) => a.time - b.time);
+          renderFilmstrip();
+          renderClipTabs();
+        };
         markReleaseBtn.addEventListener('click', () => {
           const clip = getActiveClip();
           if (!clip || !videoPlayer.duration) return;
           clip.releaseTime = videoPlayer.currentTime;
+          pinSpecialFrame(clip, 'EXACT RELEASE', clip.releaseTime);
           updateSpeedUI();
         });
         markArrivalBtn.addEventListener('click', () => {
           const clip = getActiveClip();
           if (!clip || !videoPlayer.duration) return;
           clip.arrivalTime = videoPlayer.currentTime;
+          pinSpecialFrame(clip, 'ARRIVAL', clip.arrivalTime);
           updateSpeedUI();
         });
         resetSpeedBtn.addEventListener('click', () => {
@@ -3327,6 +3339,9 @@
           if (clip) {
             clip.releaseTime = null;
             clip.arrivalTime = null;
+            clip.frames = clip.frames.filter(f => f.label !== 'EXACT RELEASE' && f.label !== 'ARRIVAL');
+            renderFilmstrip();
+            renderClipTabs();
           }
           updateSpeedUI();
         });
@@ -4245,7 +4260,7 @@
         const end = Math.max(start + 0.05, Math.min(clip.trimEnd ?? dur, dur));
         const span = Math.max(0.05, end - start);
 
-        const pinned = clip.frames.filter(f => f.label === 'Pinned');
+        const pinned = clip.frames.filter(f => f.label === 'Pinned' || f.label === 'EXACT RELEASE' || f.label === 'ARRIVAL');
         const extracted = [];
 
         for (let i = 0; i < count; i++) {
