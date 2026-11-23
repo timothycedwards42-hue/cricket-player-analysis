@@ -199,6 +199,156 @@
       border-color: rgba(76, 175, 80, 0.45);
     }
 
+    /* --- COMPACT DEMOS DROPDOWN MENU --- */
+    details.demos-menu {
+      position: relative;
+    }
+
+    details.demos-menu > summary {
+      list-style: none;
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      color: var(--text);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+
+    details.demos-menu > summary::-webkit-details-marker { display: none; }
+
+    details.demos-menu > summary:hover {
+      background: var(--surface-hover);
+      border-color: var(--border-strong);
+    }
+
+    .demos-dropdown {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      min-width: 175px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      padding: 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      z-index: 60;
+    }
+
+    .demos-dropdown button {
+      width: 100%;
+      justify-content: flex-start;
+      border: none;
+      background: transparent;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+    }
+
+    .demos-dropdown button:hover {
+      background: var(--surface-hover);
+    }
+
+    /* --- COLLAPSIBLE FORM SECTIONS & STEP BADGES --- */
+    details.collapsible-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    details.collapsible-card > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 9px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    details.collapsible-card > summary::-webkit-details-marker { display: none; }
+
+    details.collapsible-card[open] > summary {
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .collapsible-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .step-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .step-num {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-strong);
+      color: var(--pitch);
+      display: inline-grid;
+      place-items: center;
+      font-size: 0.68rem;
+    }
+
+    /* --- TOAST FEEDBACK --- */
+    .toast-pill {
+      position: fixed;
+      left: 50%;
+      bottom: calc(20px + env(safe-area-inset-bottom));
+      transform: translateX(-50%) translateY(20px);
+      background: #1f2630;
+      border: 1px solid var(--accent-bright);
+      color: #e8f8ea;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 90;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      max-width: calc(100vw - 32px);
+      text-align: center;
+    }
+
+    .toast-pill.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 1080px) {
+      .toast-pill {
+        bottom: calc(74px + env(safe-area-inset-bottom));
+      }
+    }
+
     /* --- MAIN WORKSPACE GRID --- */
     main.workspace {
       flex: 1;
@@ -2041,12 +2191,15 @@
         <span class="status-dot"></span>
         <span id="apiStatusText">AI Key Not Set</span>
       </button>
-      <button type="button" id="historyBtn" title="View or save sessions locally on this device">📚 Saved (<span id="savedCount">0</span>)</button>
-      <button type="button" id="loadBatterDemoBtn">Demo: Batter</button>
-      <button type="button" id="loadBowlerDemoBtn">Demo: Bowler</button>
-      <button type="button" id="loadLbwDemoBtn">Demo: LBW</button>
-      <button type="button" id="emailReportBtn" disabled>✉️ Email Plan</button>
-      <button type="button" id="exportReportBtn" disabled>Export Report</button>
+      <button type="button" id="historyBtn" title="View or save player folders (Local &amp; Supabase)">📚 Players (<span id="savedCount">0</span>)</button>
+      <details class="demos-menu" id="demosMenu">
+        <summary>🎯 Demos ▾</summary>
+        <div class="demos-dropdown">
+          <button type="button" id="loadBatterDemoBtn">🏏 Batter Demo</button>
+          <button type="button" id="loadBowlerDemoBtn">⚡ Bowler Demo</button>
+          <button type="button" id="loadLbwDemoBtn">☝️ LBW DRS Demo</button>
+        </div>
+      </details>
     </div>
   </header>
 
@@ -2185,34 +2338,39 @@
           </div>
         </div>
 
-        <!-- Bowling Speed Gun (Always visible: Pitch Length + 2-Tap Release -> Arrival Timer) -->
-        <div class="speed-gun-box" id="speedGunBox">
-          <div class="speed-gun-top">
-            <span class="speed-gun-title">⚡ Bowling Speed Estimator</span>
-            <div class="btn-group">
-              <button type="button" class="btn-sm" id="markReleaseBtn" title="Mark exact frame ball leaves bowler's hand">🖐 Mark Release</button>
-              <button type="button" class="btn-sm" id="markArrivalBtn" title="Mark exact frame ball reaches batter/stumps">🏏 Mark Arrival</button>
-              <button type="button" class="btn-sm btn-ghost" id="resetSpeedBtn" title="Clear speed markers">Reset</button>
+        <!-- Bowling Speed Gun (Collapsible in Batting mode, open in Bowling/LBW) -->
+        <details class="collapsible-card" id="speedGunDetails">
+          <summary>
+            <span>⚡ Bowling Speed Estimator &amp; Pitch Length</span>
+            <span class="help-text" id="speedSummaryPill">20.12m</span>
+          </summary>
+          <div class="collapsible-body" id="speedGunBox">
+            <div class="speed-gun-top">
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="markReleaseBtn" title="Mark exact frame ball leaves bowler's hand">🖐 Mark Release</button>
+                <button type="button" class="btn-sm" id="markArrivalBtn" title="Mark exact frame ball reaches batter/stumps">🏏 Mark Arrival</button>
+                <button type="button" class="btn-sm btn-ghost" id="resetSpeedBtn" title="Clear speed markers">Reset</button>
+              </div>
+            </div>
+            <div class="speed-gun-selects">
+              <select id="pitchLengthSelect" aria-label="Pitch length" style="padding:5px 8px; font-size:0.76rem;">
+                <option value="20.12" selected>Pitch: 20.12m (Full Senior / 22 yd)</option>
+                <option value="19">Pitch: 19m (Youth / U15)</option>
+                <option value="18">Pitch: 18m (Junior / U13)</option>
+                <option value="16">Pitch: 16m (Junior / U11)</option>
+              </select>
+              <select id="arrivalPointSelect" aria-label="Speed arrival marker" style="padding:5px 8px; font-size:0.76rem;">
+                <option value="crease" selected>Arrival: Batting Crease / Bat (-2.44m)</option>
+                <option value="stumps">Arrival: Batting Stumps (-1.22m)</option>
+                <option value="full">Arrival: Full Stump-to-Stump (0m)</option>
+              </select>
+            </div>
+            <div class="speed-readout-pill">
+              <span class="speed-value" id="speedValueText">Upload a video, then mark release &amp; arrival frames</span>
+              <span class="help-text" id="speedDetailText">Flight dist: 17.68m</span>
             </div>
           </div>
-          <div class="speed-gun-selects">
-            <select id="pitchLengthSelect" aria-label="Pitch length" style="padding:5px 8px; font-size:0.76rem;">
-              <option value="20.12" selected>Pitch: 20.12m (Full Senior / 22 yd)</option>
-              <option value="19">Pitch: 19m (Youth / U15)</option>
-              <option value="18">Pitch: 18m (Junior / U13)</option>
-              <option value="16">Pitch: 16m (Junior / U11)</option>
-            </select>
-            <select id="arrivalPointSelect" aria-label="Speed arrival marker" style="padding:5px 8px; font-size:0.76rem;">
-              <option value="crease" selected>Arrival: Batting Crease / Bat (-2.44m)</option>
-              <option value="stumps">Arrival: Batting Stumps (-1.22m)</option>
-              <option value="full">Arrival: Full Stump-to-Stump (0m)</option>
-            </select>
-          </div>
-          <div class="speed-readout-pill">
-            <span class="speed-value" id="speedValueText">Upload a video, then mark release &amp; arrival frames</span>
-            <span class="help-text" id="speedDetailText">Flight dist: 17.68m</span>
-          </div>
-        </div>
+        </details>
 
         <!-- Player Profile Form -->
         <div class="form-grid">
@@ -2248,17 +2406,22 @@
               <option value="Red-ball / Multi-day">Red-ball / Multi-day</option>
             </select>
           </div>
-
-          <div class="field full">
-            <label>Priority Focus Areas (Optional — Tap to Guide Analysis)</label>
-            <div class="focus-chips" id="focusChips" role="group" aria-label="Priority coaching focus areas"></div>
-          </div>
-
-          <div class="field full">
-            <label for="notesInput">Coach / Player Focus Notes (Optional)</label>
-            <textarea id="notesInput" placeholder="e.g., Struggles against full inswingers, head falling over to off-side, or losing pace in final overs..."></textarea>
-          </div>
         </div>
+
+        <!-- Collapsible Priority Focus Areas & Coach Notes -->
+        <details class="collapsible-card" id="focusDetails">
+          <summary>
+            <span>🎯 Priority Focus Areas &amp; Coach Notes</span>
+            <span class="help-text" id="focusCountPill">Optional</span>
+          </summary>
+          <div class="collapsible-body">
+            <div class="focus-chips" id="focusChips" role="group" aria-label="Priority coaching focus areas"></div>
+            <div class="field">
+              <label for="notesInput">Custom Notes (Optional)</label>
+              <textarea id="notesInput" placeholder="e.g., Struggles against full inswingers, head falling over to off-side, or losing pace in final overs..."></textarea>
+            </div>
+          </div>
+        </details>
 
         <div class="error-banner" id="errorBanner" role="alert"></div>
 
@@ -2278,8 +2441,10 @@
       <div class="panel-header">
         <h2 id="reportTitle">📊 Coaching &amp; Tactical Matchup Report</h2>
         <div class="btn-group">
-          <button type="button" class="btn-sm" id="saveSessionBtn" disabled title="Save this report &amp; clips locally on this device">💾 Save</button>
-          <button type="button" class="btn-sm" id="speakReportBtn" disabled title="Read verdict &amp; key cues aloud (great for smart glasses Bluetooth audio)">🔊 Read Aloud</button>
+          <button type="button" class="btn-sm" id="speakReportBtn" disabled title="Read verdict &amp; key cues aloud">🔊 Audio</button>
+          <button type="button" class="btn-sm" id="emailReportBtn" disabled title="Email coaching &amp; training plan">✉️ Email</button>
+          <button type="button" class="btn-sm" id="exportReportBtn" disabled title="Download Markdown report">⬇️ Export</button>
+          <button type="button" class="btn-sm" id="saveSessionBtn" disabled title="Save or re-tag this session">💾 Save</button>
           <span class="badge badge-pitch" id="reportSourceBadge" style="display:none;">Ready</span>
         </div>
       </div>
@@ -2315,7 +2480,10 @@
           <div class="saved-frames-card" id="savedFramesCard">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
               <strong style="font-size:0.84rem;">🎞️ Stored Video Reference Frames (<span id="savedFramesCount">0</span>)</strong>
-              <span class="help-text">Tap any frame to inspect large</span>
+              <div class="btn-group">
+                <button type="button" class="btn-sm btn-primary" id="analyzeStoredFramesBtn" style="display:none;">✨ Analyze These Frames with AI</button>
+                <span class="help-text">Tap any frame to inspect</span>
+              </div>
             </div>
             <div class="saved-frame-preview-box" id="savedFramePreviewBox">
               <img id="savedFrameLargeImg" alt="Selected video reference frame">
@@ -2434,6 +2602,9 @@
     <button type="button" id="mobileTabVideo" class="active">🎬 Video &amp; Setup</button>
     <button type="button" id="mobileTabReport">📊 Report <span class="mobile-report-dot" id="mobileReportDot"></span></button>
   </nav>
+
+  <!-- NON-INTRUSIVE TOAST NOTIFICATION -->
+  <div class="toast-pill" id="toastPill" role="status" aria-live="polite"></div>
 
   <!-- GEMINI API SETTINGS DIALOG -->
   <dialog id="apiDialog" aria-labelledby="apiDialogTitle">
@@ -2867,6 +3038,21 @@
       const savedFramePreviewBox = document.getElementById('savedFramePreviewBox');
       const savedFrameLargeImg = document.getElementById('savedFrameLargeImg');
       const savedFrameLargeLabel = document.getElementById('savedFrameLargeLabel');
+      const analyzeStoredFramesBtn = document.getElementById('analyzeStoredFramesBtn');
+      const demosMenu = document.getElementById('demosMenu');
+      const speedGunDetails = document.getElementById('speedGunDetails');
+      const speedSummaryPill = document.getElementById('speedSummaryPill');
+      const focusCountPill = document.getElementById('focusCountPill');
+      const toastPill = document.getElementById('toastPill');
+      let toastTimer = null;
+
+      function showToast(msg) {
+        if (!toastPill) return;
+        toastPill.textContent = msg;
+        toastPill.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastPill.classList.remove('show'), 2600);
+      }
       const emailReportBtn = document.getElementById('emailReportBtn');
       const exportReportBtn = document.getElementById('exportReportBtn');
       const emailDialog = document.getElementById('emailDialog');
@@ -2966,6 +3152,7 @@
         focusChips.textContent = '';
         const options = FOCUS_AREAS[state.role] || [];
         state.focusAreas = state.focusAreas.filter(f => options.includes(f));
+        focusCountPill.textContent = state.focusAreas.length > 0 ? `${state.focusAreas.length} selected` : 'Optional';
         options.forEach(area => {
           const btn = document.createElement('button');
           btn.type = 'button';
@@ -3347,6 +3534,7 @@
           state.clips.push(cutClip);
           renderClipTabs();
           updateAnalyzeButtonLabel();
+          showToast(`✓ Added cut [${start.toFixed(1)}s–${end.toFixed(1)}s] to clips`);
         });
 
         // Bowling Speed Gun controls (auto-pins exact release & arrival frames for AI)
@@ -3431,11 +3619,19 @@
         });
 
         // Analyze, Save Frames Only & Demos
-        analyzeBtn.addEventListener('click', runAnalysis);
+        analyzeBtn.addEventListener('click', () => runAnalysis());
         saveFramesOnlyBtn.addEventListener('click', saveFramesOnlySession);
-        document.getElementById('loadBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
-        document.getElementById('loadBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
-        document.getElementById('loadLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
+        analyzeStoredFramesBtn.addEventListener('click', () => {
+          const frames = state.currentReport?._referenceFrames || [];
+          if (frames.length > 0) runAnalysis(frames);
+        });
+        const closeDemos = () => { if (demosMenu) demosMenu.open = false; };
+        document.getElementById('loadBatterDemoBtn').addEventListener('click', () => { closeDemos(); loadDemo('batting'); });
+        document.getElementById('loadBowlerDemoBtn').addEventListener('click', () => { closeDemos(); loadDemo('bowling'); });
+        document.getElementById('loadLbwDemoBtn').addEventListener('click', () => { closeDemos(); loadDemo('lbw'); });
+        document.addEventListener('click', (e) => {
+          if (demosMenu && demosMenu.open && !demosMenu.contains(e.target)) demosMenu.open = false;
+        });
         document.getElementById('emptyBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
         document.getElementById('emptyBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
         document.getElementById('emptyLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
@@ -3547,6 +3743,9 @@
         roleBattingBtn.classList.toggle('active', role === 'batting');
         roleBowlingBtn.classList.toggle('active', role === 'bowling');
         roleLbwBtn.classList.toggle('active', role === 'lbw');
+        if (speedGunDetails) {
+          speedGunDetails.open = role === 'bowling' || role === 'lbw';
+        }
         if (role === 'lbw') {
           cameraAngleSelect.value = 'Front-on (Umpire / Keeper view)';
           const clip = getActiveClip();
@@ -4191,12 +4390,15 @@
         if (res.valid) {
           speedValueText.textContent = `⚡ ${res.kmh.toFixed(1)} km/h (${res.mph.toFixed(1)} mph)`;
           speedDetailText.textContent = `${res.flightM.toFixed(2)}m in ${res.dt.toFixed(3)}s (range ~${res.kmhLow.toFixed(0)}–${res.kmhHigh.toFixed(0)} km/h)`;
+          if (speedSummaryPill) speedSummaryPill.textContent = `⚡ ${res.kmh.toFixed(1)} km/h`;
         } else if (res.error) {
           speedValueText.textContent = res.error;
           speedDetailText.textContent = '';
+          if (speedSummaryPill) speedSummaryPill.textContent = `${res.pitchM}m`;
         } else {
           speedValueText.textContent = 'Step to release & arrival frames to measure speed';
           speedDetailText.textContent = `Flight dist: ${res.flightM.toFixed(2)}m`;
+          if (speedSummaryPill) speedSummaryPill.textContent = `${res.pitchM}m`;
         }
       }
 
@@ -4291,7 +4493,7 @@
         renderClipTabs();
       }
 
-      async function autoExtractKeyframes(count = 12) {
+      async function autoExtractKeyframes(count = state.sampleCount) {
         const clip = getActiveClip();
         const dur = videoPlayer.duration;
         if (!clip || !dur || !isFinite(dur)) return;
@@ -4322,7 +4524,7 @@
         renderClipTabs();
       }
 
-      async function extractKeyframesOffscreen(clip, count = 12) {
+      async function extractKeyframesOffscreen(clip, count = state.sampleCount) {
         return new Promise((resolve, reject) => {
           const v = document.createElement('video');
           v.muted = true;
@@ -4428,8 +4630,9 @@
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
       }
 
-      async function runAnalysis() {
+      async function runAnalysis(storedFramesOverride = null) {
         clearError();
+        const usingStoredFrames = Array.isArray(storedFramesOverride) && storedFramesOverride.length > 0;
 
         const playerName = playerNameInput.value.trim();
         if (!playerName) {
@@ -4438,8 +4641,8 @@
           return;
         }
 
-        if (state.clips.length === 0) {
-          showError('Please upload at least one batting or bowling video first (or click "Demo: Batter" / "Demo: Bowler" in the top bar to preview).');
+        if (!usingStoredFrames && state.clips.length === 0) {
+          showError('Please upload at least one batting or bowling video first (or open 🎯 Demos in the top bar to preview).');
           return;
         }
 
@@ -4449,67 +4652,80 @@
           return;
         }
 
-        setLoading(true, 'Preparing video frames...', `Extracting biomechanical sequences across ${state.clips.length} clip${state.clips.length > 1 ? 's' : ''}.`);
+        setLoading(true, 'Preparing video frames...', usingStoredFrames
+          ? `Sending ${storedFramesOverride.length} stored video frames to ${state.model}.`
+          : `Extracting biomechanical sequences across ${state.clips.length} clip${state.clips.length > 1 ? 's' : ''}.`);
 
         try {
-          const isMultiClip = state.clips.length > 1;
-          // Ensure every clip has keyframes extracted
-          for (let i = 0; i < state.clips.length; i++) {
-            const clip = state.clips[i];
-            if (clip.frames.length === 0) {
-              setLoading(true, `Sampling Clip ${i + 1} of ${state.clips.length}...`, `Extracting ${state.sampleCount} frames from ${clip.name} (${clip.angle}).`);
-              if (clip.id === state.activeClipId && videoPlayer.duration) {
-                await autoExtractKeyframes(state.sampleCount);
-              } else {
-                await extractKeyframesOffscreen(clip, state.sampleCount);
-                renderClipTabs();
-              }
-            }
-          }
-
-          const singleClip = state.clips[0];
-          const fileSizeMb = singleClip.file.size / (1024 * 1024);
-          // Multi-clip always uses labeled keyframes across all angles so payload stays crisp & under API limits
-          const useFullVideo = !isMultiClip && (
-            (state.analysisMode === 'video' && fileSizeMb <= 18) ||
-            (state.analysisMode === 'auto' && !singleClip.trimCustom && fileSizeMb <= 15)
-          );
-
+          const isMultiClip = !usingStoredFrames && state.clips.length > 1;
           const parts = [{ text: buildPrompt() }];
 
-          if (useFullVideo) {
-            setLoading(true, 'Encoding video clip...', `Sending full video (${fileSizeMb.toFixed(1)} MB) to ${state.model}.`);
-            const base64Video = await fileToBase64(singleClip.file);
-            parts.push({
-              inlineData: {
-                mimeType: singleClip.file.type || 'video/mp4',
-                data: base64Video
-              }
+          if (usingStoredFrames) {
+            storedFramesOverride.forEach((f, fIdx) => {
+              parts.push({ text: `Stored Frame ${fIdx + 1} (${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (fIdx + 1)}) at ${Number(f.time || 0).toFixed(2)}s:` });
+              parts.push({
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: f.dataUrl.split(',')[1]
+                }
+              });
             });
           } else {
-            const totalFrames = state.clips.reduce((sum, c) => sum + c.frames.length, 0);
-            const subtitle = isMultiClip
-              ? `Sending ${totalFrames} frames across ${state.clips.length} camera angles to ${state.model}.`
-              : `Sending ${totalFrames} timestamped frames to ${state.model}.`;
-            setLoading(true, 'Analyzing biomechanical sequences...', subtitle);
+            // Ensure every clip has keyframes extracted
+            for (let i = 0; i < state.clips.length; i++) {
+              const clip = state.clips[i];
+              if (clip.frames.length === 0) {
+                setLoading(true, `Sampling Clip ${i + 1} of ${state.clips.length}...`, `Extracting ${state.sampleCount} frames from ${clip.name} (${clip.angle}).`);
+                if (clip.id === state.activeClipId && videoPlayer.duration) {
+                  await autoExtractKeyframes(state.sampleCount);
+                } else {
+                  await extractKeyframesOffscreen(clip, state.sampleCount);
+                  renderClipTabs();
+                }
+              }
+            }
 
-            state.clips.forEach((clip, cIdx) => {
-              const winDesc = clip.trimCustom
-                ? `${(clip.trimStart || 0).toFixed(2)}s–${(clip.trimEnd || 0).toFixed(2)}s`
-                : `Full clip (${(clip.duration || 0).toFixed(2)}s)`;
+            const singleClip = state.clips[0];
+            const fileSizeMb = singleClip.file.size / (1024 * 1024);
+            const useFullVideo = !isMultiClip && (
+              (state.analysisMode === 'video' && fileSizeMb <= 18) ||
+              (state.analysisMode === 'auto' && !singleClip.trimCustom && fileSizeMb <= 15)
+            );
+
+            if (useFullVideo) {
+              setLoading(true, 'Encoding video clip...', `Sending full video (${fileSizeMb.toFixed(1)} MB) to ${state.model}.`);
+              const base64Video = await fileToBase64(singleClip.file);
               parts.push({
-                text: `=== CLIP ${cIdx + 1} of ${state.clips.length}: "${clip.name}" | Camera Angle: ${clip.angle} | Window: ${winDesc} ===`
+                inlineData: {
+                  mimeType: singleClip.file.type || 'video/mp4',
+                  data: base64Video
+                }
               });
-              clip.frames.forEach((f, fIdx) => {
-                parts.push({ text: `Clip ${cIdx + 1} (${clip.angle}) — Frame ${fIdx + 1} (${f.label}) at ${f.time.toFixed(2)}s:` });
+            } else {
+              const totalFrames = state.clips.reduce((sum, c) => sum + c.frames.length, 0);
+              const subtitle = isMultiClip
+                ? `Sending ${totalFrames} frames across ${state.clips.length} camera angles to ${state.model}.`
+                : `Sending ${totalFrames} timestamped frames to ${state.model}.`;
+              setLoading(true, 'Analyzing biomechanical sequences...', subtitle);
+
+              state.clips.forEach((clip, cIdx) => {
+                const winDesc = clip.trimCustom
+                  ? `${(clip.trimStart || 0).toFixed(2)}s–${(clip.trimEnd || 0).toFixed(2)}s`
+                  : `Full clip (${(clip.duration || 0).toFixed(2)}s)`;
                 parts.push({
-                  inlineData: {
-                    mimeType: 'image/jpeg',
-                    data: f.dataUrl.split(',')[1]
-                  }
+                  text: `=== CLIP ${cIdx + 1} of ${state.clips.length}: "${clip.name}" | Camera Angle: ${clip.angle} | Window: ${winDesc} ===`
+                });
+                clip.frames.forEach((f, fIdx) => {
+                  parts.push({ text: `Clip ${cIdx + 1} (${clip.angle}) — Frame ${fIdx + 1} (${f.label}) at ${f.time.toFixed(2)}s:` });
+                  parts.push({
+                    inlineData: {
+                      mimeType: 'image/jpeg',
+                      data: f.dataUrl.split(',')[1]
+                    }
+                  });
                 });
               });
-            });
+            }
           }
 
           const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
@@ -4572,14 +4788,16 @@
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
 
-          const currentFramesSnapshot = state.clips.flatMap((c, ci) =>
-            c.frames.map(f => ({
-              time: f.time,
-              dataUrl: f.dataUrl,
-              label: state.clips.length > 1 ? `C${ci + 1} ${f.label}` : f.label,
-              angle: c.angle
-            }))
-          );
+          const currentFramesSnapshot = usingStoredFrames
+            ? storedFramesOverride
+            : state.clips.flatMap((c, ci) =>
+                c.frames.map(f => ({
+                  time: f.time,
+                  dataUrl: f.dataUrl,
+                  label: state.clips.length > 1 ? `C${ci + 1} ${f.label}` : f.label,
+                  angle: c.angle
+                }))
+              );
           parsed._referenceFrames = currentFramesSnapshot;
 
           renderReport(parsed);
@@ -4587,6 +4805,7 @@
           // Automatically save to Player -> Discipline folder unless "Test - Not Saved"
           if (!isTestMode) {
             await autoSaveAnalysisSession(parsed, playerName, sessionTag, autoFileStamp, nowIso);
+            showToast(`✓ Auto-saved to ${playerName} / ${state.role}`);
           }
         } catch (err) {
           console.error(err);
@@ -4841,8 +5060,15 @@ For each improvement's diagram (top-down net/pitch view):
         reportSourceBadge.style.display = 'inline-flex';
         reportSourceBadge.textContent = meta.source || 'Analysis Ready';
 
-        // Stored Video Reference Frames viewer
-        renderSavedFramesViewer(report._referenceFrames || []);
+        // Stored Video Reference Frames viewer & Frames-Only mode toggle
+        const isFramesOnlyView = Boolean(report._framesOnlyView);
+        renderSavedFramesViewer(report._referenceFrames || [], isFramesOnlyView);
+        const reportTabsEl = document.querySelector('.report-tabs');
+        if (reportTabsEl) reportTabsEl.style.display = isFramesOnlyView ? 'none' : 'flex';
+        document.querySelectorAll('.tab-panel').forEach(p => {
+          if (isFramesOnlyView) p.style.display = 'none';
+          else p.style.display = '';
+        });
 
         // Badges
         const badgesEl = document.getElementById('reportBadges');
@@ -5605,9 +5831,12 @@ For each improvement's diagram (top-down net/pitch view):
       }
 
       // --- STORED VIDEO REFERENCE FRAMES VIEWER ---
-      function renderSavedFramesViewer(frames) {
+      function renderSavedFramesViewer(frames, isFramesOnlyView = false) {
         savedFramesStrip.textContent = '';
         savedFramePreviewBox.classList.remove('active');
+        if (analyzeStoredFramesBtn) {
+          analyzeStoredFramesBtn.style.display = (isFramesOnlyView && Array.isArray(frames) && frames.length > 0) ? 'inline-flex' : 'none';
+        }
         if (!Array.isArray(frames) || frames.length === 0) {
           savedFramesCard.classList.remove('active');
           return;
@@ -5936,6 +6165,7 @@ create policy "Allow anon read/write for personal lab"
           }
           // Open the saved frames-only view right away as confirmation
           loadSavedSession(record);
+          showToast(`✓ Saved ${clipsMeta.reduce((n, c) => n + c.frames.length, 0)} frames to ${playerName} / ${state.role}`);
         } catch (err) {
           showError(`Could not save frames: ${err.message}`);
         } finally {
@@ -6066,6 +6296,7 @@ create policy "Allow anon read/write for personal lab"
 
         if (isFramesOnly) {
           const stubReport = {
+            _framesOnlyView: true,
             _meta: {
               playerName: session.playerName,
               sessionTag: session.sessionTag || '',
