@@ -472,15 +472,51 @@
       letter-spacing: 0.04em;
     }
 
-    /* --- PROMINENT ACTIVE PLAYER BANNER --- */
+    /* --- PROMINENT ACTIVE PLAYER & DISCIPLINE BANNER --- */
     .active-player-bar {
-      background: linear-gradient(135deg, rgba(199, 176, 136, 0.14), rgba(46, 125, 50, 0.12));
-      border: 1px solid rgba(199, 176, 136, 0.48);
+      background: linear-gradient(135deg, rgba(46, 125, 50, 0.18), rgba(27, 28, 36, 0.92));
+      border: 1px solid rgba(76, 175, 80, 0.55);
+      border-left: 4px solid var(--accent-bright);
       border-radius: var(--radius);
       padding: 12px 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+      transition: background 0.22s ease, border-color 0.22s ease;
+    }
+
+    body.mode-bowling .active-player-bar {
+      background: linear-gradient(135deg, rgba(2, 119, 189, 0.20), rgba(27, 28, 36, 0.92));
+      border-color: rgba(79, 195, 247, 0.55);
+      border-left-color: var(--info);
+    }
+
+    body.mode-lbw .active-player-bar {
+      background: linear-gradient(135deg, rgba(198, 40, 40, 0.22), rgba(27, 28, 36, 0.92));
+      border-color: rgba(239, 83, 80, 0.55);
+      border-left-color: var(--danger);
+    }
+
+    body.mode-bowling .left-panel {
+      border-top: 3px solid var(--info);
+    }
+
+    body.mode-batting .left-panel {
+      border-top: 3px solid var(--accent-bright);
+    }
+
+    body.mode-lbw .left-panel {
+      border-top: 3px solid var(--danger);
+    }
+
+    body.mode-bowling .segmented button.active {
+      background: #0277bd;
+      box-shadow: 0 1px 8px rgba(79, 195, 247, 0.35);
+    }
+
+    body.mode-lbw .segmented button.active {
+      background: #c62828;
+      box-shadow: 0 1px 8px rgba(239, 83, 80, 0.35);
     }
 
     .active-player-top {
@@ -2027,11 +2063,16 @@
       </div>
 
       <div class="panel-body">
-        <!-- Prominent Active Player Banner (Always at Top) -->
+        <!-- Prominent Active Player & Discipline Banner (Always at Top) -->
         <div class="active-player-bar" id="activePlayerBar">
           <div class="active-player-top">
-            <span class="badge badge-amber" id="activePlayerBadge">⚠️ Select or Enter Player Name</span>
+            <span class="badge badge-amber" id="activePlayerBadge">⚠️ Enter Player Name</span>
             <button type="button" class="btn-sm btn-ghost" id="setTestPlayerBtn" title="Use Test mode — analysis will not be saved to storage">🧪 Test - Not Saved</button>
+          </div>
+          <div class="segmented" role="group" aria-label="Analysis discipline mode">
+            <button type="button" id="roleBattingBtn" class="active">🏏 Batting</button>
+            <button type="button" id="roleBowlingBtn">⚡ Bowling</button>
+            <button type="button" id="roleLbwBtn">☝️ LBW Review</button>
           </div>
           <div class="active-player-inputs">
             <input type="text" id="playerNameInput" list="playerNameList" placeholder="Player Name * (e.g. Sam)" autocomplete="off" aria-label="Player Name (Required)">
@@ -2175,15 +2216,6 @@
 
         <!-- Player Profile Form -->
         <div class="form-grid">
-          <div class="field full">
-            <label>Discipline / Mode</label>
-            <div class="segmented" role="group" aria-label="Analysis mode">
-              <button type="button" id="roleBattingBtn" class="active">🏏 Batting</button>
-              <button type="button" id="roleBowlingBtn">⚡ Bowling</button>
-              <button type="button" id="roleLbwBtn">☝️ LBW Review</button>
-            </div>
-          </div>
-
           <div class="field">
             <label for="handednessSelect">Handedness</label>
             <select id="handednessSelect">
@@ -2872,7 +2904,7 @@
 
       // --- INITIALIZE ---
       function init() {
-        document.body.classList.add('mobile-view-video');
+        document.body.classList.add('mobile-view-video', 'mode-batting');
         populateStyleOptions();
         renderFocusChips();
         updateApiStatusUI();
@@ -2884,15 +2916,17 @@
 
       function updateActivePlayerBadge() {
         const name = (playerNameInput.value || '').trim();
+        const modeTag = state.role === 'bowling' ? '⚡ Bowling' : state.role === 'lbw' ? '☝️ LBW Review' : '🏏 Batting';
+        const modeCls = state.role === 'bowling' ? 'badge-blue' : state.role === 'lbw' ? 'badge-red' : 'badge-green';
         if (!name) {
-          activePlayerBadge.textContent = '⚠️ Enter Player Name';
+          activePlayerBadge.textContent = `${modeTag} · ⚠️ Enter Player Name`;
           activePlayerBadge.className = 'badge badge-amber';
         } else if (isTestPlayerName(name)) {
-          activePlayerBadge.textContent = '🧪 Test Mode · Not Saved';
-          activePlayerBadge.className = 'badge badge-blue';
+          activePlayerBadge.textContent = `${modeTag} · 🧪 Test (Not Saved)`;
+          activePlayerBadge.className = 'badge badge-pitch';
         } else {
-          activePlayerBadge.textContent = `👤 Active Player: ${name} · Auto-Save ON`;
-          activePlayerBadge.className = 'badge badge-green';
+          activePlayerBadge.textContent = `${modeTag} · 👤 ${name}`;
+          activePlayerBadge.className = `badge ${modeCls}`;
         }
       }
 
@@ -3508,6 +3542,8 @@
       function setRole(role) {
         state.role = role;
         state.focusAreas = [];
+        document.body.classList.remove('mode-batting', 'mode-bowling', 'mode-lbw');
+        document.body.classList.add(`mode-${role}`);
         roleBattingBtn.classList.toggle('active', role === 'batting');
         roleBowlingBtn.classList.toggle('active', role === 'bowling');
         roleLbwBtn.classList.toggle('active', role === 'lbw');
@@ -3521,6 +3557,7 @@
         }
         populateStyleOptions();
         renderFocusChips();
+        updateActivePlayerBadge();
         updateAnalyzeButtonLabel();
       }
 
