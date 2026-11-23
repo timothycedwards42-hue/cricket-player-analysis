@@ -9,6 +9,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#121318">
   <title>Cricket Player Analysis — Biomechanics & Tactical Matchup Lab</title>
+  <!-- Optional Supabase CDN Client for Cloud Sync -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -1592,14 +1594,131 @@
       100% { transform: translate(6px, -11px) rotate(32deg); }
     }
 
-    /* --- SAVED SESSIONS LIST --- */
+    /* --- SAVED SESSIONS FOLDER TREE & VIDEO REFERENCE --- */
     .session-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      max-height: 340px;
+      max-height: 360px;
       overflow-y: auto;
     }
+
+    details.folder-player {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    details.folder-player > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 9px 12px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    details.folder-player > summary::-webkit-details-marker { display: none; }
+
+    .folder-body {
+      padding: 8px 10px 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    details.folder-discipline {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    details.folder-discipline > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 7px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--pitch);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    details.folder-discipline > summary::-webkit-details-marker { display: none; }
+
+    .folder-files {
+      padding: 6px 8px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-top: 1px solid var(--border);
+    }
+
+    .saved-frames-card {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+
+    .saved-frames-card.active {
+      display: flex;
+    }
+
+    .saved-frame-preview-box {
+      display: none;
+      position: relative;
+      background: #000;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      text-align: center;
+    }
+
+    .saved-frame-preview-box.active {
+      display: block;
+    }
+
+    .saved-frame-preview-box img {
+      max-width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .supabase-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .supabase-box > summary {
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--info);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      list-style: none;
+    }
+
+    .supabase-box > summary::-webkit-details-marker { display: none; }
 
     .session-row {
       display: flex;
@@ -1971,6 +2090,22 @@
         <!-- Player Profile Form -->
         <div class="form-grid">
           <div class="field full">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <label for="playerNameInput">Player Name (Required for Analysis) *</label>
+              <button type="button" class="btn-sm btn-ghost" id="setTestPlayerBtn" title="Use Test mode — analysis will not be saved to storage">🧪 Test - Not Saved</button>
+            </div>
+            <input type="text" id="playerNameInput" list="playerNameList" placeholder="Enter player name (e.g. Sam) or click Test - Not Saved" autocomplete="off">
+            <datalist id="playerNameList">
+              <option value="Test - Not Saved"></option>
+            </datalist>
+          </div>
+
+          <div class="field full">
+            <label for="sessionTagInput">Session Tag / Note (Optional — Auto-Timestamped)</label>
+            <input type="text" id="sessionTagInput" placeholder="e.g. Net Session, Front-Foot Drives, Match Clip (date &amp; time added automatically)">
+          </div>
+
+          <div class="field full">
             <label>Discipline / Mode</label>
             <div class="segmented" role="group" aria-label="Analysis mode">
               <button type="button" id="roleBattingBtn" class="active">🏏 Batting</button>
@@ -2069,8 +2204,24 @@
           </div>
         </div>
 
-        <!-- Populated Report -->
+          <!-- Populated Report -->
         <div class="report-content" id="reportContent">
+          <!-- Saved Video Reference Frames Viewer (shown when opening a saved session or after analysis) -->
+          <div class="saved-frames-card" id="savedFramesCard">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+              <strong style="font-size:0.84rem;">🎞️ Stored Video Reference Frames (<span id="savedFramesCount">0</span>)</strong>
+              <span class="help-text">Tap any frame to inspect large</span>
+            </div>
+            <div class="saved-frame-preview-box" id="savedFramePreviewBox">
+              <img id="savedFrameLargeImg" alt="Selected video reference frame">
+              <div style="padding:4px 8px; font-size:0.74rem; color:var(--pitch); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
+                <span id="savedFrameLargeLabel"></span>
+                <button type="button" class="btn-sm btn-ghost" id="closeFramePreviewBtn">Close ✕</button>
+              </div>
+            </div>
+            <div class="filmstrip" id="savedFramesStrip"></div>
+          </div>
+
           <!-- TV-Style DRS LBW Verdict Banner (shown in LBW mode) -->
           <div class="drs-card" id="drsVerdictCard">
             <div class="drs-header">
@@ -2341,31 +2492,59 @@
     </div>
   </dialog>
 
-  <!-- ON-DEVICE SAVED SESSIONS DIALOG (IndexedDB) -->
-  <dialog id="historyDialog" aria-labelledby="historyDialogTitle" style="max-width:620px;">
+  <!-- SAVED SESSIONS FOLDER BROWSER & SUPABASE SYNC DIALOG -->
+  <dialog id="historyDialog" aria-labelledby="historyDialogTitle" style="max-width:660px;">
     <div class="dialog-header">
-      <h3 id="historyDialogTitle">📚 Saved Sessions (On-Device Storage)</h3>
+      <h3 id="historyDialogTitle">📚 Player Storage Folders (Local &amp; Cloud)</h3>
       <button type="button" class="btn-sm btn-ghost" id="closeHistoryDialogBtn" aria-label="Close">✕</button>
     </div>
     <div class="dialog-body">
-      <!-- Save Current Session Box -->
+      <!-- Save / Re-tag Current Session Box -->
       <div id="saveCurrentBox" style="display:none; flex-direction:column; gap:8px; background:var(--bg); border:1px solid rgba(76,175,80,0.4); border-radius:var(--radius-sm); padding:10px 12px;">
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="sessionNameInput" placeholder="Session name (e.g. Sam — Off-Side Drives)" style="flex:1; min-width:180px;">
-          <button type="button" class="btn-primary" id="confirmSaveSessionBtn">💾 Save Session</button>
+          <input type="text" id="sessionNameInput" placeholder="Player name (folder)" style="flex:1; min-width:140px;">
+          <input type="text" id="sessionTagModalInput" placeholder="Optional file tag (e.g. Match 1)" style="flex:1; min-width:140px;">
+          <button type="button" class="btn-primary" id="confirmSaveSessionBtn">💾 Save</button>
         </div>
         <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.76rem; color:var(--text-muted); cursor:pointer;">
           <input type="checkbox" id="saveRawVideoChk" style="width:auto; accent-color:var(--accent-bright);">
-          Also store raw video file(s) on device (uses more storage; unchecked saves lightweight keyframes + full report)
+          Also store raw video file(s) locally (keyframes + full report are always saved automatically)
         </label>
       </div>
 
+      <!-- Optional Supabase Cloud Sync Panel -->
+      <details class="supabase-box" id="supabaseDetails">
+        <summary>
+          <span>☁️ Supabase Cloud Storage Sync</span>
+          <span class="badge badge-blue" id="supabaseBadge">Local Only</span>
+        </summary>
+        <div class="form-grid" style="margin-top:4px;">
+          <div class="field">
+            <label for="supabaseUrlInput">Supabase Project URL</label>
+            <input type="text" id="supabaseUrlInput" placeholder="https://xxxx.supabase.co" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="supabaseKeyInput">Supabase Anon Public Key</label>
+            <input type="password" id="supabaseKeyInput" placeholder="eyJ..." autocomplete="off">
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div class="btn-group">
+            <button type="button" class="btn-sm btn-primary" id="saveSupabaseBtn">Connect &amp; Sync</button>
+            <button type="button" class="btn-sm" id="syncSupabaseNowBtn">↻ Sync Now</button>
+            <button type="button" class="btn-sm btn-ghost" id="copySupabaseSqlBtn" title="Copy CREATE TABLE SQL to paste into Supabase SQL Editor">📋 Copy Table SQL</button>
+          </div>
+          <button type="button" class="btn-sm btn-ghost" id="clearSupabaseBtn">Disconnect</button>
+        </div>
+        <p class="help-text" id="supabaseStatusText">Connect a Supabase project to sync Player → Batting/Bowling folders (with video frames &amp; reports) across all your devices.</p>
+      </details>
+
       <div style="display:flex; gap:8px; align-items:center;">
-        <input type="text" id="historySearchInput" placeholder="Filter saved sessions by player, discipline, or style...">
+        <input type="text" id="historySearchInput" placeholder="Filter by player folder, batting/bowling, tag, or date...">
       </div>
 
       <div class="session-list" id="sessionList"></div>
-      <p class="help-text" id="historyStatusText">Stored privately in your browser’s IndexedDB on this device.</p>
+      <p class="help-text" id="historyStatusText">Analyses under any player name (except "Test - Not Saved") auto-save into Player → Discipline folders with video frames.</p>
     </div>
     <div class="dialog-footer" style="justify-content:space-between; flex-wrap:wrap;">
       <div class="btn-group">
@@ -2538,6 +2717,10 @@
       const roleBattingBtn = document.getElementById('roleBattingBtn');
       const roleBowlingBtn = document.getElementById('roleBowlingBtn');
       const roleLbwBtn = document.getElementById('roleLbwBtn');
+      const playerNameInput = document.getElementById('playerNameInput');
+      const playerNameList = document.getElementById('playerNameList');
+      const setTestPlayerBtn = document.getElementById('setTestPlayerBtn');
+      const sessionTagInput = document.getElementById('sessionTagInput');
       const handednessSelect = document.getElementById('handednessSelect');
       const styleLabel = document.getElementById('styleLabel');
       const styleSelect = document.getElementById('styleSelect');
@@ -2561,11 +2744,22 @@
       const historyDialog = document.getElementById('historyDialog');
       const saveCurrentBox = document.getElementById('saveCurrentBox');
       const sessionNameInput = document.getElementById('sessionNameInput');
+      const sessionTagModalInput = document.getElementById('sessionTagModalInput');
       const saveRawVideoChk = document.getElementById('saveRawVideoChk');
       const historySearchInput = document.getElementById('historySearchInput');
       const sessionListEl = document.getElementById('sessionList');
       const historyStatusText = document.getElementById('historyStatusText');
       const importBackupInput = document.getElementById('importBackupInput');
+      const supabaseUrlInput = document.getElementById('supabaseUrlInput');
+      const supabaseKeyInput = document.getElementById('supabaseKeyInput');
+      const supabaseBadge = document.getElementById('supabaseBadge');
+      const supabaseStatusText = document.getElementById('supabaseStatusText');
+      const savedFramesCard = document.getElementById('savedFramesCard');
+      const savedFramesCount = document.getElementById('savedFramesCount');
+      const savedFramesStrip = document.getElementById('savedFramesStrip');
+      const savedFramePreviewBox = document.getElementById('savedFramePreviewBox');
+      const savedFrameLargeImg = document.getElementById('savedFrameLargeImg');
+      const savedFrameLargeLabel = document.getElementById('savedFrameLargeLabel');
       const emailReportBtn = document.getElementById('emailReportBtn');
       const exportReportBtn = document.getElementById('exportReportBtn');
       const emailDialog = document.getElementById('emailDialog');
@@ -2608,6 +2802,7 @@
         renderFocusChips();
         updateApiStatusUI();
         bindEvents();
+        initSupabaseFromStorage();
         refreshSavedCount();
       }
 
@@ -2706,10 +2901,17 @@
         videoFullscreenBtn.addEventListener('click', () => toggleElementFullscreen(videoContainer, videoPlayer));
         camFullscreenBtn.addEventListener('click', () => toggleElementFullscreen(cameraPreviewWrap, cameraPreview));
 
-        // Role toggle
+        // Role toggle & Test Player shortcut
         roleBattingBtn.addEventListener('click', () => setRole('batting'));
         roleBowlingBtn.addEventListener('click', () => setRole('bowling'));
         roleLbwBtn.addEventListener('click', () => setRole('lbw'));
+        setTestPlayerBtn.addEventListener('click', () => {
+          playerNameInput.value = 'Test - Not Saved';
+          clearError();
+        });
+        document.getElementById('closeFramePreviewBtn').addEventListener('click', () => {
+          savedFramePreviewBox.classList.remove('active');
+        });
 
         const isVideoFile = (f) =>
           Boolean(f) && (
@@ -3061,7 +3263,7 @@
         historyDialog.addEventListener('click', (e) => {
           if (e.target === historyDialog) historyDialog.close();
         });
-        document.getElementById('confirmSaveSessionBtn').addEventListener('click', saveCurrentSession);
+        document.getElementById('confirmSaveSessionBtn').addEventListener('click', () => saveCurrentSession(false));
         historySearchInput.addEventListener('input', renderSavedSessionsList);
         document.getElementById('exportBackupBtn').addEventListener('click', exportSessionsBackup);
         document.getElementById('importBackupBtn').addEventListener('click', () => importBackupInput.click());
@@ -3069,6 +3271,12 @@
           if (importBackupInput.files?.[0]) importSessionsBackup(importBackupInput.files[0]);
           importBackupInput.value = '';
         });
+
+        // Supabase Cloud Sync events
+        document.getElementById('saveSupabaseBtn').addEventListener('click', connectSupabase);
+        document.getElementById('syncSupabaseNowBtn').addEventListener('click', () => syncWithSupabase(true));
+        document.getElementById('copySupabaseSqlBtn').addEventListener('click', copySupabaseTableSql);
+        document.getElementById('clearSupabaseBtn').addEventListener('click', disconnectSupabase);
 
         // Email Dialog events
         document.getElementById('closeEmailDialogBtn').addEventListener('click', () => emailDialog.close());
@@ -4012,8 +4220,24 @@
       }
 
       // --- GEMINI AI ANALYSIS ---
+      function isTestPlayerName(name) {
+        return String(name || '').trim().toLowerCase() === 'test - not saved';
+      }
+
+      function formatFileTimestamp(date = new Date()) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
       async function runAnalysis() {
         clearError();
+
+        const playerName = playerNameInput.value.trim();
+        if (!playerName) {
+          showError('Player Name is required before running an analysis. Enter a player name (or tap "🧪 Test - Not Saved" for quick testing).');
+          playerNameInput.focus();
+          return;
+        }
 
         if (state.clips.length === 0) {
           showError('Please upload at least one batting or bowling video first (or click "Demo: Batter" / "Demo: Bowler" in the top bar to preview).');
@@ -4124,21 +4348,47 @@
           if (!rawText) throw new Error('Gemini returned an empty response. Try again or switch to Keyframes mode.');
 
           const speedInfo = state.clips.map(c => computeClipSpeed(c)).find(s => s.valid);
+          const sessionTag = sessionTagInput.value.trim();
+          const nowIso = new Date().toISOString();
+          const autoFileStamp = formatFileTimestamp(new Date(nowIso));
+          const isTestMode = isTestPlayerName(playerName);
+
           const parsed = JSON.parse(rawText);
           parsed._meta = {
+            playerName,
+            sessionTag,
+            fileStamp: autoFileStamp,
+            savedAt: nowIso,
             role: state.role,
             handedness: handednessSelect.value,
             style: styleSelect.value,
             format: formatSelect.value,
             pitchLength: `${pitchLengthSelect.value}m`,
             measuredSpeed: speedInfo ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph)` : null,
-            source: isMultiClip
-              ? `AI Analysis · ${state.clips.length} Angles (${state.model})`
-              : `AI Analysis (${state.model})`,
+            source: isTestMode
+              ? `Test Mode (Not Saved) · ${state.model}`
+              : isMultiClip
+                ? `Auto-Saved · ${state.clips.length} Angles (${state.model})`
+                : `Auto-Saved (${state.model})`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
 
+          const currentFramesSnapshot = state.clips.flatMap((c, ci) =>
+            c.frames.map(f => ({
+              time: f.time,
+              dataUrl: f.dataUrl,
+              label: state.clips.length > 1 ? `C${ci + 1} ${f.label}` : f.label,
+              angle: c.angle
+            }))
+          );
+          parsed._referenceFrames = currentFramesSnapshot;
+
           renderReport(parsed);
+
+          // Automatically save to Player -> Discipline folder unless "Test - Not Saved"
+          if (!isTestMode) {
+            await autoSaveAnalysisSession(parsed, playerName, sessionTag, autoFileStamp, nowIso);
+          }
         } catch (err) {
           console.error(err);
           showError(`Analysis failed: ${err.message}`);
@@ -4392,15 +4642,25 @@ For each improvement's diagram (top-down net/pitch view):
         reportSourceBadge.style.display = 'inline-flex';
         reportSourceBadge.textContent = meta.source || 'Analysis Ready';
 
+        // Stored Video Reference Frames viewer
+        renderSavedFramesViewer(report._referenceFrames || []);
+
         // Badges
         const badgesEl = document.getElementById('reportBadges');
         badgesEl.textContent = '';
-        const badgeList = [
+        const badgeList = [];
+        if (meta.playerName) {
+          badgeList.push({ text: `👤 ${meta.playerName}`, cls: 'badge-pitch' });
+        }
+        badgeList.push(
           { text: isLbw ? '☝️ LBW Review' : isBatting ? '🏏 Batting' : '⚡ Bowling', cls: isLbw ? 'badge-red' : 'badge-green' },
           { text: meta.handedness || handednessSelect.value, cls: 'badge-pitch' },
           { text: meta.style || styleSelect.value, cls: 'badge-blue' },
           { text: meta.format || formatSelect.value, cls: 'badge-amber' }
-        ];
+        );
+        if (meta.sessionTag) {
+          badgeList.push({ text: `🏷️ ${meta.sessionTag}`, cls: 'badge-blue' });
+        }
         if (meta.measuredSpeed) {
           badgeList.push({ text: `⚡ ${meta.measuredSpeed}`, cls: 'badge-green' });
         }
@@ -5145,12 +5405,267 @@ For each improvement's diagram (top-down net/pitch view):
         });
       }
 
+      // --- STORED VIDEO REFERENCE FRAMES VIEWER ---
+      function renderSavedFramesViewer(frames) {
+        savedFramesStrip.textContent = '';
+        savedFramePreviewBox.classList.remove('active');
+        if (!Array.isArray(frames) || frames.length === 0) {
+          savedFramesCard.classList.remove('active');
+          return;
+        }
+        savedFramesCard.classList.add('active');
+        savedFramesCount.textContent = String(frames.length);
+        frames.forEach((f, idx) => {
+          const card = document.createElement('div');
+          card.className = 'frame-thumb';
+          card.title = `${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (idx + 1)} (${Number(f.time || 0).toFixed(2)}s)`;
+
+          const img = document.createElement('img');
+          img.src = f.dataUrl;
+          img.alt = `Reference frame ${idx + 1}`;
+
+          const lbl = document.createElement('div');
+          lbl.className = 'frame-label';
+          const s1 = document.createElement('span');
+          s1.textContent = f.label || `F${idx + 1}`;
+          const s2 = document.createElement('span');
+          s2.textContent = `${Number(f.time || 0).toFixed(2)}s`;
+          lbl.append(s1, s2);
+
+          card.addEventListener('click', () => {
+            savedFrameLargeImg.src = f.dataUrl;
+            savedFrameLargeLabel.textContent = `${f.angle ? f.angle + ' · ' : ''}${f.label || 'Frame ' + (idx + 1)} @ ${Number(f.time || 0).toFixed(2)}s`;
+            savedFramePreviewBox.classList.add('active');
+          });
+
+          card.append(img, lbl);
+          savedFramesStrip.appendChild(card);
+        });
+      }
+
+      // --- SUPABASE CLOUD STORAGE SYNC ---
+      let supabaseClient = null;
+      const SUPABASE_TABLE = 'cricket_analyses';
+      const SUPABASE_TABLE_SQL = `create table if not exists public.cricket_analyses (
+  id text primary key,
+  player_name text not null,
+  discipline text not null,
+  session_tag text default '',
+  file_stamp text not null,
+  saved_at timestamptz not null default now(),
+  handedness text,
+  style text,
+  thumbnail text,
+  clips_meta jsonb default '[]'::jsonb,
+  report jsonb not null
+);
+
+alter table public.cricket_analyses enable row level security;
+
+create policy "Allow anon read/write for personal lab"
+  on public.cricket_analyses
+  for all
+  using (true)
+  with check (true);`;
+
+      function initSupabaseFromStorage() {
+        const url = localStorage.getItem('cpa_supabase_url') || '';
+        const key = localStorage.getItem('cpa_supabase_key') || '';
+        supabaseUrlInput.value = url;
+        supabaseKeyInput.value = key;
+        if (url && key && window.supabase && typeof window.supabase.createClient === 'function') {
+          try {
+            supabaseClient = window.supabase.createClient(url, key);
+            supabaseBadge.textContent = 'Connected';
+            supabaseBadge.className = 'badge badge-green';
+            supabaseStatusText.textContent = 'Connected to Supabase. Auto-saved sessions sync across devices.';
+            syncWithSupabase(false);
+          } catch (err) {
+            supabaseClient = null;
+            supabaseBadge.textContent = 'Error';
+            supabaseBadge.className = 'badge badge-red';
+            supabaseStatusText.textContent = `Supabase init failed: ${err.message}`;
+          }
+        } else {
+          supabaseClient = null;
+          supabaseBadge.textContent = 'Local Only';
+          supabaseBadge.className = 'badge badge-blue';
+        }
+      }
+
+      async function connectSupabase() {
+        const url = supabaseUrlInput.value.trim();
+        const key = supabaseKeyInput.value.trim();
+        if (!url || !key) {
+          supabaseStatusText.textContent = 'Enter both your Supabase Project URL and Anon Key first.';
+          return;
+        }
+        localStorage.setItem('cpa_supabase_url', url);
+        localStorage.setItem('cpa_supabase_key', key);
+        initSupabaseFromStorage();
+        if (supabaseClient) {
+          await syncWithSupabase(true);
+        }
+      }
+
+      function disconnectSupabase() {
+        localStorage.removeItem('cpa_supabase_url');
+        localStorage.removeItem('cpa_supabase_key');
+        supabaseUrlInput.value = '';
+        supabaseKeyInput.value = '';
+        supabaseClient = null;
+        supabaseBadge.textContent = 'Local Only';
+        supabaseBadge.className = 'badge badge-blue';
+        supabaseStatusText.textContent = 'Disconnected from Supabase. Using local on-device storage only.';
+      }
+
+      async function copySupabaseTableSql() {
+        try {
+          await navigator.clipboard.writeText(SUPABASE_TABLE_SQL);
+          supabaseStatusText.textContent = '✓ Copied CREATE TABLE SQL! Paste & run it in your Supabase SQL Editor.';
+        } catch {
+          supabaseStatusText.textContent = 'Could not copy automatically — check browser clipboard permissions.';
+        }
+      }
+
+      async function pushSessionToSupabase(record) {
+        if (!supabaseClient) return;
+        try {
+          const payload = {
+            id: record.id,
+            player_name: record.playerName,
+            discipline: record.role || 'batting',
+            session_tag: record.sessionTag || '',
+            file_stamp: record.fileStamp || formatFileTimestamp(new Date(record.savedAt)),
+            saved_at: record.savedAt,
+            handedness: record.handedness || '',
+            style: record.style || '',
+            thumbnail: record.thumbnail || null,
+            clips_meta: record.clipsMeta || [],
+            report: record.report
+          };
+          const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert(payload, { onConflict: 'id' });
+          if (error) throw error;
+          supabaseStatusText.textContent = `✓ Synced "${record.playerName}" to Supabase cloud.`;
+        } catch (err) {
+          supabaseStatusText.textContent = `Cloud sync warning: ${err.message}`;
+        }
+      }
+
+      async function deleteSessionFromSupabase(id) {
+        if (!supabaseClient) return;
+        try {
+          await supabaseClient.from(SUPABASE_TABLE).delete().eq('id', id);
+        } catch {}
+      }
+
+      async function syncWithSupabase(pushLocal = false) {
+        if (!supabaseClient) {
+          supabaseStatusText.textContent = 'Connect Supabase first to sync.';
+          return;
+        }
+        supabaseStatusText.textContent = 'Syncing folders with Supabase...';
+        try {
+          if (pushLocal) {
+            const locals = await getAllSessions();
+            for (const loc of locals) {
+              if (!isTestPlayerName(loc.playerName)) {
+                await pushSessionToSupabase(loc);
+              }
+            }
+          }
+          const { data, error } = await supabaseClient
+            .from(SUPABASE_TABLE)
+            .select('*')
+            .order('saved_at', { ascending: false })
+            .limit(250);
+          if (error) throw error;
+
+          for (const row of (data || [])) {
+            const existing = cachedSessions.find(s => s.id === row.id);
+            const merged = {
+              id: row.id,
+              savedAt: row.saved_at,
+              fileStamp: row.file_stamp || formatFileTimestamp(new Date(row.saved_at)),
+              playerName: row.player_name,
+              sessionTag: row.session_tag || '',
+              role: row.discipline || 'batting',
+              handedness: row.handedness || '',
+              style: row.style || '',
+              thumbnail: row.thumbnail || null,
+              clipsMeta: Array.isArray(row.clips_meta) ? row.clips_meta : [],
+              includeVideo: existing?.includeVideo || false,
+              videoBlobs: existing?.videoBlobs || [],
+              report: row.report,
+              synced: true
+            };
+            await putSession(merged);
+          }
+          await refreshSavedCount();
+          if (historyDialog.open) renderSavedSessionsList();
+          supabaseStatusText.textContent = `✓ Synced ${cachedSessions.length} total session(s) with Supabase.`;
+        } catch (err) {
+          supabaseStatusText.textContent = `Supabase sync error: ${err.message} (make sure you ran the Table SQL).`;
+        }
+      }
+
+      // --- ON-DEVICE STORAGE (IndexedDB) + PLAYER -> DISCIPLINE FOLDERS ---
+      function updatePlayerAutocomplete() {
+        playerNameList.textContent = '';
+        const names = new Set(['Test - Not Saved']);
+        cachedSessions.forEach(s => {
+          if (s.playerName && !isTestPlayerName(s.playerName)) {
+            names.add(s.playerName.trim());
+          }
+        });
+        Array.from(names).sort((a, b) => a === 'Test - Not Saved' ? -1 : b === 'Test - Not Saved' ? 1 : a.localeCompare(b)).forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          playerNameList.appendChild(opt);
+        });
+      }
+
       async function refreshSavedCount() {
         try {
           cachedSessions = await getAllSessions();
           savedCountEl.textContent = String(cachedSessions.length);
+          updatePlayerAutocomplete();
         } catch {
           savedCountEl.textContent = '0';
+        }
+      }
+
+      async function autoSaveAnalysisSession(reportObj, playerName, sessionTag, fileStamp, savedAtIso) {
+        const firstFrame = state.clips[0]?.frames?.[0]?.dataUrl || null;
+        const clipsMeta = state.clips.map(c => ({
+          name: c.name,
+          angle: c.angle,
+          duration: c.duration,
+          frames: c.frames
+        }));
+        const record = {
+          id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          savedAt: savedAtIso || new Date().toISOString(),
+          fileStamp: fileStamp || formatFileTimestamp(),
+          playerName: playerName.trim(),
+          sessionTag: (sessionTag || '').trim(),
+          role: reportObj._meta?.role || state.role,
+          handedness: reportObj._meta?.handedness || handednessSelect.value,
+          style: reportObj._meta?.style || styleSelect.value,
+          thumbnail: firstFrame,
+          clipsMeta,
+          includeVideo: false,
+          videoBlobs: [],
+          report: reportObj
+        };
+        try {
+          await putSession(record);
+          await refreshSavedCount();
+          if (supabaseClient) {
+            pushSessionToSupabase(record);
+          }
+        } catch (err) {
+          console.error('Auto-save failed:', err);
         }
       }
 
@@ -5160,10 +5675,9 @@ For each improvement's diagram (top-down net/pitch view):
         saveCurrentBox.style.display = hasReport ? 'flex' : 'none';
         if (hasReport) {
           const m = state.currentReport._meta || {};
-          const roleLabel = m.role === 'lbw' ? 'LBW Review' : m.role === 'bowling' ? 'Bowling' : 'Batting';
-          if (!sessionNameInput.value.trim() || focusSave) {
-            sessionNameInput.value = `${roleLabel} — ${m.style || ''} (${new Date().toLocaleDateString()})`;
-          }
+          const curPlayer = (m.playerName || playerNameInput.value || '').trim();
+          sessionNameInput.value = isTestPlayerName(curPlayer) ? '' : curPlayer;
+          sessionTagModalInput.value = (m.sessionTag || sessionTagInput.value || '').trim();
           saveRawVideoChk.disabled = state.clips.length === 0;
           if (state.clips.length === 0) saveRawVideoChk.checked = false;
         }
@@ -5171,31 +5685,37 @@ For each improvement's diagram (top-down net/pitch view):
         historyDialog.showModal();
         if (focusSave && hasReport) {
           sessionNameInput.focus();
-          sessionNameInput.select();
         }
       }
 
       async function saveCurrentSession() {
         if (!state.currentReport) return;
-        const name = sessionNameInput.value.trim() || `Session ${new Date().toLocaleDateString()}`;
+        const playerName = sessionNameInput.value.trim();
+        if (!playerName || isTestPlayerName(playerName)) {
+          historyStatusText.textContent = 'Enter a real player name (not "Test - Not Saved") to save into a player folder.';
+          sessionNameInput.focus();
+          return;
+        }
+        const sessionTag = sessionTagModalInput.value.trim();
         const includeVideo = saveRawVideoChk.checked && state.clips.length > 0;
         const m = state.currentReport._meta || {};
+        const nowIso = new Date().toISOString();
+        const fileStamp = formatFileTimestamp(new Date(nowIso));
 
-        const firstFrame = state.clips[0]?.frames?.[0]?.dataUrl || null;
-        const clipsMeta = state.clips.map(c => ({
-          name: c.name,
-          angle: c.angle,
-          duration: c.duration,
-          frames: c.frames
-        }));
+        const firstFrame = state.clips[0]?.frames?.[0]?.dataUrl || state.currentReport._referenceFrames?.[0]?.dataUrl || null;
+        const clipsMeta = state.clips.length > 0
+          ? state.clips.map(c => ({ name: c.name, angle: c.angle, duration: c.duration, frames: c.frames }))
+          : (state.currentReport._referenceFrames?.length ? [{ name: 'Saved Frames', angle: '', frames: state.currentReport._referenceFrames }] : []);
         const videoBlobs = includeVideo
           ? state.clips.map(c => ({ name: c.name, angle: c.angle, type: c.file.type, blob: c.file }))
           : [];
 
         const record = {
           id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          savedAt: new Date().toISOString(),
-          playerName: name,
+          savedAt: nowIso,
+          fileStamp,
+          playerName,
+          sessionTag,
           role: m.role || state.role,
           handedness: m.handedness || handednessSelect.value,
           style: m.style || styleSelect.value,
@@ -5203,14 +5723,18 @@ For each improvement's diagram (top-down net/pitch view):
           clipsMeta,
           includeVideo,
           videoBlobs,
-          report: state.currentReport
+          report: {
+            ...state.currentReport,
+            _meta: { ...m, playerName, sessionTag, fileStamp, savedAt: nowIso }
+          }
         };
 
         try {
           await putSession(record);
           await refreshSavedCount();
           renderSavedSessionsList();
-          historyStatusText.textContent = `✓ Saved "${name}" locally on this device.`;
+          if (supabaseClient) await pushSessionToSupabase(record);
+          historyStatusText.textContent = `✓ Saved to ${playerName} / ${record.role} / ${fileStamp}${sessionTag ? ` (${sessionTag})` : ''}.`;
         } catch (err) {
           historyStatusText.textContent = `Could not save session: ${err.message}`;
         }
@@ -5218,7 +5742,6 @@ For each improvement's diagram (top-down net/pitch view):
 
       function loadSavedSession(session) {
         if (!session || !session.report) return;
-        // Clear current clips & load saved raw videos if attached
         state.clips.forEach(c => URL.revokeObjectURL(c.url));
         state.clips = [];
         state.activeClipId = null;
@@ -5228,7 +5751,6 @@ For each improvement's diagram (top-down net/pitch view):
             new File([vb.blob], vb.name || 'saved-clip.mp4', { type: vb.type || 'video/mp4' })
           );
           addVideoFiles(restoredFiles);
-          // Restore saved camera angles & keyframes
           state.clips.forEach((clip, i) => {
             if (session.videoBlobs[i]?.angle) clip.angle = session.videoBlobs[i].angle;
             if (session.clipsMeta?.[i]?.frames?.length) clip.frames = session.clipsMeta[i].frames;
@@ -5246,16 +5768,31 @@ For each improvement's diagram (top-down net/pitch view):
           renderFilmstrip();
         }
 
+        if (session.playerName) playerNameInput.value = session.playerName;
+        sessionTagInput.value = session.sessionTag || '';
         if (session.role) setRole(session.role);
         if (session.handedness) handednessSelect.value = session.handedness;
         if (session.style && Array.from(styleSelect.options).some(o => o.value === session.style)) {
           styleSelect.value = session.style;
         }
 
+        // Flatten stored video reference frames so user can inspect every frame immediately
+        const storedFrames = (session.clipsMeta || []).flatMap((c, ci) =>
+          (c.frames || []).map(f => ({
+            time: f.time,
+            dataUrl: f.dataUrl,
+            label: (session.clipsMeta.length > 1 ? `C${ci + 1} ` : '') + (f.label || 'Frame'),
+            angle: c.angle || ''
+          }))
+        );
+
         const reportCopy = JSON.parse(JSON.stringify(session.report));
+        reportCopy._referenceFrames = storedFrames.length > 0 ? storedFrames : (session.report._referenceFrames || []);
         reportCopy._meta = {
           ...(reportCopy._meta || {}),
-          source: `Saved · ${new Date(session.savedAt).toLocaleDateString()}`
+          playerName: session.playerName,
+          sessionTag: session.sessionTag || '',
+          source: `Saved · ${session.fileStamp || formatFileTimestamp(new Date(session.savedAt))}`
         };
         renderReport(reportCopy);
         historyDialog.close();
@@ -5265,7 +5802,7 @@ For each improvement's diagram (top-down net/pitch view):
         const q = (historySearchInput.value || '').trim().toLowerCase();
         const filtered = cachedSessions.filter(s => {
           if (!q) return true;
-          return `${s.playerName} ${s.role} ${s.style} ${s.handedness}`.toLowerCase().includes(q);
+          return `${s.playerName} ${s.role} ${s.sessionTag || ''} ${s.fileStamp || ''} ${s.style || ''}`.toLowerCase().includes(q);
         });
 
         sessionListEl.textContent = '';
@@ -5275,63 +5812,151 @@ For each improvement's diagram (top-down net/pitch view):
           empty.style.textAlign = 'center';
           empty.style.padding = '18px 8px';
           empty.textContent = cachedSessions.length === 0
-            ? 'No saved sessions yet. Analyze a clip (or load a Demo) and click Save Session above.'
-            : 'No saved sessions match your filter.';
+            ? 'No player folders yet. Enter a Player Name and run an analysis to auto-create Player → Batting/Bowling folders.'
+            : 'No saved files match your filter.';
           sessionListEl.appendChild(empty);
           return;
         }
 
+        // Group into Player Folder -> Discipline Subfolder (Batting / Bowling / LBW) -> Files
+        const byPlayer = new Map();
         filtered.forEach(s => {
-          const row = document.createElement('div');
-          row.className = 'session-row';
+          const pName = (s.playerName || 'Unassigned Player').trim();
+          const disc = s.role === 'bowling' ? 'bowling' : s.role === 'lbw' ? 'lbw' : 'batting';
+          if (!byPlayer.has(pName)) byPlayer.set(pName, { batting: [], bowling: [], lbw: [] });
+          byPlayer.get(pName)[disc].push(s);
+        });
 
-          if (s.thumbnail) {
-            const img = document.createElement('img');
-            img.className = 'session-thumb';
-            img.src = s.thumbnail;
-            img.alt = s.playerName;
-            row.appendChild(img);
-          } else {
-            const icon = document.createElement('div');
-            icon.className = 'session-thumb';
-            icon.textContent = s.role === 'lbw' ? '☝️' : s.role === 'bowling' ? '⚡' : '🏏';
-            row.appendChild(icon);
-          }
+        const sortedPlayers = Array.from(byPlayer.keys()).sort((a, b) => a.localeCompare(b));
+        const discMeta = [
+          { key: 'batting', label: '🏏 Batting' },
+          { key: 'bowling', label: '⚡ Bowling' },
+          { key: 'lbw', label: '☝️ LBW Review' }
+        ];
 
-          const info = document.createElement('div');
-          info.className = 'session-info';
-          const title = document.createElement('div');
-          title.className = 'session-title';
-          title.textContent = s.playerName;
-          const meta = document.createElement('div');
-          meta.className = 'session-meta';
-          const dt = new Date(s.savedAt).toLocaleDateString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-          const storageTag = s.includeVideo ? '🎬 Video + Report' : (s.clipsMeta?.length ? '🖼️ Keyframes + Report' : '📄 Report Only');
-          meta.textContent = `${dt} · ${s.role.toUpperCase()} · ${storageTag}`;
-          info.append(title, meta);
+        sortedPlayers.forEach((pName, pIdx) => {
+          const groups = byPlayer.get(pName);
+          const totalForPlayer = groups.batting.length + groups.bowling.length + groups.lbw.length;
 
-          const actions = document.createElement('div');
-          actions.className = 'btn-group';
-          const openBtn = document.createElement('button');
-          openBtn.type = 'button';
-          openBtn.className = 'btn-sm btn-primary';
-          openBtn.textContent = 'Open';
-          openBtn.addEventListener('click', () => loadSavedSession(s));
+          const playerDetails = document.createElement('details');
+          playerDetails.className = 'folder-player';
+          if (pIdx === 0 || q.length > 0) playerDetails.open = true;
 
-          const delBtn = document.createElement('button');
-          delBtn.type = 'button';
-          delBtn.className = 'btn-sm btn-ghost';
-          delBtn.textContent = '×';
-          delBtn.title = 'Delete saved session';
-          delBtn.addEventListener('click', async () => {
-            await deleteSessionById(s.id);
-            await refreshSavedCount();
-            renderSavedSessionsList();
+          const pSum = document.createElement('summary');
+          const pLeft = document.createElement('span');
+          pLeft.textContent = `📁 ${pName}`;
+          const pRight = document.createElement('span');
+          pRight.className = 'badge badge-pitch';
+          pRight.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
+          pSum.append(pLeft, pRight);
+          playerDetails.appendChild(pSum);
+
+          const folderBody = document.createElement('div');
+          folderBody.className = 'folder-body';
+
+          discMeta.forEach(dm => {
+            const list = groups[dm.key];
+            if (list.length === 0) return;
+
+            const dDetails = document.createElement('details');
+            dDetails.className = 'folder-discipline';
+            dDetails.open = true;
+
+            const dSum = document.createElement('summary');
+            const dLeft = document.createElement('span');
+            dLeft.textContent = `📂 ${dm.label}`;
+            const dRight = document.createElement('span');
+            dRight.className = 'help-text';
+            dRight.textContent = `${list.length}`;
+            dSum.append(dLeft, dRight);
+            dDetails.appendChild(dSum);
+
+            const filesWrap = document.createElement('div');
+            filesWrap.className = 'folder-files';
+
+            list.forEach(s => {
+              const row = document.createElement('div');
+              row.className = 'session-row';
+
+              if (s.thumbnail) {
+                const img = document.createElement('img');
+                img.className = 'session-thumb';
+                img.src = s.thumbnail;
+                img.alt = s.fileStamp || s.playerName;
+                row.appendChild(img);
+              } else {
+                const icon = document.createElement('div');
+                icon.className = 'session-thumb';
+                icon.textContent = dm.key === 'lbw' ? '☝️' : dm.key === 'bowling' ? '⚡' : '🏏';
+                row.appendChild(icon);
+              }
+
+              const info = document.createElement('div');
+              info.className = 'session-info';
+              const stamp = s.fileStamp || formatFileTimestamp(new Date(s.savedAt));
+              const title = document.createElement('div');
+              title.className = 'session-title';
+              title.textContent = s.sessionTag ? `${stamp} · ${s.sessionTag}` : stamp;
+
+              const frameTotal = (s.clipsMeta || []).reduce((acc, c) => acc + (c.frames?.length || 0), 0);
+              const meta = document.createElement('div');
+              meta.className = 'session-meta';
+              const storageTag = s.includeVideo
+                ? `🎬 Video + ${frameTotal} frames`
+                : frameTotal > 0
+                  ? `🎞️ ${frameTotal} frames`
+                  : '📄 Report';
+              meta.textContent = `${s.style || dm.label} · ${storageTag}${s.synced ? ' · ☁️' : ''}`;
+              info.append(title, meta);
+
+              const actions = document.createElement('div');
+              actions.className = 'btn-group';
+
+              const openBtn = document.createElement('button');
+              openBtn.type = 'button';
+              openBtn.className = 'btn-sm btn-primary';
+              openBtn.textContent = 'Open';
+              openBtn.addEventListener('click', () => loadSavedSession(s));
+
+              const tagBtn = document.createElement('button');
+              tagBtn.type = 'button';
+              tagBtn.className = 'btn-sm btn-ghost';
+              tagBtn.textContent = '🏷️';
+              tagBtn.title = 'Edit file tag';
+              tagBtn.addEventListener('click', async () => {
+                const nextTag = prompt('Set custom tag for this file (leave blank for timestamp only):', s.sessionTag || '');
+                if (nextTag === null) return;
+                s.sessionTag = nextTag.trim();
+                if (s.report?._meta) s.report._meta.sessionTag = s.sessionTag;
+                await putSession(s);
+                if (supabaseClient) await pushSessionToSupabase(s);
+                await refreshSavedCount();
+                renderSavedSessionsList();
+              });
+
+              const delBtn = document.createElement('button');
+              delBtn.type = 'button';
+              delBtn.className = 'btn-sm btn-ghost';
+              delBtn.textContent = '×';
+              delBtn.title = 'Delete file';
+              delBtn.addEventListener('click', async () => {
+                await deleteSessionById(s.id);
+                await deleteSessionFromSupabase(s.id);
+                await refreshSavedCount();
+                renderSavedSessionsList();
+              });
+
+              actions.append(openBtn, tagBtn, delBtn);
+              row.append(info, actions);
+              filesWrap.appendChild(row);
+            });
+
+            dDetails.appendChild(filesWrap);
+            folderBody.appendChild(dDetails);
           });
 
-          actions.append(openBtn, delBtn);
-          row.append(info, actions);
-          sessionListEl.appendChild(row);
+          playerDetails.appendChild(folderBody);
+          sessionListEl.appendChild(playerDetails);
         });
       }
 
