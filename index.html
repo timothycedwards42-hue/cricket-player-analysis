@@ -452,6 +452,64 @@
       font-weight: 600;
     }
 
+    /* --- BOWLING SPEED GUN --- */
+    .speed-gun-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .speed-gun-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .speed-gun-title {
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--pitch);
+    }
+
+    .speed-gun-selects {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    @media (max-width: 520px) {
+      .speed-gun-selects {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .speed-readout-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .speed-value {
+      font-weight: 800;
+      color: var(--accent-bright);
+    }
+
     .btn-group {
       display: inline-flex;
       align-items: center;
@@ -1804,6 +1862,35 @@
             </div>
             <div class="filmstrip" id="filmstrip"></div>
           </div>
+
+          <!-- Bowling Speed Gun (2-Tap Release -> Arrival Timer) -->
+          <div class="speed-gun-box" id="speedGunBox">
+            <div class="speed-gun-top">
+              <span class="speed-gun-title">⚡ Bowling Speed Estimator</span>
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="markReleaseBtn" title="Mark exact frame ball leaves bowler's hand">🖐 Mark Release</button>
+                <button type="button" class="btn-sm" id="markArrivalBtn" title="Mark exact frame ball reaches batter/stumps">🏏 Mark Arrival</button>
+                <button type="button" class="btn-sm btn-ghost" id="resetSpeedBtn" title="Clear speed markers">Reset</button>
+              </div>
+            </div>
+            <div class="speed-gun-selects">
+              <select id="pitchLengthSelect" aria-label="Pitch length" style="padding:5px 8px; font-size:0.76rem;">
+                <option value="20.12" selected>Pitch: 20.12m (Full Senior / 22 yd)</option>
+                <option value="19">Pitch: 19m (Youth / U15)</option>
+                <option value="18">Pitch: 18m (Junior / U13)</option>
+                <option value="16">Pitch: 16m (Junior / U11)</option>
+              </select>
+              <select id="arrivalPointSelect" aria-label="Speed arrival marker" style="padding:5px 8px; font-size:0.76rem;">
+                <option value="crease" selected>Arrival: Batting Crease / Bat (-2.44m)</option>
+                <option value="stumps">Arrival: Batting Stumps (-1.22m)</option>
+                <option value="full">Arrival: Full Stump-to-Stump (0m)</option>
+              </select>
+            </div>
+            <div class="speed-readout-pill">
+              <span class="speed-value" id="speedValueText">Step to release &amp; arrival frames to measure speed</span>
+              <span class="help-text" id="speedDetailText"></span>
+            </div>
+          </div>
         </div>
 
         <!-- Player Profile Form -->
@@ -2354,6 +2441,13 @@
       const setEndBtn = document.getElementById('setEndBtn');
       const loopWindowBtn = document.getElementById('loopWindowBtn');
       const resetTrimBtn = document.getElementById('resetTrimBtn');
+      const pitchLengthSelect = document.getElementById('pitchLengthSelect');
+      const arrivalPointSelect = document.getElementById('arrivalPointSelect');
+      const markReleaseBtn = document.getElementById('markReleaseBtn');
+      const markArrivalBtn = document.getElementById('markArrivalBtn');
+      const resetSpeedBtn = document.getElementById('resetSpeedBtn');
+      const speedValueText = document.getElementById('speedValueText');
+      const speedDetailText = document.getElementById('speedDetailText');
 
       const telestrator = document.getElementById('telestrator');
       const tCtx = telestrator.getContext('2d');
@@ -2790,6 +2884,30 @@
           updateTrimUI();
           autoExtractKeyframes(state.sampleCount);
         });
+
+        // Bowling Speed Gun controls
+        markReleaseBtn.addEventListener('click', () => {
+          const clip = getActiveClip();
+          if (!clip || !videoPlayer.duration) return;
+          clip.releaseTime = videoPlayer.currentTime;
+          updateSpeedUI();
+        });
+        markArrivalBtn.addEventListener('click', () => {
+          const clip = getActiveClip();
+          if (!clip || !videoPlayer.duration) return;
+          clip.arrivalTime = videoPlayer.currentTime;
+          updateSpeedUI();
+        });
+        resetSpeedBtn.addEventListener('click', () => {
+          const clip = getActiveClip();
+          if (clip) {
+            clip.releaseTime = null;
+            clip.arrivalTime = null;
+          }
+          updateSpeedUI();
+        });
+        pitchLengthSelect.addEventListener('change', updateSpeedUI);
+        arrivalPointSelect.addEventListener('change', updateSpeedUI);
 
         // Telestrator drawing
         window.addEventListener('resize', resizeTelestrator);
@@ -3441,6 +3559,8 @@
             trimStart: 0,
             trimEnd: null,
             trimCustom: false,
+            releaseTime: null,
+            arrivalTime: null,
             frames: [],
             drawings: []
           };
@@ -3469,6 +3589,7 @@
         renderClipTabs();
         renderFilmstrip();
         updateTrimUI();
+        updateSpeedUI();
         redrawTelestrator();
       }
 
@@ -3540,6 +3661,48 @@
         const cur = videoPlayer.currentTime || 0;
         const dur = videoPlayer.duration || 0;
         timeReadout.textContent = `${cur.toFixed(2)}s / ${dur.toFixed(2)}s`;
+      }
+
+      function computeClipSpeed(clip = getActiveClip()) {
+        const pitchM = parseFloat(pitchLengthSelect.value) || 20.12;
+        const arrivalMode = arrivalPointSelect.value || 'crease';
+        const offset = arrivalMode === 'crease' ? 2.44 : arrivalMode === 'stumps' ? 1.22 : 0;
+        const flightM = Math.max(5, pitchM - offset);
+        if (!clip || clip.releaseTime === null || clip.arrivalTime === null) {
+          return { pitchM, flightM, valid: false };
+        }
+        const dt = clip.arrivalTime - clip.releaseTime;
+        if (dt <= 0.08) {
+          return { pitchM, flightM, dt, valid: false, error: 'Arrival must be after release' };
+        }
+        const kmh = (flightM / dt) * 3.6;
+        const mph = kmh * 0.621371;
+        // ±0.017s (~half a 30fps frame each end) uncertainty band
+        const kmhLow = (flightM / (dt + 0.033)) * 3.6;
+        const kmhHigh = (flightM / Math.max(0.08, dt - 0.033)) * 3.6;
+        return { pitchM, flightM, dt, kmh, mph, kmhLow, kmhHigh, valid: true };
+      }
+
+      function updateSpeedUI() {
+        const clip = getActiveClip();
+        const res = computeClipSpeed(clip);
+        markReleaseBtn.textContent = clip && clip.releaseTime !== null
+          ? `🖐 Release (${clip.releaseTime.toFixed(2)}s)`
+          : '🖐 Mark Release';
+        markArrivalBtn.textContent = clip && clip.arrivalTime !== null
+          ? `🏏 Arrival (${clip.arrivalTime.toFixed(2)}s)`
+          : '🏏 Mark Arrival';
+
+        if (res.valid) {
+          speedValueText.textContent = `⚡ ${res.kmh.toFixed(1)} km/h (${res.mph.toFixed(1)} mph)`;
+          speedDetailText.textContent = `${res.flightM.toFixed(2)}m in ${res.dt.toFixed(3)}s (range ~${res.kmhLow.toFixed(0)}–${res.kmhHigh.toFixed(0)} km/h)`;
+        } else if (res.error) {
+          speedValueText.textContent = res.error;
+          speedDetailText.textContent = '';
+        } else {
+          speedValueText.textContent = 'Step to release & arrival frames to measure speed';
+          speedDetailText.textContent = `Flight dist: ${res.flightM.toFixed(2)}m`;
+        }
       }
 
       function updateTrimUI() {
@@ -3872,12 +4035,15 @@
           const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (!rawText) throw new Error('Gemini returned an empty response. Try again or switch to Keyframes mode.');
 
+          const speedInfo = state.clips.map(c => computeClipSpeed(c)).find(s => s.valid);
           const parsed = JSON.parse(rawText);
           parsed._meta = {
             role: state.role,
             handedness: handednessSelect.value,
             style: styleSelect.value,
             format: formatSelect.value,
+            pitchLength: `${pitchLengthSelect.value}m`,
+            measuredSpeed: speedInfo ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph)` : null,
             source: isMultiClip
               ? `AI Analysis · ${state.clips.length} Angles (${state.model})`
               : `AI Analysis (${state.model})`,
@@ -3941,6 +4107,11 @@
     "caveat": "1-sentence honest note on camera/frame-rate limitations vs Hawk-Eye."
   },` : '';
 
+        const speedInfo = state.clips.map(c => computeClipSpeed(c)).find(s => s.valid);
+        const speedContextLine = speedInfo
+          ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph) — measured over ${speedInfo.flightM.toFixed(2)}m in ${speedInfo.dt.toFixed(3)}s on a ${speedInfo.pitchM}m pitch`
+          : `Not manually timed (Pitch Length: ${pitchLengthSelect.value}m)`;
+
         return `You are an elite international cricket ${isLbw ? 'third umpire (MCC Law 36 specialist) and biomechanics analyst' : 'biomechanics coach and tactical analyst'}.
 ${multiAngleNote}${focusInstruction}
 
@@ -3948,6 +4119,8 @@ Player Context:
 - Mode: ${isLbw ? 'LBW Umpire Review (MCC Law 36)' : state.role}
 - Batter Handedness: ${handednessSelect.value}
 - Style / Bowler Angle: ${styleSelect.value}
+- Pitch Length: ${pitchLengthSelect.value}m
+- Bowling Speed: ${speedContextLine}
 - Uploaded Clips / Camera Angles: ${clipSummary || cameraAngleSelect.value}
 - Match Format: ${formatSelect.value}
 - Selected Focus Areas: ${state.focusAreas.length ? state.focusAreas.join(', ') : 'General review'}
@@ -4156,12 +4329,16 @@ For each improvement's diagram (top-down net/pitch view):
         // Badges
         const badgesEl = document.getElementById('reportBadges');
         badgesEl.textContent = '';
-        [
+        const badgeList = [
           { text: isLbw ? '☝️ LBW Review' : isBatting ? '🏏 Batting' : '⚡ Bowling', cls: isLbw ? 'badge-red' : 'badge-green' },
           { text: meta.handedness || handednessSelect.value, cls: 'badge-pitch' },
           { text: meta.style || styleSelect.value, cls: 'badge-blue' },
           { text: meta.format || formatSelect.value, cls: 'badge-amber' }
-        ].forEach(b => {
+        ];
+        if (meta.measuredSpeed) {
+          badgeList.push({ text: `⚡ ${meta.measuredSpeed}`, cls: 'badge-green' });
+        }
+        badgeList.forEach(b => {
           const span = document.createElement('span');
           span.className = `badge ${b.cls}`;
           span.textContent = b.text;
