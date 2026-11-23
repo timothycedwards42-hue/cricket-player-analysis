@@ -1862,34 +1862,34 @@
             </div>
             <div class="filmstrip" id="filmstrip"></div>
           </div>
+        </div>
 
-          <!-- Bowling Speed Gun (2-Tap Release -> Arrival Timer) -->
-          <div class="speed-gun-box" id="speedGunBox">
-            <div class="speed-gun-top">
-              <span class="speed-gun-title">⚡ Bowling Speed Estimator</span>
-              <div class="btn-group">
-                <button type="button" class="btn-sm" id="markReleaseBtn" title="Mark exact frame ball leaves bowler's hand">🖐 Mark Release</button>
-                <button type="button" class="btn-sm" id="markArrivalBtn" title="Mark exact frame ball reaches batter/stumps">🏏 Mark Arrival</button>
-                <button type="button" class="btn-sm btn-ghost" id="resetSpeedBtn" title="Clear speed markers">Reset</button>
-              </div>
+        <!-- Bowling Speed Gun (Always visible: Pitch Length + 2-Tap Release -> Arrival Timer) -->
+        <div class="speed-gun-box" id="speedGunBox">
+          <div class="speed-gun-top">
+            <span class="speed-gun-title">⚡ Bowling Speed Estimator</span>
+            <div class="btn-group">
+              <button type="button" class="btn-sm" id="markReleaseBtn" title="Mark exact frame ball leaves bowler's hand">🖐 Mark Release</button>
+              <button type="button" class="btn-sm" id="markArrivalBtn" title="Mark exact frame ball reaches batter/stumps">🏏 Mark Arrival</button>
+              <button type="button" class="btn-sm btn-ghost" id="resetSpeedBtn" title="Clear speed markers">Reset</button>
             </div>
-            <div class="speed-gun-selects">
-              <select id="pitchLengthSelect" aria-label="Pitch length" style="padding:5px 8px; font-size:0.76rem;">
-                <option value="20.12" selected>Pitch: 20.12m (Full Senior / 22 yd)</option>
-                <option value="19">Pitch: 19m (Youth / U15)</option>
-                <option value="18">Pitch: 18m (Junior / U13)</option>
-                <option value="16">Pitch: 16m (Junior / U11)</option>
-              </select>
-              <select id="arrivalPointSelect" aria-label="Speed arrival marker" style="padding:5px 8px; font-size:0.76rem;">
-                <option value="crease" selected>Arrival: Batting Crease / Bat (-2.44m)</option>
-                <option value="stumps">Arrival: Batting Stumps (-1.22m)</option>
-                <option value="full">Arrival: Full Stump-to-Stump (0m)</option>
-              </select>
-            </div>
-            <div class="speed-readout-pill">
-              <span class="speed-value" id="speedValueText">Step to release &amp; arrival frames to measure speed</span>
-              <span class="help-text" id="speedDetailText"></span>
-            </div>
+          </div>
+          <div class="speed-gun-selects">
+            <select id="pitchLengthSelect" aria-label="Pitch length" style="padding:5px 8px; font-size:0.76rem;">
+              <option value="20.12" selected>Pitch: 20.12m (Full Senior / 22 yd)</option>
+              <option value="19">Pitch: 19m (Youth / U15)</option>
+              <option value="18">Pitch: 18m (Junior / U13)</option>
+              <option value="16">Pitch: 16m (Junior / U11)</option>
+            </select>
+            <select id="arrivalPointSelect" aria-label="Speed arrival marker" style="padding:5px 8px; font-size:0.76rem;">
+              <option value="crease" selected>Arrival: Batting Crease / Bat (-2.44m)</option>
+              <option value="stumps">Arrival: Batting Stumps (-1.22m)</option>
+              <option value="full">Arrival: Full Stump-to-Stump (0m)</option>
+            </select>
+          </div>
+          <div class="speed-readout-pill">
+            <span class="speed-value" id="speedValueText">Upload a video, then mark release &amp; arrival frames</span>
+            <span class="help-text" id="speedDetailText">Flight dist: 17.68m</span>
           </div>
         </div>
 
