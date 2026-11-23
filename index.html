@@ -2234,6 +2234,9 @@
           <button type="button" class="btn-primary" id="analyzeBtn">
             ✨ Analyze Technique &amp; Avenues of Attack
           </button>
+          <button type="button" id="saveFramesOnlyBtn" title="Store the sampled video frames in this player's folder without running AI analysis">
+            💾 Save Frames Only
+          </button>
         </div>
       </div>
     </section>
@@ -2800,6 +2803,7 @@
       const focusChips = document.getElementById('focusChips');
       const notesInput = document.getElementById('notesInput');
       const analyzeBtn = document.getElementById('analyzeBtn');
+      const saveFramesOnlyBtn = document.getElementById('saveFramesOnlyBtn');
       const errorBanner = document.getElementById('errorBanner');
 
       const reportEmpty = document.getElementById('reportEmpty');
@@ -3392,8 +3396,9 @@
           });
         });
 
-        // Analyze & Demos
+        // Analyze, Save Frames Only & Demos
         analyzeBtn.addEventListener('click', runAnalysis);
+        saveFramesOnlyBtn.addEventListener('click', saveFramesOnlySession);
         document.getElementById('loadBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
         document.getElementById('loadBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
         document.getElementById('loadLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
@@ -5699,7 +5704,7 @@ create policy "Allow anon read/write for personal lab"
             style: record.style || '',
             thumbnail: record.thumbnail || null,
             clips_meta: record.clipsMeta || [],
-            report: record.report
+            report: record.hasAnalysis === false || !record.report ? { _framesOnly: true } : record.report
           };
           const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert(payload, { onConflict: 'id' });
           if (error) throw error;
@@ -5740,6 +5745,7 @@ create policy "Allow anon read/write for personal lab"
 
           for (const row of (data || [])) {
             const existing = cachedSessions.find(s => s.id === row.id);
+            const isFramesOnly = Boolean(row.report && row.report._framesOnly);
             const merged = {
               id: row.id,
               savedAt: row.saved_at,
@@ -5753,7 +5759,8 @@ create policy "Allow anon read/write for personal lab"
               clipsMeta: Array.isArray(row.clips_meta) ? row.clips_meta : [],
               includeVideo: existing?.includeVideo || false,
               videoBlobs: existing?.videoBlobs || [],
-              report: row.report,
+              hasAnalysis: !isFramesOnly,
+              report: isFramesOnly ? null : row.report,
               synced: true
             };
             await putSession(merged);
@@ -5813,6 +5820,7 @@ create policy "Allow anon read/write for personal lab"
           clipsMeta,
           includeVideo: false,
           videoBlobs: [],
+          hasAnalysis: true,
           report: reportObj
         };
         try {
@@ -5823,6 +5831,79 @@ create policy "Allow anon read/write for personal lab"
           }
         } catch (err) {
           console.error('Auto-save failed:', err);
+        }
+      }
+
+      async function saveFramesOnlySession() {
+        clearError();
+        const playerName = playerNameInput.value.trim();
+        if (!playerName || isTestPlayerName(playerName)) {
+          showError('Enter a real Player Name (not "Test - Not Saved") to save video frames into a player folder.');
+          playerNameInput.focus();
+          return;
+        }
+        if (state.clips.length === 0) {
+          showError('Upload or record a video first before saving frames.');
+          return;
+        }
+
+        saveFramesOnlyBtn.disabled = true;
+        saveFramesOnlyBtn.textContent = '⏳ Saving Frames...';
+        try {
+          for (let i = 0; i < state.clips.length; i++) {
+            const clip = state.clips[i];
+            if (clip.frames.length === 0) {
+              if (clip.id === state.activeClipId && videoPlayer.duration) {
+                await autoExtractKeyframes(state.sampleCount);
+              } else {
+                await extractKeyframesOffscreen(clip, state.sampleCount);
+                renderClipTabs();
+              }
+            }
+          }
+
+          const nowIso = new Date().toISOString();
+          const fileStamp = formatFileTimestamp(new Date(nowIso));
+          const sessionTag = sessionTagInput.value.trim();
+          const speedInfo = state.clips.map(c => computeClipSpeed(c)).find(s => s.valid);
+          const firstFrame = state.clips[0]?.frames?.[0]?.dataUrl || null;
+          const clipsMeta = state.clips.map(c => ({
+            name: c.name,
+            angle: c.angle,
+            duration: c.duration,
+            frames: c.frames
+          }));
+
+          const record = {
+            id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            savedAt: nowIso,
+            fileStamp,
+            playerName,
+            sessionTag,
+            role: state.role,
+            handedness: handednessSelect.value,
+            style: styleSelect.value,
+            measuredSpeed: speedInfo ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph)` : null,
+            thumbnail: firstFrame,
+            clipsMeta,
+            includeVideo: false,
+            videoBlobs: [],
+            hasAnalysis: false,
+            report: null
+          };
+
+          await putSession(record);
+          await refreshSavedCount();
+          if (supabaseClient) {
+            await pushSessionToSupabase(record);
+          }
+          // Open the saved frames-only view right away as confirmation
+          loadSavedSession(record);
+        } catch (err) {
+          showError(`Could not save frames: ${err.message}`);
+        } finally {
+          saveFramesOnlyBtn.disabled = false;
+          saveFramesOnlyBtn.textContent = '💾 Save Frames Only';
         }
       }
 
@@ -5898,7 +5979,9 @@ create policy "Allow anon read/write for personal lab"
       }
 
       function loadSavedSession(session) {
-        if (!session || !session.report) return;
+        if (!session) return;
+        const isFramesOnly = session.hasAnalysis === false || !session.report || Boolean(session.report._framesOnly);
+
         state.clips.forEach(c => URL.revokeObjectURL(c.url));
         state.clips = [];
         state.activeClipId = null;
@@ -5944,6 +6027,46 @@ create policy "Allow anon read/write for personal lab"
           }))
         );
 
+        if (isFramesOnly) {
+          const stubReport = {
+            _meta: {
+              playerName: session.playerName,
+              sessionTag: session.sessionTag || '',
+              role: session.role || state.role,
+              handedness: session.handedness || handednessSelect.value,
+              style: session.style || styleSelect.value,
+              format: 'Video Library',
+              measuredSpeed: session.measuredSpeed || null,
+              source: `🎞️ Frames Only · ${session.fileStamp || formatFileTimestamp(new Date(session.savedAt))}`,
+              timestamp: new Date(session.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            },
+            _referenceFrames: storedFrames,
+            overview: `Stored video frames for ${session.playerName} (${storedFrames.length} frames saved for playback/reference — no AI analysis attached yet). Tap any frame above to inspect it large.`,
+            scorecard: [],
+            strengths: [],
+            weaknesses: [],
+            phases: [],
+            improvements: [],
+            avenuesOfAttack: {
+              headline: 'No AI Matchup Analysis Attached',
+              summary: 'This file was saved as Frames Only for playback and reference.',
+              pitchZones: [],
+              plans: [],
+              fieldOrGuard: [],
+              tacticalCues: []
+            }
+          };
+          renderReport(stubReport);
+          // Automatically enlarge the first frame for immediate playback/inspection
+          if (storedFrames.length > 0) {
+            savedFrameLargeImg.src = storedFrames[0].dataUrl;
+            savedFrameLargeLabel.textContent = `${storedFrames[0].angle ? storedFrames[0].angle + ' · ' : ''}${storedFrames[0].label} @ ${Number(storedFrames[0].time || 0).toFixed(2)}s`;
+            savedFramePreviewBox.classList.add('active');
+          }
+          if (historyDialog.open) historyDialog.close();
+          return;
+        }
+
         const reportCopy = JSON.parse(JSON.stringify(session.report));
         reportCopy._referenceFrames = storedFrames.length > 0 ? storedFrames : (session.report._referenceFrames || []);
         reportCopy._meta = {
@@ -5953,14 +6076,16 @@ create policy "Allow anon read/write for personal lab"
           source: `Saved · ${session.fileStamp || formatFileTimestamp(new Date(session.savedAt))}`
         };
         renderReport(reportCopy);
-        historyDialog.close();
+        if (historyDialog.open) historyDialog.close();
       }
 
       function renderSavedSessionsList() {
         const q = (historySearchInput.value || '').trim().toLowerCase();
         const filtered = cachedSessions.filter(s => {
           if (!q) return true;
-          return `${s.playerName} ${s.role} ${s.sessionTag || ''} ${s.fileStamp || ''} ${s.style || ''}`.toLowerCase().includes(q);
+          const isAnalyzed = s.hasAnalysis !== false && Boolean(s.report) && !s.report._framesOnly;
+          const statusWord = isAnalyzed ? 'analyzed report' : 'frames only playback video';
+          return `${s.playerName} ${s.role} ${s.sessionTag || ''} ${s.fileStamp || ''} ${s.style || ''} ${statusWord}`.toLowerCase().includes(q);
         });
 
         sessionListEl.textContent = '';
@@ -6057,14 +6182,17 @@ create policy "Allow anon read/write for personal lab"
               title.textContent = s.sessionTag ? `${stamp} · ${s.sessionTag}` : stamp;
 
               const frameTotal = (s.clipsMeta || []).reduce((acc, c) => acc + (c.frames?.length || 0), 0);
+              const isAnalyzed = s.hasAnalysis !== false && Boolean(s.report) && !s.report._framesOnly;
               const meta = document.createElement('div');
               meta.className = 'session-meta';
-              const storageTag = s.includeVideo
-                ? `🎬 Video + ${frameTotal} frames`
-                : frameTotal > 0
-                  ? `🎞️ ${frameTotal} frames`
-                  : '📄 Report';
-              meta.textContent = `${s.style || dm.label} · ${storageTag}${s.synced ? ' · ☁️' : ''}`;
+              const statusBadge = document.createElement('span');
+              statusBadge.className = `badge ${isAnalyzed ? 'badge-green' : 'badge-blue'}`;
+              statusBadge.style.padding = '1px 6px';
+              statusBadge.style.fontSize = '0.65rem';
+              statusBadge.textContent = isAnalyzed ? '📊 Analyzed' : '🎞️ Frames Only';
+              const metaTxt = document.createElement('span');
+              metaTxt.textContent = `${frameTotal}f · ${s.style || dm.label}${s.synced ? ' · ☁️' : ''}`;
+              meta.append(statusBadge, metaTxt);
               info.append(title, meta);
 
               const actions = document.createElement('div');
