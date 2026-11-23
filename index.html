@@ -454,6 +454,62 @@
       font-weight: 600;
     }
 
+    .autocut-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .autocut-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* --- PROMINENT ACTIVE PLAYER BANNER --- */
+    .active-player-bar {
+      background: linear-gradient(135deg, rgba(199, 176, 136, 0.14), rgba(46, 125, 50, 0.12));
+      border: 1px solid rgba(199, 176, 136, 0.48);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .active-player-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .active-player-inputs {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 8px;
+    }
+
+    @media (max-width: 560px) {
+      .active-player-inputs {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .active-player-bar input[type="text"] {
+      font-size: 0.92rem;
+      font-weight: 600;
+      padding: 9px 11px;
+      border-color: var(--border-strong);
+    }
+
     /* --- BOWLING SPEED GUN --- */
     .speed-gun-box {
       background: var(--bg);
@@ -1971,6 +2027,21 @@
       </div>
 
       <div class="panel-body">
+        <!-- Prominent Active Player Banner (Always at Top) -->
+        <div class="active-player-bar" id="activePlayerBar">
+          <div class="active-player-top">
+            <span class="badge badge-amber" id="activePlayerBadge">⚠️ Select or Enter Player Name</span>
+            <button type="button" class="btn-sm btn-ghost" id="setTestPlayerBtn" title="Use Test mode — analysis will not be saved to storage">🧪 Test - Not Saved</button>
+          </div>
+          <div class="active-player-inputs">
+            <input type="text" id="playerNameInput" list="playerNameList" placeholder="Player Name * (e.g. Sam)" autocomplete="off" aria-label="Player Name (Required)">
+            <input type="text" id="sessionTagInput" placeholder="Optional Tag (e.g. Net 1, Ball 4)" aria-label="Optional Session Tag">
+          </div>
+          <datalist id="playerNameList">
+            <option value="Test - Not Saved"></option>
+          </datalist>
+        </div>
+
         <!-- Drop Zone -->
         <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload cricket batting or bowling videos">
           <div class="drop-zone-icon">📹</div>
@@ -2007,8 +2078,10 @@
             <div class="transport-row">
               <div class="btn-group">
                 <button type="button" class="btn-sm" id="playPauseBtn">▶ Play</button>
+                <button type="button" class="btn-sm" id="jumpBack5Btn" title="Jump back 5 seconds (for long videos)">-5s</button>
                 <button type="button" class="btn-sm" id="stepBackBtn" title="Step back 1 frame">-1f</button>
                 <button type="button" class="btn-sm" id="stepFwdBtn" title="Step forward 1 frame">+1f</button>
+                <button type="button" class="btn-sm" id="jumpFwd5Btn" title="Jump forward 5 seconds (for long videos)">+5s</button>
                 <select id="speedSelect" aria-label="Playback speed" style="width:auto; padding:4px 6px; font-size:0.75rem;">
                   <option value="0.1">0.1x</option>
                   <option value="0.25" selected>0.25x</option>
@@ -2018,7 +2091,7 @@
               </div>
 
               <div class="btn-group">
-                <button type="button" class="btn-sm" id="captureFrameBtn" title="Bookmark current frame for AI analysis">📸 Pin Frame</button>
+                <button type="button" class="btn-sm" id="captureFrameBtn" title="Bookmark current frame for AI analysis">📸 Pin</button>
                 <button type="button" class="btn-sm" id="drawToggleBtn" title="Toggle telestrator drawing overlay">✏️ Draw</button>
                 <button type="button" class="btn-sm" id="clearDrawBtn" title="Clear drawings">Clear</button>
                 <button type="button" class="btn-sm" id="videoFullscreenBtn" title="Fullscreen video player">⛶</button>
@@ -2033,6 +2106,17 @@
                 <button type="button" class="btn-sm btn-ghost" id="resetTrimBtn" title="Reset action window to full video">Reset</button>
               </div>
               <span class="trim-readout" id="trimReadout">Window: Full clip</span>
+            </div>
+
+            <div class="autocut-row">
+              <div class="btn-group">
+                <span class="autocut-label">✂️ Auto-Cut from here:</span>
+                <button type="button" class="btn-sm auto-cut-btn" data-cut="1.5">+1.5s</button>
+                <button type="button" class="btn-sm auto-cut-btn" data-cut="2.0">+2.0s</button>
+                <button type="button" class="btn-sm auto-cut-btn" data-cut="2.5">+2.5s</button>
+                <button type="button" class="btn-sm auto-cut-btn" data-cut="3.0">+3.0s</button>
+              </div>
+              <button type="button" class="btn-sm" id="addCutClipBtn" title="Save this trimmed window as a separate clip pill (great for cutting multiple balls from one long video)">➕ Add Cut to Clips</button>
             </div>
           </div>
 
@@ -2089,22 +2173,6 @@
 
         <!-- Player Profile Form -->
         <div class="form-grid">
-          <div class="field full">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-              <label for="playerNameInput">Player Name (Required for Analysis) *</label>
-              <button type="button" class="btn-sm btn-ghost" id="setTestPlayerBtn" title="Use Test mode — analysis will not be saved to storage">🧪 Test - Not Saved</button>
-            </div>
-            <input type="text" id="playerNameInput" list="playerNameList" placeholder="Enter player name (e.g. Sam) or click Test - Not Saved" autocomplete="off">
-            <datalist id="playerNameList">
-              <option value="Test - Not Saved"></option>
-            </datalist>
-          </div>
-
-          <div class="field full">
-            <label for="sessionTagInput">Session Tag / Note (Optional — Auto-Timestamped)</label>
-            <input type="text" id="sessionTagInput" placeholder="e.g. Net Session, Front-Foot Drives, Match Clip (date &amp; time added automatically)">
-          </div>
-
           <div class="field full">
             <label>Discipline / Mode</label>
             <div class="segmented" role="group" aria-label="Analysis mode">
@@ -2719,6 +2787,7 @@
       const roleLbwBtn = document.getElementById('roleLbwBtn');
       const playerNameInput = document.getElementById('playerNameInput');
       const playerNameList = document.getElementById('playerNameList');
+      const activePlayerBadge = document.getElementById('activePlayerBadge');
       const setTestPlayerBtn = document.getElementById('setTestPlayerBtn');
       const sessionTagInput = document.getElementById('sessionTagInput');
       const handednessSelect = document.getElementById('handednessSelect');
@@ -2801,9 +2870,24 @@
         populateStyleOptions();
         renderFocusChips();
         updateApiStatusUI();
+        updateActivePlayerBadge();
         bindEvents();
         initSupabaseFromStorage();
         refreshSavedCount();
+      }
+
+      function updateActivePlayerBadge() {
+        const name = (playerNameInput.value || '').trim();
+        if (!name) {
+          activePlayerBadge.textContent = '⚠️ Enter Player Name';
+          activePlayerBadge.className = 'badge badge-amber';
+        } else if (isTestPlayerName(name)) {
+          activePlayerBadge.textContent = '🧪 Test Mode · Not Saved';
+          activePlayerBadge.className = 'badge badge-blue';
+        } else {
+          activePlayerBadge.textContent = `👤 Active Player: ${name} · Auto-Save ON`;
+          activePlayerBadge.className = 'badge badge-green';
+        }
       }
 
       function setMobileView(view) {
@@ -2907,8 +2991,11 @@
         roleLbwBtn.addEventListener('click', () => setRole('lbw'));
         setTestPlayerBtn.addEventListener('click', () => {
           playerNameInput.value = 'Test - Not Saved';
+          updateActivePlayerBadge();
           clearError();
         });
+        playerNameInput.addEventListener('input', updateActivePlayerBadge);
+        playerNameInput.addEventListener('change', updateActivePlayerBadge);
         document.getElementById('closeFramePreviewBtn').addEventListener('click', () => {
           savedFramePreviewBox.classList.remove('active');
         });
@@ -3071,6 +3158,9 @@
             videoPlayer.pause();
           }
         });
+        document.getElementById('jumpBack5Btn').addEventListener('click', () => {
+          videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 5);
+        });
         stepBackBtn.addEventListener('click', () => {
           videoPlayer.pause();
           videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 1 / 30);
@@ -3078,6 +3168,9 @@
         stepFwdBtn.addEventListener('click', () => {
           videoPlayer.pause();
           videoPlayer.currentTime = Math.min(videoPlayer.duration || 0, videoPlayer.currentTime + 1 / 30);
+        });
+        document.getElementById('jumpFwd5Btn').addEventListener('click', () => {
+          videoPlayer.currentTime = Math.min(videoPlayer.duration || 0, videoPlayer.currentTime + 5);
         });
         speedSelect.addEventListener('change', () => {
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
@@ -3168,6 +3261,52 @@
           loopWindowBtn.classList.remove('btn-active');
           updateTrimUI();
           autoExtractKeyframes(state.sampleCount);
+        });
+
+        // Quick Auto-Cut from current playhead (+1.5s, +2.0s, +2.5s, +3.0s)
+        document.querySelectorAll('.auto-cut-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const clip = getActiveClip();
+            const dur = videoPlayer.duration;
+            if (!clip || !dur) return;
+            const len = parseFloat(btn.dataset.cut) || 2.0;
+            const start = Math.max(0, Math.min(videoPlayer.currentTime, dur - 0.15));
+            const end = Math.min(dur, start + len);
+            clip.trimStart = start;
+            clip.trimEnd = end;
+            clip.trimCustom = true;
+            state.loopWindow = true;
+            loopWindowBtn.classList.add('btn-active');
+            updateTrimUI();
+            autoExtractKeyframes(state.sampleCount);
+          });
+        });
+
+        // Add current trimmed cut as its own clip pill (for cutting multiple balls from 1 long video)
+        document.getElementById('addCutClipBtn').addEventListener('click', () => {
+          const clip = getActiveClip();
+          if (!clip || !videoPlayer.duration) return;
+          const id = state.nextClipId++;
+          const start = clip.trimStart || 0;
+          const end = clip.trimEnd ?? videoPlayer.duration;
+          const cutClip = {
+            id,
+            file: clip.file,
+            url: clip.url, // shared object URL (safe ref-counted on remove)
+            name: `${clip.name} [${start.toFixed(1)}s–${end.toFixed(1)}s]`,
+            angle: clip.angle,
+            duration: clip.duration || videoPlayer.duration,
+            trimStart: start,
+            trimEnd: end,
+            trimCustom: true,
+            releaseTime: clip.releaseTime,
+            arrivalTime: clip.arrivalTime,
+            frames: clip.frames.map(f => ({ ...f })),
+            drawings: clip.drawings.map(d => ({ ...d }))
+          };
+          state.clips.push(cutClip);
+          renderClipTabs();
+          updateAnalyzeButtonLabel();
         });
 
         // Bowling Speed Gun controls
@@ -3892,8 +4031,11 @@
       function removeClip(clipId) {
         const idx = state.clips.findIndex(c => c.id === clipId);
         if (idx === -1) return;
-        URL.revokeObjectURL(state.clips[idx].url);
+        const removedUrl = state.clips[idx].url;
         state.clips.splice(idx, 1);
+        if (!state.clips.some(c => c.url === removedUrl)) {
+          URL.revokeObjectURL(removedUrl);
+        }
 
         if (state.clips.length === 0) {
           state.activeClipId = null;
@@ -5769,6 +5911,7 @@ create policy "Allow anon read/write for personal lab"
         }
 
         if (session.playerName) playerNameInput.value = session.playerName;
+        updateActivePlayerBadge();
         sessionTagInput.value = session.sessionTag || '';
         if (session.role) setRole(session.role);
         if (session.handedness) handednessSelect.value = session.handedness;
