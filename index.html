@@ -103,6 +103,81 @@
       font-weight: 500;
     }
 
+    .header-player-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      background: var(--accent-glow);
+      border: 1.5px solid var(--accent-bright);
+      color: #e8fae9;
+      cursor: pointer;
+      max-width: 320px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    body.mode-bowling .header-player-pill:not(.needs-player):not(.test-mode) {
+      background: var(--info-soft);
+      border-color: var(--info);
+      color: #d6f1fd;
+    }
+
+    body.mode-lbw .header-player-pill:not(.needs-player):not(.test-mode) {
+      background: var(--danger-soft);
+      border-color: var(--danger);
+      color: #ffd6d6;
+    }
+
+    .header-player-pill.needs-player {
+      background: var(--warning-soft);
+      border-color: var(--warning);
+      color: #ffe082;
+    }
+
+    .header-player-pill.test-mode {
+      background: var(--pitch-soft);
+      border-color: var(--pitch);
+      color: #f5e6cc;
+    }
+
+    .studio-work-area {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: opacity 0.2s ease;
+    }
+
+    .studio-work-area.locked {
+      opacity: 0.36;
+      pointer-events: none;
+      user-select: none;
+      filter: grayscale(0.35);
+    }
+
+    .player-lock-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--warning-soft);
+      border: 1px solid rgba(255, 183, 77, 0.55);
+      color: #ffe6a1;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .player-lock-banner.active {
+      display: flex;
+    }
+
     .top-actions {
       display: flex;
       align-items: center;
@@ -2372,6 +2447,7 @@
         <h1>Cricket Player Analysis</h1>
         <span>Video Biomechanics, Coaching &amp; Tactical Matchup Lab</span>
       </div>
+      <button type="button" class="header-player-pill needs-player" id="headerPlayerPill" title="Click to select or change active player">⚠️ Select Player</button>
     </div>
 
     <div class="top-actions">
@@ -2424,6 +2500,11 @@
           </datalist>
         </div>
 
+        <div class="player-lock-banner active" id="playerLockBanner">
+          <span>🔒 Enter a Player Name above (or tap 🧪 Test - Not Saved) to unlock video &amp; analysis</span>
+        </div>
+
+        <div class="studio-work-area locked" id="studioWorkArea">
         <!-- Loaded Stored Frames Banner (shown when a saved file's frames are ready for re-analysis) -->
         <div id="loadedFramesBanner" style="display:none; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; background:var(--info-soft); border:1px solid rgba(79,195,247,0.45); border-radius:var(--radius-sm); padding:8px 12px; font-size:0.78rem; color:#d4f0fd;">
           <span id="loadedFramesBannerText">🎞️ Stored frames loaded — adjust Focus Areas, Notes, or Model and click Analyze.</span>
@@ -2616,6 +2697,7 @@
             💾 Save Frames Only
           </button>
         </div>
+        </div><!-- /#studioWorkArea -->
       </div>
     </section>
 
@@ -3294,6 +3376,9 @@
       const playerNameInput = document.getElementById('playerNameInput');
       const playerNameList = document.getElementById('playerNameList');
       const activePlayerBadge = document.getElementById('activePlayerBadge');
+      const headerPlayerPill = document.getElementById('headerPlayerPill');
+      const studioWorkArea = document.getElementById('studioWorkArea');
+      const playerLockBanner = document.getElementById('playerLockBanner');
       const setTestPlayerBtn = document.getElementById('setTestPlayerBtn');
       const sessionTagInput = document.getElementById('sessionTagInput');
       const handednessSelect = document.getElementById('handednessSelect');
@@ -3417,19 +3502,45 @@
         refreshSavedCount();
       }
 
+      function hasSelectedPlayer() {
+        return Boolean((playerNameInput.value || '').trim());
+      }
+
       function updateActivePlayerBadge() {
         const name = (playerNameInput.value || '').trim();
         const modeTag = state.role === 'bowling' ? '⚡ Bowling' : state.role === 'lbw' ? '☝️ LBW Review' : '🏏 Batting';
         const modeCls = state.role === 'bowling' ? 'badge-blue' : state.role === 'lbw' ? 'badge-red' : 'badge-green';
-        if (!name) {
+        const locked = !name;
+
+        if (studioWorkArea) studioWorkArea.classList.toggle('locked', locked);
+        if (playerLockBanner) playerLockBanner.classList.toggle('active', locked);
+        recordVideoBtn.disabled = locked;
+        liveBufferBtn.disabled = locked;
+        changeVideoBtn.disabled = locked;
+        analyzeBtn.disabled = locked;
+        saveFramesOnlyBtn.disabled = locked;
+
+        if (locked) {
           activePlayerBadge.textContent = `${modeTag} · ⚠️ Enter Player Name`;
           activePlayerBadge.className = 'badge badge-amber';
+          if (headerPlayerPill) {
+            headerPlayerPill.textContent = '⚠️ Select Player';
+            headerPlayerPill.className = 'header-player-pill needs-player';
+          }
         } else if (isTestPlayerName(name)) {
           activePlayerBadge.textContent = `${modeTag} · 🧪 Test (Not Saved)`;
           activePlayerBadge.className = 'badge badge-pitch';
+          if (headerPlayerPill) {
+            headerPlayerPill.textContent = `🧪 Test Mode · ${modeTag}`;
+            headerPlayerPill.className = 'header-player-pill test-mode';
+          }
         } else {
           activePlayerBadge.textContent = `${modeTag} · 👤 ${name}`;
           activePlayerBadge.className = `badge ${modeCls}`;
+          if (headerPlayerPill) {
+            headerPlayerPill.textContent = `👤 ${name} · ${modeTag}`;
+            headerPlayerPill.className = 'header-player-pill';
+          }
         }
       }
 
@@ -3532,6 +3643,11 @@
         roleBattingBtn.addEventListener('click', () => setRole('batting'));
         roleBowlingBtn.addEventListener('click', () => setRole('bowling'));
         roleLbwBtn.addEventListener('click', () => setRole('lbw'));
+        headerPlayerPill.addEventListener('click', () => {
+          if (window.innerWidth <= 1080) setMobileView('video');
+          playerNameInput.focus();
+          playerNameInput.select();
+        });
         setTestPlayerBtn.addEventListener('click', () => {
           playerNameInput.value = 'Test - Not Saved';
           updateActivePlayerBadge();
@@ -3607,6 +3723,11 @@
           e.preventDefault();
           dropZone.classList.remove('drag-over');
           leftPanel.classList.remove('drag-over-panel');
+          if (!hasSelectedPlayer()) {
+            showToast('Select or enter a Player Name first');
+            playerNameInput.focus();
+            return;
+          }
           const files = Array.from(e.dataTransfer.files || []).filter(isVideoFile);
           if (files.length > 0) {
             addVideoFiles(files);
@@ -3615,11 +3736,16 @@
           }
         });
         videoInput.addEventListener('change', () => {
+          if (!hasSelectedPlayer()) {
+            videoInput.value = '';
+            return;
+          }
           const files = Array.from(videoInput.files || []).filter(isVideoFile);
           if (files.length > 0) addVideoFiles(files);
           videoInput.value = '';
         });
         window.addEventListener('paste', (e) => {
+          if (!hasSelectedPlayer()) return;
           const items = Array.from(e.clipboardData?.files || []).filter(isVideoFile);
           if (items.length > 0) {
             e.preventDefault();
@@ -6419,6 +6545,7 @@ create policy "Allow anon read/write for personal lab"
             supabaseBadge.textContent = 'Connected';
             supabaseBadge.className = 'badge badge-green';
             supabaseStatusText.textContent = 'Connected to Supabase. Auto-saved sessions sync across devices.';
+            fetchPlayerNamesFromSupabase();
             syncWithSupabase(false);
           } catch (err) {
             supabaseClient = null;
@@ -6562,6 +6689,24 @@ create policy "Allow anon read/write for personal lab"
         }
       }
 
+      let dbPlayerNames = [];
+
+      async function fetchPlayerNamesFromSupabase() {
+        if (!supabaseClient) return;
+        try {
+          const { data, error } = await supabaseClient
+            .from(SUPABASE_TABLE)
+            .select('player_name')
+            .neq('discipline', 'custom_drills');
+          if (!error && Array.isArray(data)) {
+            dbPlayerNames = data
+              .map(r => (r.player_name || '').trim())
+              .filter(n => n && n !== '__custom_drills__' && !isTestPlayerName(n));
+            updatePlayerAutocomplete();
+          }
+        } catch {}
+      }
+
       // --- ON-DEVICE STORAGE (IndexedDB) + PLAYER -> DISCIPLINE FOLDERS ---
       function autoFillPlayerDefaults(name) {
         if (!name || isTestPlayerName(name) || !cachedSessions.length) return;
@@ -6580,6 +6725,7 @@ create policy "Allow anon read/write for personal lab"
       function updatePlayerAutocomplete() {
         playerNameList.textContent = '';
         const names = new Set(['Test - Not Saved']);
+        dbPlayerNames.forEach(n => names.add(n));
         cachedSessions.forEach(s => {
           if (s.role === 'custom_drills') return;
           if (s.playerName && !isTestPlayerName(s.playerName)) {
