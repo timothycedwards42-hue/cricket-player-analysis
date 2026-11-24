@@ -6597,9 +6597,61 @@ create policy "Allow anon read/write for personal lab"
         }
       }
 
+      async function downscaleDataUrlForCloud(dataUrl, maxW = 480, quality = 0.68) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, maxW / (img.width || maxW));
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(img.width * scale));
+            c.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = () => resolve(dataUrl);
+          img.src = dataUrl;
+        });
+      }
+
+      async function prepareCloudClipsMeta(clipsMeta) {
+        if (!Array.isArray(clipsMeta) || clipsMeta.length === 0) return [];
+        const rawSize = JSON.stringify(clipsMeta).length;
+        if (rawSize <= 550000) return clipsMeta;
+        // Re-compress frames to crisp 480px JPEGs so 20-30 frame clips always fit cleanly under cloud payload limits
+        const out = [];
+        for (const clip of clipsMeta) {
+          const frames = [];
+          for (const f of (clip.frames || [])) {
+            const smallUrl = f.dataUrl ? await downscaleDataUrlForCloud(f.dataUrl, 480, 0.66) : f.dataUrl;
+            frames.push({ ...f, dataUrl: smallUrl });
+          }
+          out.push({ ...clip, frames });
+        }
+        return out;
+      }
+
       async function pushSessionToSupabase(record) {
-        if (!supabaseClient) return;
+        if (!supabaseClient) return { ok: false, error: 'Not connected' };
         try {
+          // Strip duplicate _referenceFrames from report (frames already live in clips_meta) to cut payload size in half
+          let cleanReport;
+          if (record.role === 'custom_drills') {
+            cleanReport = { _customDrillsLib: true, items: record.customDrills || [] };
+          } else if (record.role === 'training_plan') {
+            cleanReport = { _trainingPlan: true, drills: record.planDrills || [] };
+          } else if (record.hasAnalysis === false || !record.report) {
+            cleanReport = { _framesOnly: true, _note: record.note || '' };
+          } else {
+            const { _referenceFrames, ...reportWithoutDupFrames } = record.report;
+            cleanReport = { ...reportWithoutDupFrames, _note: record.note || record.report._note || '' };
+          }
+
+          const cloudClipsMeta = await prepareCloudClipsMeta(record.clipsMeta || []);
+          const cloudThumb = record.thumbnail && record.thumbnail.length > 50000
+            ? await downscaleDataUrlForCloud(record.thumbnail, 240, 0.65)
+            : (record.thumbnail || null);
+
           const payload = {
             id: record.id,
             player_name: record.playerName,
@@ -6609,25 +6661,19 @@ create policy "Allow anon read/write for personal lab"
             saved_at: record.savedAt,
             handedness: record.handedness || '',
             style: record.style || '',
-            thumbnail: record.thumbnail || null,
-            clips_meta: record.clipsMeta || [],
-            report: record.role === 'custom_drills'
-              ? { _customDrillsLib: true, items: record.customDrills || [] }
-              : record.role === 'training_plan'
-                ? { _trainingPlan: true, drills: record.planDrills || [] }
-                : record.hasAnalysis === false || !record.report
-                  ? { _framesOnly: true, _note: record.note || '' }
-                  : { ...record.report, _note: record.note || record.report._note || '' }
+            thumbnail: cloudThumb,
+            clips_meta: cloudClipsMeta,
+            report: cleanReport
           };
           const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert(payload, { onConflict: 'id' });
           if (error) throw error;
           record.synced = true;
           await putSession(record);
           supabaseStatusText.textContent = `✓ Synced "${record.playerName}" to Supabase cloud.`;
-          return true;
+          return { ok: true };
         } catch (err) {
-          supabaseStatusText.textContent = `Cloud sync warning: ${err.message}`;
-          return false;
+          supabaseStatusText.textContent = `Cloud sync warning (${record.playerName}): ${err.message}`;
+          return { ok: false, error: err.message };
         }
       }
 
@@ -6647,9 +6693,13 @@ create policy "Allow anon read/write for personal lab"
         try {
           // Always push any unsynced local sessions (e.g. saved offline or before cloud sync)
           const locals = await getAllSessions();
+          let pushedCount = 0;
+          let pushErrors = [];
           for (const loc of locals) {
             if (!isTestPlayerName(loc.playerName) && (pushAll || !loc.synced)) {
-              await pushSessionToSupabase(loc);
+              const res = await pushSessionToSupabase(loc);
+              if (res.ok) pushedCount++;
+              else pushErrors.push(`${loc.playerName}: ${res.error}`);
             }
           }
           const { data, error } = await supabaseClient
@@ -6688,7 +6738,9 @@ create policy "Allow anon read/write for personal lab"
           }
           await refreshSavedCount();
           if (historyDialog.open) renderSavedSessionsList();
-          supabaseStatusText.textContent = `✓ Synced ${cachedSessions.length} total session(s) with Supabase.`;
+          supabaseStatusText.textContent = pushErrors.length > 0
+            ? `Synced with ${pushErrors.length} warning(s): ${pushErrors[0]}`
+            : `✓ Synced ${cachedSessions.length} total item(s)${pushedCount ? ` (uploaded ${pushedCount})` : ''} with Supabase.`;
         } catch (err) {
           supabaseStatusText.textContent = `Supabase sync error: ${err.message} (make sure you ran the Table SQL).`;
         }
