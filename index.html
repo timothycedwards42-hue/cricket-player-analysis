@@ -7210,6 +7210,71 @@ create policy "Allow anon read/write for personal lab"
         if (historyDialog.open) historyDialog.close();
       }
 
+      async function renamePlayerInStorage(oldName, newName) {
+        const cleanOld = (oldName || '').trim();
+        const cleanNew = (newName || '').trim();
+        if (!cleanNew || cleanNew === cleanOld || isTestPlayerName(cleanNew)) return false;
+
+        const matching = cachedSessions.filter(s => s.role !== 'custom_drills' && (s.playerName || 'Unassigned Player').trim() === cleanOld);
+        if (matching.length === 0) return false;
+
+        // 1. Rename all analysis & frames-only sessions
+        const normalSessions = matching.filter(s => s.role !== 'training_plan');
+        for (const s of normalSessions) {
+          s.playerName = cleanNew;
+          if (s.report && s.report._meta) {
+            s.report._meta.playerName = cleanNew;
+          }
+          await putSession(s);
+          if (supabaseClient) await pushSessionToSupabase(s);
+        }
+
+        // 2. Move / merge training plan record (keyed by player name)
+        const oldPlans = matching.filter(s => s.role === 'training_plan');
+        if (oldPlans.length > 0) {
+          const newPlanId = getPlanRecordId(cleanNew);
+          const existingTargetPlan = cachedSessions.find(s => s.id === newPlanId);
+          const mergedDrills = existingTargetPlan && Array.isArray(existingTargetPlan.planDrills)
+            ? [...existingTargetPlan.planDrills]
+            : [];
+          const seenIds = new Set(mergedDrills.map(d => d.id));
+          oldPlans.forEach(p => {
+            (p.planDrills || []).forEach(d => {
+              if (!seenIds.has(d.id)) {
+                mergedDrills.push(d);
+                seenIds.add(d.id);
+              }
+            });
+          });
+          await savePlayerPlanRecord(cleanNew, mergedDrills);
+          for (const p of oldPlans) {
+            if (p.id !== newPlanId) {
+              await deleteSessionById(p.id);
+              await deleteSessionFromSupabase(p.id);
+            }
+          }
+        }
+
+        // 3. Update active player selector & cached cloud player names
+        if (Array.isArray(dbPlayerNames)) {
+          dbPlayerNames = dbPlayerNames.map(n => n === cleanOld ? cleanNew : n);
+          if (!dbPlayerNames.includes(cleanNew)) dbPlayerNames.push(cleanNew);
+        }
+        if ((playerNameInput.value || '').trim() === cleanOld) {
+          playerNameInput.value = cleanNew;
+          localStorage.setItem('cpa_last_player_name', cleanNew);
+          updateActivePlayerBadge();
+        }
+        if (state.currentReport?._meta?.playerName === cleanOld) {
+          state.currentReport._meta.playerName = cleanNew;
+        }
+
+        await refreshSavedCount();
+        renderSavedSessionsList();
+        showToast(`✓ Renamed "${cleanOld}" → "${cleanNew}"`);
+        return true;
+      }
+
       function renderSavedSessionsList() {
         const q = (historySearchInput.value || '').trim().toLowerCase();
         const filtered = cachedSessions.filter(s => {
@@ -7266,6 +7331,25 @@ create policy "Allow anon read/write for personal lab"
           pLeft.textContent = `📁 ${pName}`;
           const pRightWrap = document.createElement('div');
           pRightWrap.className = 'btn-group';
+          const renamePlayerBtn = document.createElement('button');
+          renamePlayerBtn.type = 'button';
+          renamePlayerBtn.className = 'btn-sm btn-ghost';
+          renamePlayerBtn.textContent = '✏️';
+          renamePlayerBtn.title = `Rename player "${pName}" (updates all stored files & training plan)`;
+          renamePlayerBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextName = prompt(`Rename player "${pName}" (all saved files & training plan will move to the new name):`, pName);
+            if (nextName === null) return;
+            const trimmed = nextName.trim();
+            if (!trimmed || trimmed === pName) return;
+            if (isTestPlayerName(trimmed)) {
+              showToast('Cannot rename a player folder to Test - Not Saved');
+              return;
+            }
+            renamePlayerBtn.disabled = true;
+            await renamePlayerInStorage(pName, trimmed);
+          });
           const planBtn = document.createElement('button');
           planBtn.type = 'button';
           planBtn.className = 'btn-sm';
@@ -7278,7 +7362,7 @@ create policy "Allow anon read/write for personal lab"
           const pBadge = document.createElement('span');
           pBadge.className = 'badge badge-pitch';
           pBadge.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
-          pRightWrap.append(planBtn, pBadge);
+          pRightWrap.append(renamePlayerBtn, planBtn, pBadge);
           pSum.append(pLeft, pRightWrap);
           playerDetails.appendChild(pSum);
 
@@ -7377,6 +7461,30 @@ create policy "Allow anon read/write for personal lab"
               openBtn.textContent = 'Open';
               openBtn.addEventListener('click', () => loadSavedSession(s));
 
+              const movePlayerBtn = document.createElement('button');
+              movePlayerBtn.type = 'button';
+              movePlayerBtn.className = 'btn-sm btn-ghost';
+              movePlayerBtn.textContent = '👤';
+              movePlayerBtn.title = 'Change player name for this file';
+              movePlayerBtn.addEventListener('click', async () => {
+                const nextPlayer = prompt('Move this file to Player Name:', s.playerName || '');
+                if (nextPlayer === null) return;
+                const trimmed = nextPlayer.trim();
+                if (!trimmed || trimmed === (s.playerName || '').trim()) return;
+                if (isTestPlayerName(trimmed)) {
+                  showToast('Cannot assign stored file to Test - Not Saved');
+                  return;
+                }
+                s.playerName = trimmed;
+                if (s.report?._meta) s.report._meta.playerName = trimmed;
+                await putSession(s);
+                if (supabaseClient) await pushSessionToSupabase(s);
+                if (Array.isArray(dbPlayerNames) && !dbPlayerNames.includes(trimmed)) dbPlayerNames.push(trimmed);
+                await refreshSavedCount();
+                renderSavedSessionsList();
+                showToast(`✓ Moved file to ${trimmed}`);
+              });
+
               const tagBtn = document.createElement('button');
               tagBtn.type = 'button';
               tagBtn.className = 'btn-sm btn-ghost';
@@ -7424,7 +7532,7 @@ create policy "Allow anon read/write for personal lab"
                 renderSavedSessionsList();
               });
 
-              actions.append(openBtn, tagBtn, noteBtn, delBtn);
+              actions.append(openBtn, movePlayerBtn, tagBtn, noteBtn, delBtn);
               row.append(info, actions);
               filesWrap.appendChild(row);
             });
