@@ -2685,40 +2685,6 @@
           </div>
         </div>
 
-        <!-- Bowling Speed Gun (Collapsible in Batting mode, open in Bowling/LBW) -->
-        <details class="collapsible-card" id="speedGunDetails">
-          <summary>
-            <span>⚡ Bowling Speed Estimator &amp; Pitch Length</span>
-            <span class="help-text" id="speedSummaryPill">20.12m</span>
-          </summary>
-          <div class="collapsible-body" id="speedGunBox">
-            <div class="speed-gun-top">
-              <div class="btn-group">
-                <button type="button" class="btn-sm" id="markReleaseBtn" title="Mark exact frame ball leaves bowler's hand">🖐 Mark Release</button>
-                <button type="button" class="btn-sm" id="markArrivalBtn" title="Mark exact frame ball reaches batter/stumps">🏏 Mark Arrival</button>
-                <button type="button" class="btn-sm btn-ghost" id="resetSpeedBtn" title="Clear speed markers">Reset</button>
-              </div>
-            </div>
-            <div class="speed-gun-selects">
-              <select id="pitchLengthSelect" aria-label="Pitch length" style="padding:5px 8px; font-size:0.76rem;">
-                <option value="20.12" selected>Pitch: 20.12m (Full Senior / 22 yd)</option>
-                <option value="19">Pitch: 19m (Youth / U15)</option>
-                <option value="18">Pitch: 18m (Junior / U13)</option>
-                <option value="16">Pitch: 16m (Junior / U11)</option>
-              </select>
-              <select id="arrivalPointSelect" aria-label="Speed arrival marker" style="padding:5px 8px; font-size:0.76rem;">
-                <option value="crease" selected>Arrival: Batting Crease / Bat (-2.44m)</option>
-                <option value="stumps">Arrival: Batting Stumps (-1.22m)</option>
-                <option value="full">Arrival: Full Stump-to-Stump (0m)</option>
-              </select>
-            </div>
-            <div class="speed-readout-pill">
-              <span class="speed-value" id="speedValueText">Upload a video, then mark release &amp; arrival frames</span>
-              <span class="help-text" id="speedDetailText">Flight dist: 17.68m</span>
-            </div>
-          </div>
-        </details>
-
         <!-- Player Profile Form (Streamlined: Handedness + Style only) -->
         <div class="form-grid">
           <div class="field">
@@ -2769,6 +2735,40 @@
             💾 Save Frames Only
           </button>
         </div>
+
+        <!-- Bowling Speed Estimator (Optional, collapsed at bottom) -->
+        <details class="collapsible-card" id="speedGunDetails">
+          <summary>
+            <span>⚡ Bowling Speed Estimator &amp; Pitch Length</span>
+            <span class="help-text" id="speedSummaryPill">20.12m</span>
+          </summary>
+          <div class="collapsible-body" id="speedGunBox">
+            <div class="speed-gun-top">
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="markReleaseBtn" title="Mark exact frame ball leaves bowler's hand">🖐 Mark Release</button>
+                <button type="button" class="btn-sm" id="markArrivalBtn" title="Mark exact frame ball reaches batter/stumps">🏏 Mark Arrival</button>
+                <button type="button" class="btn-sm btn-ghost" id="resetSpeedBtn" title="Clear speed markers">Reset</button>
+              </div>
+            </div>
+            <div class="speed-gun-selects">
+              <select id="pitchLengthSelect" aria-label="Pitch length" style="padding:5px 8px; font-size:0.76rem;">
+                <option value="20.12" selected>Pitch: 20.12m (Full Senior / 22 yd)</option>
+                <option value="19">Pitch: 19m (Youth / U15)</option>
+                <option value="18">Pitch: 18m (Junior / U13)</option>
+                <option value="16">Pitch: 16m (Junior / U11)</option>
+              </select>
+              <select id="arrivalPointSelect" aria-label="Speed arrival marker" style="padding:5px 8px; font-size:0.76rem;">
+                <option value="crease" selected>Arrival: Batting Crease / Bat (-2.44m)</option>
+                <option value="stumps">Arrival: Batting Stumps (-1.22m)</option>
+                <option value="full">Arrival: Full Stump-to-Stump (0m)</option>
+              </select>
+            </div>
+            <div class="speed-readout-pill">
+              <span class="speed-value" id="speedValueText">Upload a video, then mark release &amp; arrival frames</span>
+              <span class="help-text" id="speedDetailText">Flight dist: 17.68m</span>
+            </div>
+          </div>
+        </details>
         </div><!-- /#studioWorkArea -->
       </div>
     </section>
@@ -4321,9 +4321,6 @@
         roleBattingBtn.classList.toggle('active', role === 'batting');
         roleBowlingBtn.classList.toggle('active', role === 'bowling');
         roleLbwBtn.classList.toggle('active', role === 'lbw');
-        if (speedGunDetails) {
-          speedGunDetails.open = role === 'bowling' || role === 'lbw';
-        }
         populateStyleOptions();
         autoFillPlayerDefaults(playerNameInput.value.trim());
         renderFocusChips();
