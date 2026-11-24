@@ -2557,7 +2557,14 @@
             <button type="button" id="roleLbwBtn">☝️ LBW Review</button>
           </div>
           <div class="active-player-inputs">
-            <input type="text" id="playerNameInput" list="playerNameList" placeholder="Player Name * (e.g. Sam)" autocomplete="off" aria-label="Player Name (Required)">
+            <div style="display:flex; gap:6px; align-items:center;">
+              <select id="playerQuickSelect" aria-label="Choose saved player" style="flex:1; min-width:0; font-size:0.88rem; font-weight:600; padding:9px 8px; border-color:var(--border-strong);">
+                <option value="">Select Player ▾</option>
+                <option value="Test - Not Saved">🧪 Test - Not Saved</option>
+                <option value="__new__">➕ New Player...</option>
+              </select>
+              <input type="text" id="playerNameInput" list="playerNameList" placeholder="Or type name *" autocomplete="off" aria-label="Player Name (Required)" style="flex:1; min-width:0;">
+            </div>
             <input type="text" id="sessionTagInput" placeholder="Optional Tag (e.g. Net 1, Ball 4)" aria-label="Optional Session Tag">
           </div>
           <datalist id="playerNameList">
@@ -3439,6 +3446,7 @@
       const roleBowlingBtn = document.getElementById('roleBowlingBtn');
       const roleLbwBtn = document.getElementById('roleLbwBtn');
       const playerNameInput = document.getElementById('playerNameInput');
+      const playerQuickSelect = document.getElementById('playerQuickSelect');
       const playerNameList = document.getElementById('playerNameList');
       const activePlayerBadge = document.getElementById('activePlayerBadge');
       const headerPlayerPill = document.getElementById('headerPlayerPill');
@@ -3715,8 +3723,24 @@
         });
         setTestPlayerBtn.addEventListener('click', () => {
           playerNameInput.value = 'Test - Not Saved';
+          if (playerQuickSelect) playerQuickSelect.value = 'Test - Not Saved';
           updateActivePlayerBadge();
           clearError();
+        });
+        playerQuickSelect.addEventListener('change', () => {
+          const val = playerQuickSelect.value;
+          if (val === '__new__') {
+            playerNameInput.value = '';
+            updateActivePlayerBadge();
+            playerNameInput.focus();
+            return;
+          }
+          if (val) {
+            playerNameInput.value = val;
+            updateActivePlayerBadge();
+            autoFillPlayerDefaults(val);
+            clearError();
+          }
         });
         playerNameInput.addEventListener('input', () => {
           updateActivePlayerBadge();
@@ -6854,11 +6878,38 @@ create policy "Allow anon read/write for personal lab"
             names.add(s.playerName.trim());
           }
         });
-        Array.from(names).sort((a, b) => a === 'Test - Not Saved' ? -1 : b === 'Test - Not Saved' ? 1 : a.localeCompare(b)).forEach(name => {
+        const sortedNames = Array.from(names).sort((a, b) => a === 'Test - Not Saved' ? -1 : b === 'Test - Not Saved' ? 1 : a.localeCompare(b));
+        sortedNames.forEach(name => {
           const opt = document.createElement('option');
           opt.value = name;
           playerNameList.appendChild(opt);
         });
+
+        // Also populate native <select> dropdown (works reliably on iPhone Safari & Android)
+        if (playerQuickSelect) {
+          const currentTyped = (playerNameInput.value || '').trim();
+          playerQuickSelect.textContent = '';
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = 'Select Player ▾';
+          playerQuickSelect.appendChild(placeholder);
+
+          sortedNames.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name === 'Test - Not Saved' ? '🧪 Test - Not Saved' : `👤 ${name}`;
+            playerQuickSelect.appendChild(opt);
+          });
+
+          const newOpt = document.createElement('option');
+          newOpt.value = '__new__';
+          newOpt.textContent = '➕ New Player...';
+          playerQuickSelect.appendChild(newOpt);
+
+          if (currentTyped && sortedNames.includes(currentTyped)) {
+            playerQuickSelect.value = currentTyped;
+          }
+        }
       }
 
       async function refreshSavedCount() {
