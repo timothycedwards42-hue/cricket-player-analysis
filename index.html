@@ -2402,8 +2402,8 @@
             </select>
           </div>
 
-          <div class="field">
-            <label for="styleSelect" id="styleLabel">Batting Role / Style</label>
+          <div class="field" id="styleField">
+            <label for="styleSelect" id="styleLabel">Bowling Style</label>
             <select id="styleSelect"></select>
           </div>
         </div>
@@ -3021,6 +3021,7 @@
       const setTestPlayerBtn = document.getElementById('setTestPlayerBtn');
       const sessionTagInput = document.getElementById('sessionTagInput');
       const handednessSelect = document.getElementById('handednessSelect');
+      const styleField = document.getElementById('styleField');
       const styleLabel = document.getElementById('styleLabel');
       const styleSelect = document.getElementById('styleSelect');
       const formatSelect = document.getElementById('formatSelect');
@@ -3194,12 +3195,11 @@
       }
 
       function populateStyleOptions() {
+        const isBatting = state.role === 'batting';
+        if (styleField) styleField.style.display = isBatting ? 'none' : 'flex';
         styleSelect.textContent = '';
-        styleLabel.textContent = state.role === 'batting'
-          ? 'Batting Role / Style'
-          : state.role === 'bowling'
-            ? 'Bowling Style'
-            : 'Bowler Type & Angle';
+        if (isBatting) return;
+        styleLabel.textContent = state.role === 'bowling' ? 'Bowling Style' : 'Bowler Type & Angle';
         (STYLE_OPTIONS[state.role] || []).forEach(opt => {
           const el = document.createElement('option');
           el.value = opt;
@@ -4933,14 +4933,14 @@
           ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph) — measured over ${speedInfo.flightM.toFixed(2)}m in ${speedInfo.dt.toFixed(3)}s on a ${speedInfo.pitchM}m pitch`
           : `Not manually timed (Pitch Length: ${pitchLengthSelect.value}m)`;
 
+        const styleVal = state.role === 'batting' ? 'General Batting' : (styleSelect.value || '');
         return `You are an elite international cricket ${isLbw ? 'third umpire (MCC Law 36 specialist) and biomechanics analyst' : 'biomechanics coach and tactical analyst'}.
 ${multiAngleNote}${focusInstruction}
 
 Player Context:
 - Mode: ${isLbw ? 'LBW Umpire Review (MCC Law 36)' : state.role}
 - Batter Handedness: ${handednessSelect.value}
-- Style / Bowler Angle: ${styleSelect.value}
-- Pitch Length: ${pitchLengthSelect.value}m
+${styleVal && state.role !== 'batting' ? `- Style / Bowler Angle: ${styleVal}\n` : ''}- Pitch Length: ${pitchLengthSelect.value}m
 - Bowling Speed: ${speedContextLine}
 - Uploaded Clips: ${clipSummary || '1 clip'} (auto-detect camera angle(s) directly from the frames)
 - Match Format: ${formatSelect.value}
@@ -5142,10 +5142,12 @@ For each improvement's diagram (top-down net/pitch view):
         if (meta.playerName) {
           badgeList.push({ text: `👤 ${meta.playerName}`, cls: 'badge-pitch' });
         }
+        if (meta.style && meta.role !== 'batting') {
+          badgeList.push({ text: meta.style, cls: 'badge-blue' });
+        }
         badgeList.push(
           { text: isLbw ? '☝️ LBW Review' : isBatting ? '🏏 Batting' : '⚡ Bowling', cls: isLbw ? 'badge-red' : 'badge-green' },
           { text: meta.handedness || handednessSelect.value, cls: 'badge-pitch' },
-          { text: meta.style || styleSelect.value, cls: 'badge-blue' },
           { text: meta.format || formatSelect.value, cls: 'badge-amber' }
         );
         if (meta.sessionTag) {
