@@ -2386,7 +2386,7 @@
           </div>
         </details>
 
-        <!-- Player Profile Form -->
+        <!-- Player Profile Form (Streamlined: Handedness + Style only) -->
         <div class="form-grid">
           <div class="field">
             <label for="handednessSelect">Handedness</label>
@@ -2400,35 +2400,24 @@
             <label for="styleSelect" id="styleLabel">Batting Role / Style</label>
             <select id="styleSelect"></select>
           </div>
-
-          <div class="field">
-            <label for="cameraAngleSelect">Camera Angle (Active Clip)</label>
-            <select id="cameraAngleSelect">
-              <option value="Side-on">Side-on</option>
-              <option value="Front-on (Umpire / Keeper view)">Front-on (Umpire / Keeper view)</option>
-              <option value="Behind the bowler">Behind the bowler</option>
-              <option value="Diagonal / 45-degree">Diagonal / 45-degree</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="formatSelect">Match Context</label>
-            <select id="formatSelect">
-              <option value="All-format / Club">All-format / Club</option>
-              <option value="T20 / White-ball">T20 / White-ball</option>
-              <option value="One-Day (50-over)">One-Day (50-over)</option>
-              <option value="Red-ball / Multi-day">Red-ball / Multi-day</option>
-            </select>
-          </div>
         </div>
 
-        <!-- Collapsible Priority Focus Areas & Coach Notes -->
+        <!-- Collapsible Priority Focus Areas, Match Context & Coach Notes -->
         <details class="collapsible-card" id="focusDetails">
           <summary>
-            <span>🎯 Priority Focus Areas &amp; Coach Notes</span>
+            <span>🎯 Focus Areas, Format &amp; Notes</span>
             <span class="help-text" id="focusCountPill">Optional</span>
           </summary>
           <div class="collapsible-body">
+            <div class="field">
+              <label for="formatSelect">Match Context</label>
+              <select id="formatSelect">
+                <option value="All-format / Club">All-format / Club</option>
+                <option value="T20 / White-ball">T20 / White-ball</option>
+                <option value="One-Day (50-over)">One-Day (50-over)</option>
+                <option value="Red-ball / Multi-day">Red-ball / Multi-day</option>
+              </select>
+            </div>
             <div class="focus-chips" id="focusChips" role="group" aria-label="Priority coaching focus areas"></div>
             <div class="field">
               <label for="notesInput">Custom Notes (Optional)</label>
@@ -3026,7 +3015,6 @@
       const handednessSelect = document.getElementById('handednessSelect');
       const styleLabel = document.getElementById('styleLabel');
       const styleSelect = document.getElementById('styleSelect');
-      const cameraAngleSelect = document.getElementById('cameraAngleSelect');
       const formatSelect = document.getElementById('formatSelect');
       const focusChips = document.getElementById('focusChips');
       const notesInput = document.getElementById('notesInput');
@@ -3246,8 +3234,14 @@
           updateActivePlayerBadge();
           clearError();
         });
-        playerNameInput.addEventListener('input', updateActivePlayerBadge);
-        playerNameInput.addEventListener('change', updateActivePlayerBadge);
+        playerNameInput.addEventListener('input', () => {
+          updateActivePlayerBadge();
+          autoFillPlayerDefaults(playerNameInput.value.trim());
+        });
+        playerNameInput.addEventListener('change', () => {
+          updateActivePlayerBadge();
+          autoFillPlayerDefaults(playerNameInput.value.trim());
+        });
         document.getElementById('closeFramePreviewBtn').addEventListener('click', () => {
           stopSavedFramePlayback();
           savedFramePreviewBox.classList.remove('active');
@@ -3383,15 +3377,6 @@
           cameraInput.click();
         });
         toggleRecordBtn.addEventListener('click', toggleCameraRecording);
-
-        // Per-clip camera angle sync
-        cameraAngleSelect.addEventListener('change', () => {
-          const clip = getActiveClip();
-          if (clip) {
-            clip.angle = cameraAngleSelect.value;
-            renderClipTabs();
-          }
-        });
 
         // Video player controls
         videoPlayer.addEventListener('loadedmetadata', () => {
@@ -3798,15 +3783,8 @@
         if (speedGunDetails) {
           speedGunDetails.open = role === 'bowling' || role === 'lbw';
         }
-        if (role === 'lbw') {
-          cameraAngleSelect.value = 'Front-on (Umpire / Keeper view)';
-          const clip = getActiveClip();
-          if (clip) {
-            clip.angle = cameraAngleSelect.value;
-            renderClipTabs();
-          }
-        }
         populateStyleOptions();
+        autoFillPlayerDefaults(playerNameInput.value.trim());
         renderFocusChips();
         updateActivePlayerBadge();
         updateAnalyzeButtonLabel();
@@ -4289,15 +4267,12 @@
         let firstNewId = null;
         files.forEach((file) => {
           const id = state.nextClipId++;
-          const defaultAngle = state.clips.length === 0
-            ? cameraAngleSelect.value
-            : DEFAULT_ANGLES[state.clips.length % DEFAULT_ANGLES.length];
           const clip = {
             id,
             file,
             url: URL.createObjectURL(file),
             name: file.name,
-            angle: defaultAngle,
+            angle: 'Auto-detect',
             duration: 0,
             trimStart: 0,
             trimEnd: null,
@@ -4326,7 +4301,6 @@
         const clip = state.clips.find(c => c.id === clipId);
         if (!clip) return;
         state.activeClipId = clip.id;
-        cameraAngleSelect.value = clip.angle;
         videoPlayer.pause();
         videoPlayer.src = clip.url;
         renderClipTabs();
@@ -4370,9 +4344,9 @@
           pill.className = `clip-pill${clip.id === state.activeClipId ? ' active' : ''}`;
           pill.title = `${clip.name} (${clip.angle})`;
 
-          const shortAngle = clip.angle.split(' (')[0];
           const label = document.createElement('span');
-          label.textContent = `Clip ${idx + 1} · ${shortAngle}${clip.frames.length ? ` (${clip.frames.length}f)` : ''}`;
+          const winTag = clip.trimCustom ? ` [${(clip.trimStart || 0).toFixed(1)}–${(clip.trimEnd || 0).toFixed(1)}s]` : '';
+          label.textContent = `Clip ${idx + 1}${winTag}${clip.frames.length ? ` (${clip.frames.length}f)` : ''}`;
 
           const rem = document.createElement('button');
           rem.type = 'button';
@@ -4929,7 +4903,7 @@ Player Context:
 - Style / Bowler Angle: ${styleSelect.value}
 - Pitch Length: ${pitchLengthSelect.value}m
 - Bowling Speed: ${speedContextLine}
-- Uploaded Clips / Camera Angles: ${clipSummary || cameraAngleSelect.value}
+- Uploaded Clips: ${clipSummary || '1 clip'} (auto-detect camera angle(s) directly from the frames)
 - Match Format: ${formatSelect.value}
 - Selected Focus Areas: ${state.focusAreas.length ? state.focusAreas.join(', ') : 'General review'}
 - Coach/Umpire Notes: ${notesInput.value.trim() || 'None provided'}
@@ -6150,6 +6124,20 @@ create policy "Allow anon read/write for personal lab"
       }
 
       // --- ON-DEVICE STORAGE (IndexedDB) + PLAYER -> DISCIPLINE FOLDERS ---
+      function autoFillPlayerDefaults(name) {
+        if (!name || isTestPlayerName(name) || !cachedSessions.length) return;
+        const lower = name.toLowerCase();
+        const matches = cachedSessions.filter(s => (s.playerName || '').trim().toLowerCase() === lower);
+        if (matches.length === 0) return;
+        const roleMatch = matches.find(s => s.role === state.role) || matches[0];
+        if (roleMatch.handedness && Array.from(handednessSelect.options).some(o => o.value === roleMatch.handedness)) {
+          handednessSelect.value = roleMatch.handedness;
+        }
+        if (roleMatch.style && Array.from(styleSelect.options).some(o => o.value === roleMatch.style)) {
+          styleSelect.value = roleMatch.style;
+        }
+      }
+
       function updatePlayerAutocomplete() {
         playerNameList.textContent = '';
         const names = new Set(['Test - Not Saved']);
