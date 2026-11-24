@@ -6621,9 +6621,13 @@ create policy "Allow anon read/write for personal lab"
           };
           const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert(payload, { onConflict: 'id' });
           if (error) throw error;
+          record.synced = true;
+          await putSession(record);
           supabaseStatusText.textContent = `✓ Synced "${record.playerName}" to Supabase cloud.`;
+          return true;
         } catch (err) {
           supabaseStatusText.textContent = `Cloud sync warning: ${err.message}`;
+          return false;
         }
       }
 
@@ -6634,19 +6638,18 @@ create policy "Allow anon read/write for personal lab"
         } catch {}
       }
 
-      async function syncWithSupabase(pushLocal = false) {
+      async function syncWithSupabase(pushAll = false) {
         if (!supabaseClient) {
           supabaseStatusText.textContent = 'Connect Supabase first to sync.';
           return;
         }
         supabaseStatusText.textContent = 'Syncing folders with Supabase...';
         try {
-          if (pushLocal) {
-            const locals = await getAllSessions();
-            for (const loc of locals) {
-              if (!isTestPlayerName(loc.playerName)) {
-                await pushSessionToSupabase(loc);
-              }
+          // Always push any unsynced local sessions (e.g. saved offline or before cloud sync)
+          const locals = await getAllSessions();
+          for (const loc of locals) {
+            if (!isTestPlayerName(loc.playerName) && (pushAll || !loc.synced)) {
+              await pushSessionToSupabase(loc);
             }
           }
           const { data, error } = await supabaseClient
