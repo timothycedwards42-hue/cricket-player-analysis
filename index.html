@@ -1587,8 +1587,15 @@
       border-radius: var(--radius);
       max-width: 480px;
       width: calc(100% - 32px);
+      max-height: 90dvh;
       padding: 0;
+      overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+    }
+
+    dialog[open] {
+      display: flex;
+      flex-direction: column;
     }
 
     dialog::backdrop {
@@ -1597,6 +1604,7 @@
     }
 
     .dialog-header {
+      flex-shrink: 0;
       padding: 14px 18px;
       border-bottom: 1px solid var(--border);
       display: flex;
@@ -1609,6 +1617,11 @@
     }
 
     .dialog-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       padding: 16px 18px;
       display: flex;
       flex-direction: column;
@@ -1616,6 +1629,7 @@
     }
 
     .dialog-footer {
+      flex-shrink: 0;
       padding: 12px 18px;
       border-top: 1px solid var(--border);
       display: flex;
@@ -1929,9 +1943,7 @@
     .session-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      max-height: 360px;
-      overflow-y: auto;
+      gap: 10px;
     }
 
     details.folder-player {
@@ -2413,8 +2425,61 @@
         font-size: 0.92rem;
       }
       dialog {
-        width: calc(100% - 16px) !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 92dvh;
         max-height: 92dvh;
+        margin: auto 0 0 0;
+        border-radius: 16px 16px 0 0;
+        border-bottom: none;
+      }
+      .dialog-body {
+        padding: 12px 14px;
+      }
+      .dialog-footer {
+        padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+      }
+      details.folder-player > summary {
+        padding: 11px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .folder-body {
+        padding: 8px;
+      }
+      .folder-files {
+        padding: 6px;
+        gap: 8px;
+      }
+      .session-row {
+        flex-wrap: wrap;
+        align-items: center;
+        padding: 10px;
+        gap: 8px;
+      }
+      .session-row .session-info {
+        flex: 1 1 calc(100% - 108px);
+        min-width: 140px;
+      }
+      .session-row .session-title {
+        white-space: normal;
+        line-height: 1.3;
+      }
+      .session-row > .btn-group {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 6px;
+        border-top: 1px dashed var(--border);
+        gap: 6px;
+      }
+      .session-row > .btn-group button {
+        min-height: 36px;
+        padding: 6px 12px;
+      }
+      .session-row > .btn-group .btn-primary {
+        flex: 1;
+        justify-content: center;
       }
     }
 
@@ -3201,7 +3266,7 @@
       </div>
 
       <!-- Player's Active & Mastered Drills -->
-      <div id="trainingPlanList" style="display:flex; flex-direction:column; gap:12px; max-height:360px; overflow-y:auto;"></div>
+      <div id="trainingPlanList" style="display:flex; flex-direction:column; gap:12px;"></div>
     </div>
     <div class="dialog-footer" style="justify-content:space-between; flex-wrap:wrap;">
       <button type="button" id="emailTrainingPlanBtn">✉️ Email Training Plan</button>
