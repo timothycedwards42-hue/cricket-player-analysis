@@ -1976,6 +1976,68 @@
 
     .supabase-box > summary::-webkit-details-marker { display: none; }
 
+    /* --- PLAYER TRAINING PLAN BOARD --- */
+    .plan-add-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.3fr auto;
+      gap: 6px;
+      align-items: end;
+    }
+
+    @media (max-width: 680px) {
+      .plan-add-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .plan-cat-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .plan-cat-title {
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--pitch);
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .plan-drill-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .plan-drill-card.mastered {
+      opacity: 0.62;
+      border-color: rgba(76, 175, 80, 0.35);
+    }
+
+    .plan-drill-card.mastered .plan-drill-name {
+      text-decoration: line-through;
+    }
+
+    .plan-drill-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .plan-drill-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
     .session-row {
       display: flex;
       align-items: center;
@@ -2852,6 +2914,78 @@
     </div>
   </dialog>
 
+  <!-- PLAYER TRAINING PLAN DIALOG -->
+  <dialog id="trainingPlanDialog" aria-labelledby="trainingPlanTitle" style="max-width:720px;">
+    <div class="dialog-header">
+      <div>
+        <h3 id="trainingPlanTitle">📋 Training Plan</h3>
+        <span class="help-text" id="trainingPlanSubtitle">Build &amp; track drills from video analyses or the drill library</span>
+      </div>
+      <button type="button" class="btn-sm btn-ghost" id="closeTrainingPlanBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <!-- Add from Categorized Drill Library -->
+      <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
+        <strong style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--pitch);">📚 Add from Cricket &amp; S&amp;C Drill Library</strong>
+        <div class="plan-add-grid">
+          <div class="field">
+            <label for="planLibCategory">Category</label>
+            <select id="planLibCategory"></select>
+          </div>
+          <div class="field">
+            <label for="planLibSubCategory">Sub-Category</label>
+            <select id="planLibSubCategory"></select>
+          </div>
+          <div class="field">
+            <label for="planLibDrill">Drill</label>
+            <select id="planLibDrill"></select>
+          </div>
+          <button type="button" class="btn-primary" id="addLibDrillBtn" style="height:36px;">➕ Add</button>
+        </div>
+
+        <!-- Optional Custom Drill -->
+        <details class="collapsible-card" style="background:var(--surface);">
+          <summary><span>✏️ Or Add Custom Drill</span><span class="help-text">Optional</span></summary>
+          <div class="collapsible-body">
+            <div class="form-grid">
+              <div class="field">
+                <label for="customDrillCat">Category</label>
+                <select id="customDrillCat">
+                  <option value="Batting">🏏 Batting</option>
+                  <option value="Bowling">⚡ Bowling</option>
+                  <option value="Strength & Conditioning">🏋️ Strength &amp; Conditioning</option>
+                  <option value="Fielding & Scenarios">🧤 Fielding &amp; Scenarios</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="customDrillReps">Sets / Reps / Frequency</label>
+                <input type="text" id="customDrillReps" placeholder="e.g. 3 sets × 12 balls · 2×/week">
+              </div>
+              <div class="field full">
+                <label for="customDrillTitle">Drill Name</label>
+                <input type="text" id="customDrillTitle" placeholder="e.g. Single-stump yorker target drill">
+              </div>
+              <div class="field full">
+                <label for="customDrillCue">Coaching Cue / Notes</label>
+                <input type="text" id="customDrillCue" placeholder="e.g. Keep eyes level through release">
+              </div>
+            </div>
+            <div>
+              <button type="button" class="btn-sm btn-primary" id="addCustomDrillBtn">➕ Add Custom Drill</button>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Player's Active & Mastered Drills -->
+      <div id="trainingPlanList" style="display:flex; flex-direction:column; gap:12px; max-height:360px; overflow-y:auto;"></div>
+    </div>
+    <div class="dialog-footer" style="justify-content:space-between; flex-wrap:wrap;">
+      <button type="button" id="emailTrainingPlanBtn">✉️ Email Training Plan</button>
+      <button type="button" class="btn-primary" id="doneTrainingPlanBtn">Done</button>
+    </div>
+  </dialog>
+
   <script>
     (() => {
       // Auto-migrate retired or invalid model IDs saved in localStorage
@@ -3090,6 +3224,13 @@
       const emailIncSW = document.getElementById('emailIncSW');
       const emailIncDrills = document.getElementById('emailIncDrills');
       const emailIncAttack = document.getElementById('emailIncAttack');
+      const trainingPlanDialog = document.getElementById('trainingPlanDialog');
+      const trainingPlanTitle = document.getElementById('trainingPlanTitle');
+      const trainingPlanSubtitle = document.getElementById('trainingPlanSubtitle');
+      const trainingPlanList = document.getElementById('trainingPlanList');
+      const planLibCategory = document.getElementById('planLibCategory');
+      const planLibSubCategory = document.getElementById('planLibSubCategory');
+      const planLibDrill = document.getElementById('planLibDrill');
       const drsVerdictCard = document.getElementById('drsVerdictCard');
       const drsConfidenceText = document.getElementById('drsConfidenceText');
       const drsDecisionBadge = document.getElementById('drsDecisionBadge');
@@ -3720,6 +3861,18 @@
         document.getElementById('syncSupabaseNowBtn').addEventListener('click', () => syncWithSupabase(true));
         document.getElementById('copySupabaseSqlBtn').addEventListener('click', copySupabaseTableSql);
         document.getElementById('clearSupabaseBtn').addEventListener('click', disconnectSupabase);
+
+        // Training Plan Dialog events
+        document.getElementById('closeTrainingPlanBtn').addEventListener('click', () => trainingPlanDialog.close());
+        document.getElementById('doneTrainingPlanBtn').addEventListener('click', () => trainingPlanDialog.close());
+        trainingPlanDialog.addEventListener('click', (e) => {
+          if (e.target === trainingPlanDialog) trainingPlanDialog.close();
+        });
+        planLibCategory.addEventListener('change', populatePlanSubCategories);
+        planLibSubCategory.addEventListener('change', populatePlanDrills);
+        document.getElementById('addLibDrillBtn').addEventListener('click', addSelectedLibraryDrillToPlan);
+        document.getElementById('addCustomDrillBtn').addEventListener('click', addCustomDrillToPlan);
+        document.getElementById('emailTrainingPlanBtn').addEventListener('click', emailActivePlayerTrainingPlan);
 
         // Email Dialog events
         document.getElementById('closeEmailDialogBtn').addEventListener('click', () => emailDialog.close());
@@ -5324,7 +5477,36 @@ For each improvement's diagram (top-down net/pitch view):
           ytLink.target = '_blank';
           ytLink.rel = 'noopener noreferrer';
           ytLink.textContent = '▶ Watch Drill Videos on YouTube';
-          actionsRow.appendChild(ytLink);
+
+          const addPlanBtn = document.createElement('button');
+          addPlanBtn.type = 'button';
+          addPlanBtn.className = 'btn-sm';
+          const targetPlayer = (meta.playerName && !isTestPlayerName(meta.playerName))
+            ? meta.playerName
+            : (!isTestPlayerName(playerNameInput.value.trim()) ? playerNameInput.value.trim() : '');
+          addPlanBtn.textContent = targetPlayer ? `➕ Add to ${targetPlayer}'s Plan` : '➕ Add to Training Plan';
+          addPlanBtn.addEventListener('click', async () => {
+            let pName = targetPlayer;
+            if (!pName) {
+              const entered = prompt('Which player folder should this drill be added to?', '');
+              if (!entered || !entered.trim() || isTestPlayerName(entered)) return;
+              pName = entered.trim();
+            }
+            const cat = isBatting ? 'Batting' : 'Bowling';
+            await addDrillToPlayerPlan(pName, {
+              category: cat,
+              subCategory: 'From Video Analysis',
+              title: imp.drillName || imp.title,
+              reps: imp.reps || '3 sets × 12 reps',
+              cue: imp.cue || imp.why || '',
+              videoSearchQuery: searchQ,
+              source: 'AI Analysis'
+            });
+            addPlanBtn.textContent = `✓ Added to ${pName}'s Plan`;
+            addPlanBtn.classList.add('btn-active');
+          });
+
+          actionsRow.append(ytLink, addPlanBtn);
           detailsCol.appendChild(actionsRow);
 
           // Diagram column
@@ -6095,9 +6277,11 @@ create policy "Allow anon read/write for personal lab"
             style: record.style || '',
             thumbnail: record.thumbnail || null,
             clips_meta: record.clipsMeta || [],
-            report: record.hasAnalysis === false || !record.report
-              ? { _framesOnly: true, _note: record.note || '' }
-              : { ...record.report, _note: record.note || record.report._note || '' }
+            report: record.role === 'training_plan'
+              ? { _trainingPlan: true, drills: record.planDrills || [] }
+              : record.hasAnalysis === false || !record.report
+                ? { _framesOnly: true, _note: record.note || '' }
+                : { ...record.report, _note: record.note || record.report._note || '' }
           };
           const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert(payload, { onConflict: 'id' });
           if (error) throw error;
@@ -6138,23 +6322,25 @@ create policy "Allow anon read/write for personal lab"
 
           for (const row of (data || [])) {
             const existing = cachedSessions.find(s => s.id === row.id);
-            const isFramesOnly = Boolean(row.report && row.report._framesOnly);
+            const isTrainingPlan = row.discipline === 'training_plan' || Boolean(row.report && row.report._trainingPlan);
+            const isFramesOnly = !isTrainingPlan && Boolean(row.report && row.report._framesOnly);
             const merged = {
               id: row.id,
               savedAt: row.saved_at,
               fileStamp: row.file_stamp || formatFileTimestamp(new Date(row.saved_at)),
               playerName: row.player_name,
               sessionTag: row.session_tag || '',
-              role: row.discipline || 'batting',
+              role: isTrainingPlan ? 'training_plan' : (row.discipline || 'batting'),
               handedness: row.handedness || '',
               style: row.style || '',
               thumbnail: row.thumbnail || null,
               clipsMeta: Array.isArray(row.clips_meta) ? row.clips_meta : [],
               includeVideo: existing?.includeVideo || false,
               videoBlobs: existing?.videoBlobs || [],
-              hasAnalysis: !isFramesOnly,
+              hasAnalysis: !isFramesOnly && !isTrainingPlan,
+              planDrills: isTrainingPlan ? (Array.isArray(row.report?.drills) ? row.report.drills : []) : undefined,
               note: (row.report && row.report._note) ? String(row.report._note).slice(0, 200) : (existing?.note || ''),
-              report: isFramesOnly ? null : row.report,
+              report: (isFramesOnly || isTrainingPlan) ? null : row.report,
               synced: true
             };
             await putSession(merged);
@@ -6518,8 +6704,12 @@ create policy "Allow anon read/write for personal lab"
         const byPlayer = new Map();
         filtered.forEach(s => {
           const pName = (s.playerName || 'Unassigned Player').trim();
+          if (!byPlayer.has(pName)) byPlayer.set(pName, { batting: [], bowling: [], lbw: [], planCount: 0 });
+          if (s.role === 'training_plan') {
+            byPlayer.get(pName).planCount = (s.planDrills || []).filter(d => !d.mastered).length;
+            return;
+          }
           const disc = s.role === 'bowling' ? 'bowling' : s.role === 'lbw' ? 'lbw' : 'batting';
-          if (!byPlayer.has(pName)) byPlayer.set(pName, { batting: [], bowling: [], lbw: [] });
           byPlayer.get(pName)[disc].push(s);
         });
 
@@ -6541,10 +6731,22 @@ create policy "Allow anon read/write for personal lab"
           const pSum = document.createElement('summary');
           const pLeft = document.createElement('span');
           pLeft.textContent = `📁 ${pName}`;
-          const pRight = document.createElement('span');
-          pRight.className = 'badge badge-pitch';
-          pRight.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
-          pSum.append(pLeft, pRight);
+          const pRightWrap = document.createElement('div');
+          pRightWrap.className = 'btn-group';
+          const planBtn = document.createElement('button');
+          planBtn.type = 'button';
+          planBtn.className = 'btn-sm';
+          planBtn.textContent = groups.planCount > 0 ? `📋 Training Plan (${groups.planCount})` : '📋 Training Plan';
+          planBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openTrainingPlanDialog(pName);
+          });
+          const pBadge = document.createElement('span');
+          pBadge.className = 'badge badge-pitch';
+          pBadge.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
+          pRightWrap.append(planBtn, pBadge);
+          pSum.append(pLeft, pRightWrap);
           playerDetails.appendChild(pSum);
 
           const folderBody = document.createElement('div');
@@ -6720,6 +6922,377 @@ create policy "Allow anon read/write for personal lab"
         } catch (err) {
           historyStatusText.textContent = `Backup import failed: ${err.message}`;
         }
+      }
+
+      // --- PLAYER TRAINING PLAN & CATEGORIZED DRILL LIBRARY ---
+      const DRILL_LIBRARY = {
+        'Batting': {
+          'Head Stability & Straight Bat': [
+            { title: 'Top-Hand Chalk-Line Straight Drive', reps: '3 sets × 12 balls', cue: 'Nose over front knee, punch straight through the gate', q: 'cricket batting top hand straight drive head position drill' },
+            { title: 'Drop-Feed Still-Head Drive', reps: '3 sets × 10 balls', cue: 'Eyes level, meet the ball directly under the chin', q: 'cricket batting drop feed head still drive drill' },
+            { title: 'Underarm V-Gate Straight Drives', reps: '2 sets × 15 balls', cue: 'Show the full face back past the bowler', q: 'cricket batting playing in the V straight drive drill' }
+          ],
+          'Playing Off the Legs & Inswing': [
+            { title: 'Open Front-Toe Alignment Cone Drill', reps: '3 sets × 12 balls', cue: 'Point front toe slightly to extra cover, swing through mid-on', q: 'cricket batting front foot alignment against inswing drill' },
+            { title: 'Middle-and-Leg Whip & Clip Target', reps: '3 sets × 10 balls', cue: 'Wait late, roll wrists through mid-wicket', q: 'cricket batting playing off the pads leg side flick drill' },
+            { title: 'Late-Play Soft-Hands Pad Protection', reps: '2 sets × 12 balls', cue: 'Play beside the front pad, not out in front', q: 'cricket batting how to stop getting out lbw drill' }
+          ],
+          'Short Ball & Power Hitting': [
+            { title: 'Rapid Tennis-Ball Hip-Clear Pull Drill', reps: '3 sets × 10 balls', cue: 'Clear the front hip, hit down through square', q: 'cricket batting pull shot tennis ball drill' },
+            { title: 'Back-Foot Cut & Punch Elevation', reps: '3 sets × 12 balls', cue: 'Get on top of the bounce, fast hands through point', q: 'cricket batting back foot punch cut shot drill' },
+            { title: 'Range-Hitting Base & Swing Arc', reps: '3 sets × 8 balls', cue: 'Stable wide base, finish high over left shoulder', q: 'cricket power hitting bat speed range hitting drill' }
+          ],
+          'Playing Spin': [
+            { title: 'Use-Your-Feet Crease Advance Drill', reps: '3 sets × 10 balls', cue: 'Decisive stride to the pitch of the ball, head forward', q: 'cricket batting stepping out to spin bowling drill' },
+            { title: 'Sweep & Paddle Target Cones', reps: '3 sets × 10 balls', cue: 'Front pad outside the line, roll wrists down', q: 'cricket batting sweep shot coaching drill' },
+            { title: 'Deep-Crease Back-Foot Spin Punch', reps: '2 sets × 12 balls', cue: 'Use full crease depth, watch the ball off the pitch', q: 'cricket batting playing spin off back foot drill' }
+          ]
+        },
+        'Bowling': {
+          'Front-Leg Brace & Pace': [
+            { title: '3-Step Pole-Vault Front-Leg Brace', reps: '3 sets × 8 balls', cue: 'Plant tall, hit the wall with a braced front knee', q: 'fast bowling front leg brace drill cricket pace' },
+            { title: 'Elevated Step-Down Release Whip', reps: '3 sets × 6 balls', cue: 'Drive chest over front leg, snap wrist late', q: 'fast bowling increase pace whip release drill' },
+            { title: 'Target-Speed Run-Up Rhythm', reps: '2 sets × 6 balls', cue: 'Build smoothly into the crease, accelerate last 4 steps', q: 'cricket fast bowling run up rhythm gather drill' }
+          ],
+          'Line & Length Accuracy': [
+            { title: 'Corridor Follow-Through Cone Gate', reps: '3 sets × 6 balls', cue: 'Pull front elbow to hip pocket, run straight through', q: 'cricket fast bowling stop falling away alignment drill' },
+            { title: '4th-Stump Target Mat Channel', reps: '4 sets × 6 balls', cue: 'Eyes locked on top of off through release', q: 'cricket bowling line and length target mat drill' },
+            { title: 'Single-Stump Yorker Precision', reps: '3 sets × 6 balls', cue: 'Commit full energy, aim at base of middle-off', q: 'cricket bowling yorker accuracy death bowling drill' }
+          ],
+          'Seam, Swing & Variations': [
+            { title: 'Two-Finger Upright Seam Flicks', reps: '3 sets × 15 reps', cue: 'Stay behind the seam, crisp backspin', q: 'cricket seam presentation upright seam bowling drill' },
+            { title: 'Same-Window Short Ball Disguise', reps: '3 sets × 6 balls', cue: 'Identical release height, release a fraction later', q: 'cricket fast bowling bouncer disguise length drill' },
+            { title: 'Off-Cutter / Slower-Ball Length Control', reps: '3 sets × 6 balls', cue: 'Keep arm speed fast, roll fingers down the side', q: 'cricket slower ball off cutter bowling drill' }
+          ],
+          'Spin, Drift & Flight': [
+            { title: 'High-Arc Rope Flight & Dip Drill', reps: '4 sets × 6 balls', cue: 'Give it air above eye-line, finish over front knee', q: 'cricket spin bowling flight drift dip drill' },
+            { title: 'Pivot-Through-Crease Rip Drill', reps: '3 sets × 8 balls', cue: 'Drive back hip through, spin hard through the ball', q: 'cricket off spin leg spin pivot energy transfer drill' },
+            { title: 'Stock Ball & Variation Pairs', reps: '3 sets × 6 balls', cue: 'Same approach and release window for both balls', q: 'cricket spin bowling googly arm ball disguise drill' }
+          ]
+        },
+        'Strength & Conditioning': {
+          'Lower-Body Brace & Power': [
+            { title: 'Eccentric Single-Leg Drop Squats', reps: '3 sets × 8/leg · 2×/week', cue: 'Absorb landing smoothly with knee tracking over toe', q: 'single leg drop squat fast bowling front leg brace strength' },
+            { title: 'Bulgarian Split Squats', reps: '3 sets × 8/leg · 2×/week', cue: 'Tall torso, drive powerfully through front heel', q: 'bulgarian split squat cricket strength conditioning' },
+            { title: 'Single-Leg Box Hops & Stick Landing', reps: '3 sets × 6/leg · 2×/week', cue: 'Land stiff and balanced, hold 2 seconds', q: 'single leg plyometric stick landing cricket pace' }
+          ],
+          'Core & Rotational Power': [
+            { title: 'Pallof Press (Anti-Rotation)', reps: '3 sets × 10/side · 3×/week', cue: 'Brace ribs down, resist band pull', q: 'pallof press core strength cricket bowling batting' },
+            { title: 'Rotational Medicine Ball Slams', reps: '3 sets × 8/side · 2×/week', cue: 'Generate power from hips, explode through torso', q: 'rotational medicine ball slam cricket power' },
+            { title: 'Side Plank with Hip Dip / Hold', reps: '3 sets × 30s/side · 3×/week', cue: 'Straight line head to heel, protect lower back', q: 'side plank cricket fast bowler core stability' }
+          ],
+          'Shoulder & Groin Prehab': [
+            { title: 'Resistance-Band External Rotations', reps: '3 sets × 12/arm · 3×/week', cue: 'Elbow pinned to ribs, slow controlled return', q: 'rotator cuff external rotation band cricket shoulder prehab' },
+            { title: 'Copenhagen Adductor Plank', reps: '3 sets × 20s/side · 2×/week', cue: 'Keep hips stacked, build groin resilience', q: 'copenhagen adductor plank cricket groin prehab' },
+            { title: 'Thoracic Spine Open-Books', reps: '2 sets × 10/side · Daily', cue: 'Keep top knee pinned, rotate upper back smoothly', q: 'thoracic spine open book mobility cricket' }
+          ]
+        },
+        'Fielding & Scenarios': {
+          'Catching & Ground Fielding': [
+            { title: 'Rapid Slip-Cradle Reaction Catches', reps: '3 sets × 15 catches', cue: 'Low balanced base, soft hands giving with the ball', q: 'cricket slip catching reaction drill' },
+            { title: 'High-Ball Sky Catching', reps: '2 sets × 10 catches', cue: 'Get under the ball early, fingers pointing up/cupped', q: 'cricket high catching technique drill' },
+            { title: 'One-Hand Pick-Up & Direct-Hit Throw', reps: '3 sets × 6 throws', cue: 'Attack the ball low, align front shoulder to stumps', q: 'cricket ground fielding direct hit throwing drill' }
+          ],
+          'Match Scenarios': [
+            { title: 'Powerplay Target Chase (18 off 12)', reps: '2 × 12-ball scenarios', cue: 'Pick your boundary options early, keep strike moving', q: 'cricket batting scenario net practice drill' },
+            { title: 'Death-Over Execution (6 Balls vs Field)', reps: '2 × 6-ball overs', cue: 'Bowl to your set field, commit to wide/straight plan', q: 'cricket death bowling scenario practice drill' },
+            { title: 'Strike-Rotation Single-Off-Every-Ball Net', reps: '2 sets × 12 balls', cue: 'Soft hands into gaps, call loud and run hard', q: 'cricket batting strike rotation net drill' }
+          ]
+        }
+      };
+
+      let activePlanPlayerName = '';
+
+      function getPlanRecordId(playerName) {
+        return `plan_${String(playerName || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+      }
+
+      function getPlayerPlanRecord(playerName) {
+        const id = getPlanRecordId(playerName);
+        return cachedSessions.find(s => s.id === id) || null;
+      }
+
+      async function savePlayerPlanRecord(playerName, drills) {
+        const nowIso = new Date().toISOString();
+        const record = {
+          id: getPlanRecordId(playerName),
+          savedAt: nowIso,
+          fileStamp: formatFileTimestamp(new Date(nowIso)),
+          playerName: playerName.trim(),
+          sessionTag: 'Training Plan',
+          role: 'training_plan',
+          handedness: '',
+          style: '',
+          thumbnail: null,
+          clipsMeta: [],
+          includeVideo: false,
+          videoBlobs: [],
+          hasAnalysis: false,
+          planDrills: drills,
+          report: null
+        };
+        await putSession(record);
+        await refreshSavedCount();
+        if (supabaseClient) await pushSessionToSupabase(record);
+        if (historyDialog.open) renderSavedSessionsList();
+        return record;
+      }
+
+      async function addDrillToPlayerPlan(playerName, drillObj) {
+        await refreshSavedCount();
+        const existing = getPlayerPlanRecord(playerName);
+        const drills = existing && Array.isArray(existing.planDrills) ? [...existing.planDrills] : [];
+        drills.unshift({
+          id: `d_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          category: drillObj.category || 'Batting',
+          subCategory: drillObj.subCategory || 'General',
+          title: drillObj.title,
+          reps: drillObj.reps || '3 sets × 12 reps',
+          cue: drillObj.cue || '',
+          videoSearchQuery: drillObj.videoSearchQuery || `cricket coaching drill ${drillObj.title}`,
+          source: drillObj.source || 'Library',
+          mastered: false,
+          addedAt: new Date().toISOString()
+        });
+        await savePlayerPlanRecord(playerName, drills);
+        showToast(`✓ Added to ${playerName}'s Training Plan`);
+      }
+
+      function populatePlanCategories() {
+        planLibCategory.textContent = '';
+        Object.keys(DRILL_LIBRARY).forEach(cat => {
+          const opt = document.createElement('option');
+          opt.value = cat;
+          opt.textContent = cat;
+          planLibCategory.appendChild(opt);
+        });
+        populatePlanSubCategories();
+      }
+
+      function populatePlanSubCategories() {
+        const cat = planLibCategory.value;
+        const subs = DRILL_LIBRARY[cat] || {};
+        planLibSubCategory.textContent = '';
+        Object.keys(subs).forEach(sub => {
+          const opt = document.createElement('option');
+          opt.value = sub;
+          opt.textContent = sub;
+          planLibSubCategory.appendChild(opt);
+        });
+        populatePlanDrills();
+      }
+
+      function populatePlanDrills() {
+        const cat = planLibCategory.value;
+        const sub = planLibSubCategory.value;
+        const drills = (DRILL_LIBRARY[cat] && DRILL_LIBRARY[cat][sub]) || [];
+        planLibDrill.textContent = '';
+        drills.forEach((d, idx) => {
+          const opt = document.createElement('option');
+          opt.value = String(idx);
+          opt.textContent = d.title;
+          planLibDrill.appendChild(opt);
+        });
+      }
+
+      async function openTrainingPlanDialog(playerName) {
+        activePlanPlayerName = playerName.trim();
+        await refreshSavedCount();
+        if (planLibCategory.options.length === 0) populatePlanCategories();
+        trainingPlanTitle.textContent = `📋 Training Plan — ${activePlanPlayerName}`;
+        renderTrainingPlanList();
+        trainingPlanDialog.showModal();
+      }
+
+      async function addSelectedLibraryDrillToPlan() {
+        if (!activePlanPlayerName) return;
+        const cat = planLibCategory.value;
+        const sub = planLibSubCategory.value;
+        const idx = parseInt(planLibDrill.value, 10) || 0;
+        const drill = DRILL_LIBRARY[cat]?.[sub]?.[idx];
+        if (!drill) return;
+        await addDrillToPlayerPlan(activePlanPlayerName, {
+          category: cat,
+          subCategory: sub,
+          title: drill.title,
+          reps: drill.reps,
+          cue: drill.cue,
+          videoSearchQuery: drill.q,
+          source: 'Library'
+        });
+        renderTrainingPlanList();
+      }
+
+      async function addCustomDrillToPlan() {
+        if (!activePlanPlayerName) return;
+        const title = document.getElementById('customDrillTitle').value.trim();
+        if (!title) return;
+        const cat = document.getElementById('customDrillCat').value;
+        const reps = document.getElementById('customDrillReps').value.trim() || '3 sets × 12 reps';
+        const cue = document.getElementById('customDrillCue').value.trim();
+        await addDrillToPlayerPlan(activePlanPlayerName, {
+          category: cat,
+          subCategory: 'Custom',
+          title,
+          reps,
+          cue,
+          videoSearchQuery: `cricket coaching drill ${title}`,
+          source: 'Custom'
+        });
+        document.getElementById('customDrillTitle').value = '';
+        document.getElementById('customDrillReps').value = '';
+        document.getElementById('customDrillCue').value = '';
+        renderTrainingPlanList();
+      }
+
+      function renderTrainingPlanList() {
+        const rec = getPlayerPlanRecord(activePlanPlayerName);
+        const drills = rec && Array.isArray(rec.planDrills) ? rec.planDrills : [];
+        const activeCount = drills.filter(d => !d.mastered).length;
+        const masteredCount = drills.length - activeCount;
+        trainingPlanSubtitle.textContent = `${activeCount} active focus drill${activeCount === 1 ? '' : 's'} · ${masteredCount} mastered`;
+
+        trainingPlanList.textContent = '';
+        if (drills.length === 0) {
+          const empty = document.createElement('p');
+          empty.className = 'help-text';
+          empty.style.textAlign = 'center';
+          empty.style.padding = '20px 10px';
+          empty.textContent = `No drills in ${activePlanPlayerName}'s plan yet. Pick one from the Drill Library above, or tap "➕ Add to Plan" on any AI video analysis drill.`;
+          trainingPlanList.appendChild(empty);
+          return;
+        }
+
+        const catOrder = ['Batting', 'Bowling', 'Strength & Conditioning', 'Fielding & Scenarios'];
+        const catIcons = {
+          'Batting': '🏏 Batting',
+          'Bowling': '⚡ Bowling',
+          'Strength & Conditioning': '🏋️ Strength & Conditioning',
+          'Fielding & Scenarios': '🧤 Fielding & Match Scenarios'
+        };
+
+        catOrder.forEach(cat => {
+          const group = drills.filter(d => (d.category || 'Batting') === cat);
+          if (group.length === 0) return;
+
+          const sec = document.createElement('div');
+          sec.className = 'plan-cat-section';
+          const heading = document.createElement('div');
+          heading.className = 'plan-cat-title';
+          heading.textContent = `${catIcons[cat] || cat} (${group.length})`;
+          sec.appendChild(heading);
+
+          group.forEach(d => {
+            const card = document.createElement('div');
+            card.className = `plan-drill-card${d.mastered ? ' mastered' : ''}`;
+
+            const top = document.createElement('div');
+            top.className = 'plan-drill-top';
+
+            const left = document.createElement('label');
+            left.style.cssText = 'display:inline-flex; align-items:center; gap:8px; cursor:pointer;';
+            const chk = document.createElement('input');
+            chk.type = 'checkbox';
+            chk.checked = Boolean(d.mastered);
+            chk.style.cssText = 'width:auto; accent-color:var(--accent-bright);';
+            chk.addEventListener('change', async () => {
+              d.mastered = chk.checked;
+              await savePlayerPlanRecord(activePlanPlayerName, drills);
+              renderTrainingPlanList();
+            });
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'plan-drill-name';
+            nameSpan.textContent = d.title;
+            left.append(chk, nameSpan);
+
+            const right = document.createElement('div');
+            right.className = 'btn-group';
+            const subBadge = document.createElement('span');
+            subBadge.className = 'badge badge-blue';
+            subBadge.textContent = d.subCategory || 'Drill';
+
+            const yt = document.createElement('a');
+            yt.className = 'btn-sm';
+            yt.style.cssText = 'text-decoration:none; background:rgba(239,83,80,0.14); border:1px solid rgba(239,83,80,0.45); color:#ffcdd2; border-radius:6px; padding:3px 7px; font-size:0.72rem; font-weight:600;';
+            yt.href = `https://www.youtube.com/results?search_query=${encodeURIComponent(d.videoSearchQuery || `cricket drill ${d.title}`)}`;
+            yt.target = '_blank';
+            yt.rel = 'noopener noreferrer';
+            yt.textContent = '▶ Video';
+
+            const editRepsBtn = document.createElement('button');
+            editRepsBtn.type = 'button';
+            editRepsBtn.className = 'btn-sm btn-ghost';
+            editRepsBtn.textContent = '✏️';
+            editRepsBtn.title = 'Edit sets/reps or cue';
+            editRepsBtn.addEventListener('click', async () => {
+              const nextReps = prompt('Update sets / reps / schedule:', d.reps || '');
+              if (nextReps === null) return;
+              d.reps = nextReps.trim() || d.reps;
+              await savePlayerPlanRecord(activePlanPlayerName, drills);
+              renderTrainingPlanList();
+            });
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn-sm btn-ghost';
+            delBtn.textContent = '×';
+            delBtn.title = 'Remove drill from plan';
+            delBtn.addEventListener('click', async () => {
+              const updated = drills.filter(x => x.id !== d.id);
+              await savePlayerPlanRecord(activePlanPlayerName, updated);
+              renderTrainingPlanList();
+            });
+
+            right.append(subBadge, yt, editRepsBtn, delBtn);
+            top.append(left, right);
+            card.appendChild(top);
+
+            const metaLine = document.createElement('div');
+            metaLine.className = 'help-text';
+            metaLine.textContent = `${d.reps || ''}${d.cue ? ` · Cue: "${d.cue}"` : ''}`;
+            card.appendChild(metaLine);
+
+            sec.appendChild(card);
+          });
+
+          trainingPlanList.appendChild(sec);
+        });
+      }
+
+      function emailActivePlayerTrainingPlan() {
+        const rec = getPlayerPlanRecord(activePlanPlayerName);
+        const drills = (rec?.planDrills || []).filter(d => !d.mastered);
+        if (drills.length === 0) {
+          showToast('Add at least one active drill to email this plan');
+          return;
+        }
+        trainingPlanDialog.close();
+        emailPlayerNameInput.value = activePlanPlayerName;
+        emailSubjectInput.value = `Cricket Training Plan — ${activePlanPlayerName}`;
+
+        const lines = [
+          `Hi ${activePlanPlayerName},`,
+          '',
+          `Here is your current Cricket Training Plan (${drills.length} active focus drills):`
+        ];
+        const catOrder = ['Batting', 'Bowling', 'Strength & Conditioning', 'Fielding & Scenarios'];
+        catOrder.forEach(cat => {
+          const group = drills.filter(d => (d.category || 'Batting') === cat);
+          if (!group.length) return;
+          lines.push('');
+          lines.push(`=== ${cat.toUpperCase()} ===`);
+          group.forEach((d, i) => {
+            lines.push(`${i + 1}. ${d.title} (${d.subCategory}) — ${d.reps}`);
+            if (d.cue) lines.push(`   Cue: "${d.cue}"`);
+            lines.push(`   Drill Videos: https://www.youtube.com/results?search_query=${encodeURIComponent(d.videoSearchQuery || `cricket drill ${d.title}`)}`);
+          });
+        });
+        lines.push('', 'Generated via Cricket Player Analysis');
+
+        emailBodyPreview.value = lines.join('\n');
+        emailStatusHint.textContent = `Ready to send ${activePlanPlayerName}'s Training Plan via Mail app, Gmail, or Copy.`;
+        emailDialog.showModal();
+        emailToInput.focus();
       }
 
       // --- EMAIL COACHING & TRAINING PLAN ---
