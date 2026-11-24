@@ -2250,6 +2250,12 @@
           </datalist>
         </div>
 
+        <!-- Loaded Stored Frames Banner (shown when a saved file's frames are ready for re-analysis) -->
+        <div id="loadedFramesBanner" style="display:none; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; background:var(--info-soft); border:1px solid rgba(79,195,247,0.45); border-radius:var(--radius-sm); padding:8px 12px; font-size:0.78rem; color:#d4f0fd;">
+          <span id="loadedFramesBannerText">🎞️ Stored frames loaded — adjust Focus Areas, Notes, or Model and click Analyze.</span>
+          <button type="button" class="btn-sm btn-ghost" id="clearLoadedFramesBtn">Clear</button>
+        </div>
+
         <!-- Drop Zone -->
         <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload cricket batting or bowling videos">
           <div class="drop-zone-icon">📹</div>
@@ -2869,6 +2875,8 @@
         zoomFocusX: 0.5,
         zoomFocusY: 0.5,
         aimZoomMode: false,
+        loadedStoredFrames: [],
+        loadedStoredLabel: '',
         focusAreas: [],
         isSpeaking: false,
         drawingEnabled: false,
@@ -3052,6 +3060,9 @@
       const savedFrameLargeImg = document.getElementById('savedFrameLargeImg');
       const savedFrameLargeLabel = document.getElementById('savedFrameLargeLabel');
       const analyzeStoredFramesBtn = document.getElementById('analyzeStoredFramesBtn');
+      const loadedFramesBanner = document.getElementById('loadedFramesBanner');
+      const loadedFramesBannerText = document.getElementById('loadedFramesBannerText');
+      const clearLoadedFramesBtn = document.getElementById('clearLoadedFramesBtn');
       const demosMenu = document.getElementById('demosMenu');
       const speedGunDetails = document.getElementById('speedGunDetails');
       const speedSummaryPill = document.getElementById('speedSummaryPill');
@@ -3659,8 +3670,14 @@
         analyzeBtn.addEventListener('click', () => runAnalysis());
         saveFramesOnlyBtn.addEventListener('click', saveFramesOnlySession);
         analyzeStoredFramesBtn.addEventListener('click', () => {
-          const frames = state.currentReport?._referenceFrames || [];
+          const frames = state.loadedStoredFrames.length > 0
+            ? state.loadedStoredFrames
+            : (state.currentReport?._referenceFrames || []);
           if (frames.length > 0) runAnalysis(frames);
+        });
+        clearLoadedFramesBtn.addEventListener('click', () => {
+          setLoadedStoredFrames([], '');
+          showToast('Cleared stored frames');
         });
         const closeDemos = () => { if (demosMenu) demosMenu.open = false; };
         document.getElementById('loadBatterDemoBtn').addEventListener('click', () => { closeDemos(); loadDemo('batting'); });
@@ -4262,8 +4279,21 @@
         'Diagonal / 45-degree'
       ];
 
+      function setLoadedStoredFrames(frames, label = '') {
+        state.loadedStoredFrames = Array.isArray(frames) ? frames : [];
+        state.loadedStoredLabel = label || '';
+        if (state.loadedStoredFrames.length > 0 && state.clips.length === 0) {
+          loadedFramesBanner.style.display = 'flex';
+          loadedFramesBannerText.textContent = `🎞️ ${state.loadedStoredFrames.length} stored frames loaded${label ? ` (${label})` : ''} — change Focus Areas, Notes, or Model & click Analyze.`;
+        } else {
+          loadedFramesBanner.style.display = 'none';
+        }
+        updateAnalyzeButtonLabel();
+      }
+
       function addVideoFiles(files) {
         clearError();
+        setLoadedStoredFrames([], '');
         let firstNewId = null;
         files.forEach((file) => {
           const id = state.nextClipId++;
@@ -4366,6 +4396,12 @@
 
       function updateAnalyzeButtonLabel() {
         const n = state.clips.length;
+        if (n === 0 && state.loadedStoredFrames.length > 0) {
+          analyzeBtn.textContent = state.role === 'lbw'
+            ? `☝️ Re-Run LBW Review on ${state.loadedStoredFrames.length} Stored Frames`
+            : `🔄 Re-Analyze ${state.loadedStoredFrames.length} Stored Frames`;
+          return;
+        }
         if (state.role === 'lbw') {
           analyzeBtn.textContent = n > 1
             ? `☝️ Run LBW DRS Review (${n} Angles)`
@@ -4658,7 +4694,10 @@
 
       async function runAnalysis(storedFramesOverride = null) {
         clearError();
-        const usingStoredFrames = Array.isArray(storedFramesOverride) && storedFramesOverride.length > 0;
+        const effectiveStoredFrames = (Array.isArray(storedFramesOverride) && storedFramesOverride.length > 0)
+          ? storedFramesOverride
+          : (state.clips.length === 0 && state.loadedStoredFrames.length > 0 ? state.loadedStoredFrames : null);
+        const usingStoredFrames = Boolean(effectiveStoredFrames && effectiveStoredFrames.length > 0);
 
         const playerName = playerNameInput.value.trim();
         if (!playerName) {
@@ -4668,7 +4707,7 @@
         }
 
         if (!usingStoredFrames && state.clips.length === 0) {
-          showError('Please upload at least one batting or bowling video first (or open 🎯 Demos in the top bar to preview).');
+          showError('Please upload at least one batting or bowling video first (or open 🎯 Demos / 📁 Folders to load stored frames).');
           return;
         }
 
@@ -4679,7 +4718,7 @@
         }
 
         setLoading(true, 'Preparing video frames...', usingStoredFrames
-          ? `Sending ${storedFramesOverride.length} stored video frames to ${state.model}.`
+          ? `Sending ${effectiveStoredFrames.length} stored video frames to ${state.model}.`
           : `Extracting biomechanical sequences across ${state.clips.length} clip${state.clips.length > 1 ? 's' : ''}.`);
 
         try {
@@ -4687,7 +4726,7 @@
           const parts = [{ text: buildPrompt() }];
 
           if (usingStoredFrames) {
-            storedFramesOverride.forEach((f, fIdx) => {
+            effectiveStoredFrames.forEach((f, fIdx) => {
               parts.push({ text: `Stored Frame ${fIdx + 1} (${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (fIdx + 1)}) at ${Number(f.time || 0).toFixed(2)}s:` });
               parts.push({
                 inlineData: {
@@ -4815,7 +4854,7 @@
           };
 
           const currentFramesSnapshot = usingStoredFrames
-            ? storedFramesOverride
+            ? effectiveStoredFrames
             : state.clips.flatMap((c, ci) =>
                 c.frames.map(f => ({
                   time: f.time,
@@ -5917,7 +5956,10 @@ For each improvement's diagram (top-down net/pitch view):
         savedFramesStrip.textContent = '';
         savedFramePreviewBox.classList.remove('active');
         if (analyzeStoredFramesBtn) {
-          analyzeStoredFramesBtn.style.display = (isFramesOnlyView && savedFramePlayer.frames.length > 0) ? 'inline-flex' : 'none';
+          analyzeStoredFramesBtn.style.display = savedFramePlayer.frames.length > 0 ? 'inline-flex' : 'none';
+          analyzeStoredFramesBtn.textContent = isFramesOnlyView
+            ? '✨ Analyze These Frames with AI'
+            : '🔄 Re-Analyze These Frames';
         }
         if (savedFramePlayer.frames.length === 0) {
           savedFramesCard.classList.remove('active');
@@ -6164,13 +6206,16 @@ create policy "Allow anon read/write for personal lab"
       }
 
       async function autoSaveAnalysisSession(reportObj, playerName, sessionTag, fileStamp, savedAtIso) {
-        const firstFrame = state.clips[0]?.frames?.[0]?.dataUrl || null;
-        const clipsMeta = state.clips.map(c => ({
-          name: c.name,
-          angle: c.angle,
-          duration: c.duration,
-          frames: c.frames
-        }));
+        const refFrames = reportObj._referenceFrames || [];
+        const firstFrame = state.clips[0]?.frames?.[0]?.dataUrl || refFrames[0]?.dataUrl || null;
+        const clipsMeta = state.clips.length > 0
+          ? state.clips.map(c => ({
+              name: c.name,
+              angle: c.angle,
+              duration: c.duration,
+              frames: c.frames
+            }))
+          : (refFrames.length > 0 ? [{ name: 'Re-analyzed Stored Frames', angle: '', duration: 0, frames: refFrames }] : []);
         const record = {
           id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           savedAt: savedAtIso || new Date().toISOString(),
@@ -6382,7 +6427,7 @@ create policy "Allow anon read/write for personal lab"
           styleSelect.value = session.style;
         }
 
-        // Flatten stored video reference frames so user can inspect every frame immediately
+        // Flatten stored video reference frames and load them into the studio for easy re-analysis
         const storedFrames = (session.clipsMeta || []).flatMap((c, ci) =>
           (c.frames || []).map(f => ({
             time: f.time,
@@ -6391,6 +6436,8 @@ create policy "Allow anon read/write for personal lab"
             angle: c.angle || ''
           }))
         );
+        const allFramesForReanalysis = storedFrames.length > 0 ? storedFrames : (session.report?._referenceFrames || []);
+        setLoadedStoredFrames(allFramesForReanalysis, `${session.playerName} · ${session.fileStamp || ''}`);
 
         if (isFramesOnly) {
           const stubReport = {
