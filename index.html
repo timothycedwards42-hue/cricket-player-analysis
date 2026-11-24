@@ -2527,14 +2527,6 @@
         <span id="apiStatusText">AI Key Not Set</span>
       </button>
       <button type="button" id="historyBtn" title="View or manage saved player folders (Local &amp; Supabase)">📁 Folders<span id="savedCount" style="display:none;">0</span></button>
-      <details class="demos-menu" id="demosMenu">
-        <summary>🎯 Demos ▾</summary>
-        <div class="demos-dropdown">
-          <button type="button" id="loadBatterDemoBtn">🏏 Batter Demo</button>
-          <button type="button" id="loadBowlerDemoBtn">⚡ Bowler Demo</button>
-          <button type="button" id="loadLbwDemoBtn">☝️ LBW DRS Demo</button>
-        </div>
-      </details>
     </div>
   </header>
 
@@ -4191,16 +4183,9 @@
           setLoadedStoredFrames([], '');
           showToast('Cleared stored frames');
         });
-        const closeDemos = () => { if (demosMenu) demosMenu.open = false; };
-        document.getElementById('loadBatterDemoBtn').addEventListener('click', () => { closeDemos(); loadDemo('batting'); });
-        document.getElementById('loadBowlerDemoBtn').addEventListener('click', () => { closeDemos(); loadDemo('bowling'); });
-        document.getElementById('loadLbwDemoBtn').addEventListener('click', () => { closeDemos(); loadDemo('lbw'); });
-        document.addEventListener('click', (e) => {
-          if (demosMenu && demosMenu.open && !demosMenu.contains(e.target)) demosMenu.open = false;
-        });
-        document.getElementById('emptyBatterDemoBtn').addEventListener('click', () => loadDemo('batting'));
-        document.getElementById('emptyBowlerDemoBtn').addEventListener('click', () => loadDemo('bowling'));
-        document.getElementById('emptyLbwDemoBtn').addEventListener('click', () => loadDemo('lbw'));
+        document.getElementById('emptyBatterDemoBtn')?.addEventListener('click', () => loadDemo('batting'));
+        document.getElementById('emptyBowlerDemoBtn')?.addEventListener('click', () => loadDemo('bowling'));
+        document.getElementById('emptyLbwDemoBtn')?.addEventListener('click', () => loadDemo('lbw'));
         speakReportBtn.addEventListener('click', toggleSpeakReport);
         replayDrsBtn.addEventListener('click', () => {
           if (state.currentReport?.lbwVerdict) {
