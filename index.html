@@ -6534,9 +6534,13 @@ create policy "Allow anon read/write for personal lab"
   using (true)
   with check (true);`;
 
+      const DEFAULT_SUPABASE_URL = 'https://ovrjwhbtkndfmamwxvci.supabase.co';
+      const DEFAULT_SUPABASE_KEY = 'sb_publishable_14eR8bqUa0HUhiRIUt0exQ_dxwL7A9n';
+
       function initSupabaseFromStorage() {
-        const url = localStorage.getItem('cpa_supabase_url') || '';
-        const key = localStorage.getItem('cpa_supabase_key') || '';
+        const disabled = localStorage.getItem('cpa_supabase_disabled') === 'true';
+        const url = disabled ? '' : (localStorage.getItem('cpa_supabase_url') || DEFAULT_SUPABASE_URL);
+        const key = disabled ? '' : (localStorage.getItem('cpa_supabase_key') || DEFAULT_SUPABASE_KEY);
         supabaseUrlInput.value = url;
         supabaseKeyInput.value = key;
         if (url && key && window.supabase && typeof window.supabase.createClient === 'function') {
@@ -6561,12 +6565,9 @@ create policy "Allow anon read/write for personal lab"
       }
 
       async function connectSupabase() {
-        const url = supabaseUrlInput.value.trim();
-        const key = supabaseKeyInput.value.trim();
-        if (!url || !key) {
-          supabaseStatusText.textContent = 'Enter both your Supabase Project URL and Anon Key first.';
-          return;
-        }
+        const url = supabaseUrlInput.value.trim() || DEFAULT_SUPABASE_URL;
+        const key = supabaseKeyInput.value.trim() || DEFAULT_SUPABASE_KEY;
+        localStorage.removeItem('cpa_supabase_disabled');
         localStorage.setItem('cpa_supabase_url', url);
         localStorage.setItem('cpa_supabase_key', key);
         initSupabaseFromStorage();
@@ -6576,6 +6577,7 @@ create policy "Allow anon read/write for personal lab"
       }
 
       function disconnectSupabase() {
+        localStorage.setItem('cpa_supabase_disabled', 'true');
         localStorage.removeItem('cpa_supabase_url');
         localStorage.removeItem('cpa_supabase_key');
         supabaseUrlInput.value = '';
