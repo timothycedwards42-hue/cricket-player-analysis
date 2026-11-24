@@ -2092,6 +2092,64 @@
 
     details.completed-drills-box > summary::-webkit-details-marker { display: none; }
 
+    /* --- BEFORE VS AFTER COMPARISON --- */
+    .compare-bar {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(79, 195, 247, 0.14), rgba(27, 28, 36, 0.96));
+      border: 1px solid rgba(79, 195, 247, 0.5);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+
+    .compare-bar.active {
+      display: flex;
+    }
+
+    .comparison-card {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: linear-gradient(135deg, rgba(79, 195, 247, 0.14), rgba(46, 125, 50, 0.12));
+      border: 1px solid rgba(79, 195, 247, 0.45);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+
+    .comparison-card.active {
+      display: flex;
+    }
+
+    .delta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 8px;
+    }
+
+    .delta-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .delta-scores {
+      font-size: 0.92rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .delta-up { color: var(--accent-bright); }
+    .delta-down { color: var(--danger); }
+    .delta-flat { color: var(--warning); }
+
     .session-row {
       display: flex;
       align-items: center;
@@ -2601,6 +2659,19 @@
 
           <!-- Populated Report -->
         <div class="report-content" id="reportContent">
+          <!-- Before vs. After Comparison Progress Card -->
+          <div class="comparison-card" id="comparisonCard">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+              <div>
+                <span class="badge badge-blue">⚖️ Before vs. After Progress Comparison</span>
+                <div class="help-text" id="comparisonDatesLabel" style="margin-top:4px;"></div>
+              </div>
+              <span class="badge badge-green" id="comparisonVerdictBadge">Progress</span>
+            </div>
+            <p id="comparisonSummaryText" style="font-size:0.84rem; color:#e5eff8;"></p>
+            <div class="delta-grid" id="comparisonDeltaGrid"></div>
+          </div>
+
           <!-- Saved Video Reference Frames Viewer (shown when opening a saved session or after analysis) -->
           <div class="saved-frames-card" id="savedFramesCard">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
@@ -2955,6 +3026,18 @@
         <input type="text" id="historySearchInput" placeholder="Filter by player folder, batting/bowling, tag, or date...">
       </div>
 
+      <!-- Before vs. After Comparison Bar (tick any 2 saved files below) -->
+      <div class="compare-bar" id="compareBar">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <strong style="font-size:0.8rem; color:#b3e5fc;" id="compareBarTitle">⚖️ Comparison Mode: Select 2 files to compare</strong>
+          <button type="button" class="btn-sm btn-ghost" id="clearCompareBtn">Clear Selection</button>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="compareInstructionsInput" placeholder="Optional comparison instructions (e.g. Check if front-leg brace &amp; head alignment improved)" style="flex:1; min-width:200px;">
+          <button type="button" class="btn-primary" id="runCompareBtn" disabled>⚖️ Run Comparison</button>
+        </div>
+      </div>
+
       <div class="session-list" id="sessionList"></div>
       <p class="help-text" id="historyStatusText">Analyses under any player name (except "Test - Not Saved") auto-save into Player → Discipline folders with video frames.</p>
     </div>
@@ -3069,6 +3152,7 @@
         aimZoomMode: false,
         loadedStoredFrames: [],
         loadedStoredLabel: '',
+        compareIds: [],
         focusAreas: [],
         isSpeaking: false,
         drawingEnabled: false,
@@ -3289,6 +3373,15 @@
       const planLibCategory = document.getElementById('planLibCategory');
       const planLibSubCategory = document.getElementById('planLibSubCategory');
       const planLibDrill = document.getElementById('planLibDrill');
+      const compareBar = document.getElementById('compareBar');
+      const compareBarTitle = document.getElementById('compareBarTitle');
+      const compareInstructionsInput = document.getElementById('compareInstructionsInput');
+      const runCompareBtn = document.getElementById('runCompareBtn');
+      const comparisonCard = document.getElementById('comparisonCard');
+      const comparisonDatesLabel = document.getElementById('comparisonDatesLabel');
+      const comparisonVerdictBadge = document.getElementById('comparisonVerdictBadge');
+      const comparisonSummaryText = document.getElementById('comparisonSummaryText');
+      const comparisonDeltaGrid = document.getElementById('comparisonDeltaGrid');
       const drsVerdictCard = document.getElementById('drsVerdictCard');
       const drsConfidenceText = document.getElementById('drsConfidenceText');
       const drsDecisionBadge = document.getElementById('drsDecisionBadge');
@@ -3931,6 +4024,12 @@
         document.getElementById('addLibDrillBtn').addEventListener('click', addSelectedLibraryDrillToPlan);
         document.getElementById('addCustomDrillBtn').addEventListener('click', addCustomDrillToPlan);
         document.getElementById('emailTrainingPlanBtn').addEventListener('click', emailActivePlayerTrainingPlan);
+        document.getElementById('clearCompareBtn').addEventListener('click', () => {
+          state.compareIds = [];
+          updateCompareBarUI();
+          renderSavedSessionsList();
+        });
+        runCompareBtn.addEventListener('click', runComparisonAnalysis);
 
         // Email Dialog events
         document.getElementById('closeEmailDialogBtn').addEventListener('click', () => emailDialog.close());
@@ -5320,6 +5419,50 @@ For each improvement's diagram (top-down net/pitch view):
         const isBatting = roleMode === 'batting';
         const isLbw = roleMode === 'lbw';
 
+        // Before vs. After Comparison Progress Card
+        if (report.comparison) {
+          const cmp = report.comparison;
+          comparisonCard.classList.add('active');
+          comparisonDatesLabel.textContent = `Baseline: ${cmp.earlierLabel || 'Earlier'}  →  Current: ${cmp.laterLabel || 'Later'}`;
+          comparisonVerdictBadge.textContent = `📈 ${cmp.verdict || 'Comparison Ready'}`;
+          const vLow = String(cmp.verdict || '').toLowerCase();
+          comparisonVerdictBadge.className = `badge ${vLow.includes('regress') ? 'badge-red' : vLow.includes('mixed') || vLow.includes('plateau') ? 'badge-amber' : 'badge-green'}`;
+          comparisonSummaryText.textContent = cmp.summary || '';
+
+          comparisonDeltaGrid.textContent = '';
+          (cmp.deltas || []).forEach(d => {
+            const card = document.createElement('div');
+            card.className = 'delta-card';
+            const name = document.createElement('span');
+            name.className = 'metric-name';
+            name.textContent = d.metric;
+
+            const before = Number(d.before) || 0;
+            const after = Number(d.after) || 0;
+            const diff = after - before;
+            const cls = diff > 0.2 ? 'delta-up' : diff < -0.2 ? 'delta-down' : 'delta-flat';
+            const sign = diff > 0 ? '+' : '';
+
+            const scores = document.createElement('div');
+            scores.className = 'delta-scores';
+            const s1 = document.createElement('span');
+            s1.textContent = `${before.toFixed(1)} → ${after.toFixed(1)}`;
+            const s2 = document.createElement('span');
+            s2.className = cls;
+            s2.textContent = `(${sign}${diff.toFixed(1)})`;
+            scores.append(s1, s2);
+
+            const note = document.createElement('div');
+            note.className = 'metric-note';
+            note.textContent = d.note || '';
+
+            card.append(name, scores, note);
+            comparisonDeltaGrid.appendChild(card);
+          });
+        } else {
+          comparisonCard.classList.remove('active');
+        }
+
         // TV-Style DRS Verdict Banner + Animated Ball-Tracking Reveal
         if (report.lbwVerdict) {
           const v = report.lbwVerdict;
@@ -6584,6 +6727,7 @@ create policy "Allow anon read/write for personal lab"
           saveRawVideoChk.disabled = state.clips.length === 0;
           if (state.clips.length === 0) saveRawVideoChk.checked = false;
         }
+        updateCompareBarUI();
         renderSavedSessionsList();
         historyDialog.showModal();
         if (focusSave && hasReport) {
@@ -6844,6 +6988,25 @@ create policy "Allow anon read/write for personal lab"
               const row = document.createElement('div');
               row.className = 'session-row';
 
+              const cmpChk = document.createElement('input');
+              cmpChk.type = 'checkbox';
+              cmpChk.checked = state.compareIds.includes(s.id);
+              cmpChk.title = 'Select for Before vs. After comparison (pick 2 files)';
+              cmpChk.style.cssText = 'width:16px; height:16px; flex-shrink:0; accent-color:var(--info); cursor:pointer;';
+              cmpChk.addEventListener('change', () => {
+                if (cmpChk.checked) {
+                  if (!state.compareIds.includes(s.id)) {
+                    state.compareIds.push(s.id);
+                    if (state.compareIds.length > 2) state.compareIds.shift();
+                  }
+                } else {
+                  state.compareIds = state.compareIds.filter(id => id !== s.id);
+                }
+                updateCompareBarUI();
+                renderSavedSessionsList();
+              });
+              row.appendChild(cmpChk);
+
               if (s.thumbnail) {
                 const img = document.createElement('img');
                 img.className = 'session-thumb';
@@ -6989,6 +7152,241 @@ create policy "Allow anon read/write for personal lab"
           historyStatusText.textContent = `✓ Imported ${imported} saved session(s).`;
         } catch (err) {
           historyStatusText.textContent = `Backup import failed: ${err.message}`;
+        }
+      }
+
+      // --- BEFORE VS. AFTER COMPARISON ANALYSIS ---
+      function updateCompareBarUI() {
+        state.compareIds = state.compareIds.filter(id => cachedSessions.some(s => s.id === id));
+        if (state.compareIds.length === 0) {
+          compareBar.classList.remove('active');
+          runCompareBtn.disabled = true;
+          return;
+        }
+        compareBar.classList.add('active');
+        const selected = state.compareIds
+          .map(id => cachedSessions.find(s => s.id === id))
+          .filter(Boolean)
+          .sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
+
+        if (selected.length === 1) {
+          const s1 = selected[0];
+          compareBarTitle.textContent = `⚖️ Selected 1/2 (${s1.playerName} · ${s1.fileStamp || ''}) — tick 1 more file to compare`;
+          runCompareBtn.disabled = true;
+        } else if (selected.length === 2) {
+          const [a, b] = selected;
+          compareBarTitle.textContent = `⚖️ Compare: ${a.playerName} (${a.fileStamp || 'Earlier'})  →  ${b.playerName} (${b.fileStamp || 'Later'})`;
+          runCompareBtn.disabled = false;
+        }
+      }
+
+      function sampleEvenly(arr, maxCount) {
+        if (!Array.isArray(arr) || arr.length <= maxCount) return arr || [];
+        const out = [];
+        for (let i = 0; i < maxCount; i++) {
+          const idx = Math.round((i / (maxCount - 1)) * (arr.length - 1));
+          out.push(arr[idx]);
+        }
+        return out;
+      }
+
+      async function runComparisonAnalysis() {
+        clearError();
+        if (state.compareIds.length !== 2) return;
+        if (!state.apiKey) {
+          historyDialog.close();
+          openApiDialog();
+          showError('Add your Gemini API key in Settings to run a Before vs. After comparison.');
+          return;
+        }
+
+        const selected = state.compareIds
+          .map(id => cachedSessions.find(s => s.id === id))
+          .filter(Boolean)
+          .sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
+        if (selected.length !== 2) return;
+
+        const [earlier, later] = selected;
+        const customInstructions = compareInstructionsInput.value.trim();
+        const flattenFrames = (sess) => (sess.clipsMeta || []).flatMap((c, ci) =>
+          (c.frames || []).map(f => ({
+            time: f.time,
+            dataUrl: f.dataUrl,
+            label: (sess.clipsMeta.length > 1 ? `C${ci + 1} ` : '') + (f.label || 'F'),
+            angle: c.angle || ''
+          }))
+        );
+
+        const earlierFrames = sampleEvenly(flattenFrames(earlier), 10);
+        const laterFrames = sampleEvenly(flattenFrames(later), 10);
+
+        if (earlierFrames.length === 0 && laterFrames.length === 0 && !earlier.report && !later.report) {
+          historyStatusText.textContent = 'Selected sessions have no stored frames or reports to compare.';
+          return;
+        }
+
+        const earlierLbl = `${earlier.fileStamp || formatFileTimestamp(new Date(earlier.savedAt))}${earlier.sessionTag ? ` · ${earlier.sessionTag}` : ''}`;
+        const laterLbl = `${later.fileStamp || formatFileTimestamp(new Date(later.savedAt))}${later.sessionTag ? ` · ${later.sessionTag}` : ''}`;
+        const roleMode = later.role || earlier.role || 'batting';
+        const isBatting = roleMode === 'batting';
+
+        historyDialog.close();
+        setRole(roleMode);
+        setLoading(true, 'Running Before vs. After Comparison...', `Comparing ${earlierFrames.length} earlier frames vs. ${laterFrames.length} later frames on ${state.model}.`);
+
+        try {
+          const prevSummaryA = earlier.report?.overview
+            ? `Previous AI Overview: ${earlier.report.overview}\nPrevious Scorecard: ${(earlier.report.scorecard || []).map(x => `${x.metric}: ${x.score}/10`).join(', ')}`
+            : 'No prior AI report (compare directly from video frames).';
+          const prevSummaryB = later.report?.overview
+            ? `Later AI Overview: ${later.report.overview}\nLater Scorecard: ${(later.report.scorecard || []).map(x => `${x.metric}: ${x.score}/10`).join(', ')}`
+            : 'No prior AI report (compare directly from video frames).';
+
+          const promptText = `You are an elite international cricket biomechanics coach conducting a BEFORE vs. AFTER PROGRESS COMPARISON between two video sessions of ${later.playerName}.
+
+EARLIER SESSION (Baseline): ${earlierLbl} (${earlier.role}, ${earlier.handedness || ''}, ${earlier.style || ''})
+${prevSummaryA}
+
+LATER SESSION (Current): ${laterLbl} (${later.role}, ${later.handedness || ''}, ${later.style || ''})
+${prevSummaryB}
+
+COACH COMPARISON INSTRUCTIONS: ${customInstructions || 'Evaluate specific biomechanical improvements, unresolved leaks, and any new compensations between the earlier and later clips.'}
+
+Inspect the labeled BEFORE and AFTER video frames directly and ground every finding in visible differences.
+Return ONLY valid JSON matching this exact schema:
+{
+  "comparison": {
+    "earlierLabel": "${earlierLbl}",
+    "laterLabel": "${laterLbl}",
+    "verdict": "Clear Improvement | Moderate Progress | Mixed / Plateau | Regression",
+    "summary": "2-3 sentence before-vs-after synthesis directly answering the coach's comparison instructions.",
+    "deltas": [
+      { "metric": "Short pillar name (5 items)", "before": 6.0, "after": 7.5, "note": "Specific visible change from before to after" }
+    ]
+  },
+  "overview": "2-3 sentence coaching summary of the player's current state after these changes.",
+  "scorecard": [
+    { "metric": "Short pillar name (5 items — current scores)", "score": 7.5, "note": "Current assessment" }
+  ],
+  "strengths": [
+    { "title": "Confirmed Improvement / Current Strength", "detail": "What visibly improved compared to the earlier clip" }
+  ],
+  "weaknesses": [
+    { "title": "Still Needs Work / New Compensation", "detail": "What remains uncorrected or crept in" }
+  ],
+  "phases": [
+    { "phase": "Phase comparison (e.g. Stance/Gather, Contact/Release, Follow-Through)", "timestamp": "Before vs After", "observation": "Side-by-side phase change" }
+  ],
+  "improvements": [
+    {
+      "title": "Next-stage technical adjustment",
+      "priority": "High | Medium",
+      "drillName": "Specific progression drill",
+      "why": "Builds on current progress or fixes remaining leak",
+      "equipment": ["2 Cones", "Cricket Balls"],
+      "steps": ["Step 1...", "Step 2...", "Step 3..."],
+      "reps": "3 sets × 12 balls · 3×/week",
+      "checkpoint": "Observable success sign",
+      "cue": "Short 3-6 word coaching cue",
+      "videoSearchQuery": "Specific YouTube cricket coaching drill query",
+      "diagram": {
+        "caption": "Short diagram caption",
+        "elements": [{ "type": "player | coach | cone | target", "x": 0.50, "y": 0.22, "label": "Label" }],
+        "arrows": [{ "fromX": 0.50, "fromY": 0.82, "toX": 0.50, "toY": 0.28, "style": "ball | shot | move" }]
+      }
+    }
+  ],
+  "avenuesOfAttack": {
+    "headline": "${isBatting ? 'Updated Bowling Plan vs. This Batter' : 'Updated Batting Plan vs. This Bowler'}",
+    "summary": "How opponents should attack the player's CURRENT technique (and what old weaknesses they have now closed off).",
+    "pitchZones": [
+      { "label": "Zone name", "type": "primary | secondary | avoid", "x": 0.55, "y": 0.35, "reason": "Reason" }
+    ],
+    "plans": [
+      { "title": "Matchup plan", "execution": "How to execute", "tag": "Primary Plan | Setup Trap | Variation" }
+    ],
+    "fieldOrGuard": ["4-5 concise tags"],
+    "tacticalCues": [{ "title": "Matchup cue", "detail": "Detail" }]
+  }
+}`;
+
+          const parts = [{ text: promptText }];
+          if (earlierFrames.length > 0) {
+            parts.push({ text: `=== EARLIER / BASELINE FRAMES (${earlierLbl}) ===` });
+            earlierFrames.forEach((f, i) => {
+              parts.push({ text: `BEFORE Frame ${i + 1} (${f.label}) at ${Number(f.time || 0).toFixed(2)}s:` });
+              parts.push({ inlineData: { mimeType: 'image/jpeg', data: f.dataUrl.split(',')[1] } });
+            });
+          }
+          if (laterFrames.length > 0) {
+            parts.push({ text: `=== LATER / CURRENT FRAMES (${laterLbl}) ===` });
+            laterFrames.forEach((f, i) => {
+              parts.push({ text: `AFTER Frame ${i + 1} (${f.label}) at ${Number(f.time || 0).toFixed(2)}s:` });
+              parts.push({ inlineData: { mimeType: 'image/jpeg', data: f.dataUrl.split(',')[1] } });
+            });
+          }
+
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
+          const requestBody = JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: { temperature: 0.35, responseMimeType: 'application/json' }
+          });
+
+          let res;
+          const retryDelays = [2500, 5000];
+          for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+            res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
+            if (res.ok || (res.status !== 503 && res.status !== 429) || attempt === retryDelays.length) break;
+            setLoading(true, `Gemini busy (${res.status}) — retrying...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1}...`);
+            await new Promise(r => setTimeout(r, retryDelays[attempt]));
+          }
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error?.message || `Gemini API error (${res.status})`);
+          }
+
+          const data = await res.json();
+          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) throw new Error('Gemini returned an empty comparison response.');
+
+          const parsed = JSON.parse(rawText);
+          const nowIso = new Date().toISOString();
+          const stamp = formatFileTimestamp(new Date(nowIso));
+          parsed._meta = {
+            playerName: later.playerName,
+            sessionTag: `Comparison (${earlierLbl} → ${laterLbl})`,
+            fileStamp: stamp,
+            savedAt: nowIso,
+            role: roleMode,
+            handedness: later.handedness || handednessSelect.value,
+            style: later.style || '',
+            format: formatSelect.value,
+            source: `⚖️ Comparison (${state.model})`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          parsed._referenceFrames = [
+            ...earlierFrames.map(f => ({ ...f, label: `BEFORE ${f.label}` })),
+            ...laterFrames.map(f => ({ ...f, label: `AFTER ${f.label}` }))
+          ];
+
+          playerNameInput.value = later.playerName;
+          updateActivePlayerBadge();
+          renderReport(parsed);
+
+          // Auto-save comparison into player's folder
+          if (!isTestPlayerName(later.playerName)) {
+            await autoSaveAnalysisSession(parsed, later.playerName, `Comparison: ${earlierLbl} → ${laterLbl}`, stamp, nowIso);
+            showToast(`✓ Comparison saved to ${later.playerName} / ${roleMode}`);
+          }
+          state.compareIds = [];
+          updateCompareBarUI();
+        } catch (err) {
+          console.error(err);
+          showError(`Comparison failed: ${err.message}`);
+          setLoading(false);
+        } finally {
+          analyzeBtn.disabled = false;
         }
       }
 
