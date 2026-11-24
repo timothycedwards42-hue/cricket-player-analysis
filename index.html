@@ -798,6 +798,20 @@
       border-color: var(--accent-bright);
     }
 
+    .frame-thumb.active-frame {
+      border-color: var(--pitch);
+      box-shadow: 0 0 0 2px rgba(199, 176, 136, 0.35);
+    }
+
+    .session-note-line {
+      font-size: 0.72rem;
+      color: var(--pitch);
+      font-style: italic;
+      margin-top: 2px;
+      white-space: normal;
+      line-height: 1.3;
+    }
+
     .frame-thumb img {
       width: 100%;
       height: 54px;
@@ -2191,7 +2205,7 @@
         <span class="status-dot"></span>
         <span id="apiStatusText">AI Key Not Set</span>
       </button>
-      <button type="button" id="historyBtn" title="View or save player folders (Local &amp; Supabase)">📚 Players (<span id="savedCount">0</span>)</button>
+      <button type="button" id="historyBtn" title="View or manage saved player folders (Local &amp; Supabase)">📁 Folders<span id="savedCount" style="display:none;">0</span></button>
       <details class="demos-menu" id="demosMenu">
         <summary>🎯 Demos ▾</summary>
         <div class="demos-dropdown">
@@ -2481,13 +2495,24 @@
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
               <strong style="font-size:0.84rem;">🎞️ Stored Video Reference Frames (<span id="savedFramesCount">0</span>)</strong>
               <div class="btn-group">
+                <button type="button" class="btn-sm" id="playSavedFramesQuickBtn" title="Play through all stored frames">▶ Play Frames</button>
                 <button type="button" class="btn-sm btn-primary" id="analyzeStoredFramesBtn" style="display:none;">✨ Analyze These Frames with AI</button>
-                <span class="help-text">Tap any frame to inspect</span>
               </div>
             </div>
             <div class="saved-frame-preview-box" id="savedFramePreviewBox">
               <img id="savedFrameLargeImg" alt="Selected video reference frame">
-              <div style="padding:4px 8px; font-size:0.74rem; color:var(--pitch); display:flex; justify-content:space-between; align-items:center; background:var(--surface);">
+              <div style="padding:6px 8px; font-size:0.74rem; color:var(--pitch); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; background:var(--surface);">
+                <div class="btn-group">
+                  <button type="button" class="btn-sm" id="savedFramePrevBtn" title="Previous frame">◀</button>
+                  <button type="button" class="btn-sm btn-primary" id="savedFramePlayBtn">▶ Play</button>
+                  <button type="button" class="btn-sm" id="savedFrameNextBtn" title="Next frame">▶</button>
+                  <select id="savedFrameFpsSelect" aria-label="Frame playback speed" style="width:auto; padding:3px 6px; font-size:0.72rem;">
+                    <option value="1">1 fps</option>
+                    <option value="2">2 fps</option>
+                    <option value="4" selected>4 fps</option>
+                    <option value="8">8 fps</option>
+                  </select>
+                </div>
                 <span id="savedFrameLargeLabel"></span>
                 <button type="button" class="btn-sm btn-ghost" id="closeFramePreviewBtn">Close ✕</button>
               </div>
@@ -3224,7 +3249,34 @@
         playerNameInput.addEventListener('input', updateActivePlayerBadge);
         playerNameInput.addEventListener('change', updateActivePlayerBadge);
         document.getElementById('closeFramePreviewBtn').addEventListener('click', () => {
+          stopSavedFramePlayback();
           savedFramePreviewBox.classList.remove('active');
+        });
+        document.getElementById('playSavedFramesQuickBtn').addEventListener('click', () => {
+          if (!savedFramePlayer.frames.length) return;
+          if (!savedFramePreviewBox.classList.contains('active')) {
+            showSavedFrameAt(savedFramePlayer.index || 0);
+          }
+          toggleSavedFramePlayback();
+        });
+        document.getElementById('savedFramePlayBtn').addEventListener('click', toggleSavedFramePlayback);
+        document.getElementById('savedFramePrevBtn').addEventListener('click', () => {
+          stopSavedFramePlayback();
+          if (!savedFramePlayer.frames.length) return;
+          const prev = (savedFramePlayer.index - 1 + savedFramePlayer.frames.length) % savedFramePlayer.frames.length;
+          showSavedFrameAt(prev);
+        });
+        document.getElementById('savedFrameNextBtn').addEventListener('click', () => {
+          stopSavedFramePlayback();
+          if (!savedFramePlayer.frames.length) return;
+          const next = (savedFramePlayer.index + 1) % savedFramePlayer.frames.length;
+          showSavedFrameAt(next);
+        });
+        document.getElementById('savedFrameFpsSelect').addEventListener('change', () => {
+          if (savedFramePlayer.isPlaying) {
+            stopSavedFramePlayback();
+            startSavedFramePlayback();
+          }
         });
 
         const isVideoFile = (f) =>
@@ -5830,20 +5882,76 @@ For each improvement's diagram (top-down net/pitch view):
         });
       }
 
-      // --- STORED VIDEO REFERENCE FRAMES VIEWER ---
+      // --- STORED VIDEO REFERENCE FRAMES VIEWER & FLIPBOOK PLAYER ---
+      const savedFramePlayer = {
+        frames: [],
+        index: 0,
+        timerId: null,
+        isPlaying: false
+      };
+
+      function showSavedFrameAt(idx) {
+        if (!savedFramePlayer.frames.length) return;
+        const safeIdx = Math.max(0, Math.min(idx, savedFramePlayer.frames.length - 1));
+        savedFramePlayer.index = safeIdx;
+        const f = savedFramePlayer.frames[safeIdx];
+        savedFrameLargeImg.src = f.dataUrl;
+        savedFrameLargeLabel.textContent = `Frame ${safeIdx + 1}/${savedFramePlayer.frames.length} · ${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (safeIdx + 1)} @ ${Number(f.time || 0).toFixed(2)}s`;
+        savedFramePreviewBox.classList.add('active');
+        Array.from(savedFramesStrip.children).forEach((card, ci) => {
+          card.classList.toggle('active-frame', ci === safeIdx);
+        });
+      }
+
+      function stopSavedFramePlayback() {
+        if (savedFramePlayer.timerId) {
+          clearInterval(savedFramePlayer.timerId);
+          savedFramePlayer.timerId = null;
+        }
+        savedFramePlayer.isPlaying = false;
+        const playBtn = document.getElementById('savedFramePlayBtn');
+        const quickBtn = document.getElementById('playSavedFramesQuickBtn');
+        if (playBtn) playBtn.textContent = '▶ Play';
+        if (quickBtn) quickBtn.textContent = '▶ Play Frames';
+      }
+
+      function startSavedFramePlayback() {
+        if (savedFramePlayer.frames.length < 2) return;
+        stopSavedFramePlayback();
+        const fps = parseFloat(document.getElementById('savedFrameFpsSelect')?.value) || 4;
+        savedFramePlayer.isPlaying = true;
+        const playBtn = document.getElementById('savedFramePlayBtn');
+        const quickBtn = document.getElementById('playSavedFramesQuickBtn');
+        if (playBtn) playBtn.textContent = '⏸ Pause';
+        if (quickBtn) quickBtn.textContent = '⏸ Pause Frames';
+        showSavedFrameAt(savedFramePlayer.index);
+        savedFramePlayer.timerId = setInterval(() => {
+          const next = (savedFramePlayer.index + 1) % savedFramePlayer.frames.length;
+          showSavedFrameAt(next);
+        }, Math.round(1000 / fps));
+      }
+
+      function toggleSavedFramePlayback() {
+        if (savedFramePlayer.isPlaying) stopSavedFramePlayback();
+        else startSavedFramePlayback();
+      }
+
       function renderSavedFramesViewer(frames, isFramesOnlyView = false) {
+        stopSavedFramePlayback();
+        savedFramePlayer.frames = Array.isArray(frames) ? frames : [];
+        savedFramePlayer.index = 0;
         savedFramesStrip.textContent = '';
         savedFramePreviewBox.classList.remove('active');
         if (analyzeStoredFramesBtn) {
-          analyzeStoredFramesBtn.style.display = (isFramesOnlyView && Array.isArray(frames) && frames.length > 0) ? 'inline-flex' : 'none';
+          analyzeStoredFramesBtn.style.display = (isFramesOnlyView && savedFramePlayer.frames.length > 0) ? 'inline-flex' : 'none';
         }
-        if (!Array.isArray(frames) || frames.length === 0) {
+        if (savedFramePlayer.frames.length === 0) {
           savedFramesCard.classList.remove('active');
           return;
         }
         savedFramesCard.classList.add('active');
-        savedFramesCount.textContent = String(frames.length);
-        frames.forEach((f, idx) => {
+        savedFramesCount.textContent = String(savedFramePlayer.frames.length);
+        savedFramePlayer.frames.forEach((f, idx) => {
           const card = document.createElement('div');
           card.className = 'frame-thumb';
           card.title = `${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (idx + 1)} (${Number(f.time || 0).toFixed(2)}s)`;
@@ -5861,9 +5969,8 @@ For each improvement's diagram (top-down net/pitch view):
           lbl.append(s1, s2);
 
           card.addEventListener('click', () => {
-            savedFrameLargeImg.src = f.dataUrl;
-            savedFrameLargeLabel.textContent = `${f.angle ? f.angle + ' · ' : ''}${f.label || 'Frame ' + (idx + 1)} @ ${Number(f.time || 0).toFixed(2)}s`;
-            savedFramePreviewBox.classList.add('active');
+            stopSavedFramePlayback();
+            showSavedFrameAt(idx);
           });
 
           card.append(img, lbl);
@@ -5970,7 +6077,9 @@ create policy "Allow anon read/write for personal lab"
             style: record.style || '',
             thumbnail: record.thumbnail || null,
             clips_meta: record.clipsMeta || [],
-            report: record.hasAnalysis === false || !record.report ? { _framesOnly: true } : record.report
+            report: record.hasAnalysis === false || !record.report
+              ? { _framesOnly: true, _note: record.note || '' }
+              : { ...record.report, _note: record.note || record.report._note || '' }
           };
           const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert(payload, { onConflict: 'id' });
           if (error) throw error;
@@ -6026,6 +6135,7 @@ create policy "Allow anon read/write for personal lab"
               includeVideo: existing?.includeVideo || false,
               videoBlobs: existing?.videoBlobs || [],
               hasAnalysis: !isFramesOnly,
+              note: (row.report && row.report._note) ? String(row.report._note).slice(0, 200) : (existing?.note || ''),
               report: isFramesOnly ? null : row.report,
               synced: true
             };
@@ -6325,11 +6435,9 @@ create policy "Allow anon read/write for personal lab"
             }
           };
           renderReport(stubReport);
-          // Automatically enlarge the first frame for immediate playback/inspection
+          // Automatically show the first frame ready for immediate flipbook playback
           if (storedFrames.length > 0) {
-            savedFrameLargeImg.src = storedFrames[0].dataUrl;
-            savedFrameLargeLabel.textContent = `${storedFrames[0].angle ? storedFrames[0].angle + ' · ' : ''}${storedFrames[0].label} @ ${Number(storedFrames[0].time || 0).toFixed(2)}s`;
-            savedFramePreviewBox.classList.add('active');
+            showSavedFrameAt(0);
           }
           if (historyDialog.open) historyDialog.close();
           return;
@@ -6353,7 +6461,7 @@ create policy "Allow anon read/write for personal lab"
           if (!q) return true;
           const isAnalyzed = s.hasAnalysis !== false && Boolean(s.report) && !s.report._framesOnly;
           const statusWord = isAnalyzed ? 'analyzed report' : 'frames only playback video';
-          return `${s.playerName} ${s.role} ${s.sessionTag || ''} ${s.fileStamp || ''} ${s.style || ''} ${statusWord}`.toLowerCase().includes(q);
+          return `${s.playerName} ${s.role} ${s.sessionTag || ''} ${s.note || ''} ${s.fileStamp || ''} ${s.style || ''} ${statusWord}`.toLowerCase().includes(q);
         });
 
         sessionListEl.textContent = '';
@@ -6462,6 +6570,12 @@ create policy "Allow anon read/write for personal lab"
               metaTxt.textContent = `${frameTotal}f · ${s.style || dm.label}${s.synced ? ' · ☁️' : ''}`;
               meta.append(statusBadge, metaTxt);
               info.append(title, meta);
+              if (s.note) {
+                const noteLine = document.createElement('div');
+                noteLine.className = 'session-note-line';
+                noteLine.textContent = `📝 ${s.note}`;
+                info.appendChild(noteLine);
+              }
 
               const actions = document.createElement('div');
               actions.className = 'btn-group';
@@ -6486,6 +6600,25 @@ create policy "Allow anon read/write for personal lab"
                 if (supabaseClient) await pushSessionToSupabase(s);
                 await refreshSavedCount();
                 renderSavedSessionsList();
+                showToast('✓ File tag updated');
+              });
+
+              const noteBtn = document.createElement('button');
+              noteBtn.type = 'button';
+              noteBtn.className = 'btn-sm btn-ghost';
+              noteBtn.textContent = '📝';
+              noteBtn.title = 'Add or edit note (max 200 chars)';
+              noteBtn.addEventListener('click', async () => {
+                const nextNote = prompt('Add or edit note for this file (max 200 characters):', s.note || '');
+                if (nextNote === null) return;
+                const trimmed = nextNote.trim().slice(0, 200);
+                s.note = trimmed;
+                if (s.report) s.report._note = trimmed;
+                await putSession(s);
+                if (supabaseClient) await pushSessionToSupabase(s);
+                await refreshSavedCount();
+                renderSavedSessionsList();
+                showToast(trimmed ? '✓ Note saved' : '✓ Note cleared');
               });
 
               const delBtn = document.createElement('button');
@@ -6500,7 +6633,7 @@ create policy "Allow anon read/write for personal lab"
                 renderSavedSessionsList();
               });
 
-              actions.append(openBtn, tagBtn, delBtn);
+              actions.append(openBtn, tagBtn, noteBtn, delBtn);
               row.append(info, actions);
               filesWrap.appendChild(row);
             });
