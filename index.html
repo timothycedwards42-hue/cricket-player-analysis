@@ -3733,6 +3733,29 @@
     </div>
   </dialog>
 
+  <!-- RE-ANALYZE STORED FRAMES INSTRUCTIONS DIALOG -->
+  <dialog id="reanalyzeDialog" aria-labelledby="reanalyzeDialogTitle" style="width:min(540px, 95vw);">
+    <div class="dialog-header">
+      <h3 id="reanalyzeDialogTitle">🔄 Re-Analyze Stored Frames</h3>
+      <button type="button" class="btn-sm btn-ghost" id="closeReanalyzeDialogBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <p class="help-text" id="reanalyzeSubtitle">Add specific instructions or questions for Gemini to focus on when re-analyzing these stored frames.</p>
+      <div class="field">
+        <label for="reanalyzeNotesInput">New Instructions / Focus Notes</label>
+        <textarea id="reanalyzeNotesInput" rows="4" placeholder="e.g., Focus specifically on front-knee brace at front-foot contact, head alignment over off-stump, or why full balls are drifting down leg..."></textarea>
+      </div>
+      <label style="display:inline-flex; align-items:center; gap:8px; font-size:0.8rem; color:#dce0ee; cursor:pointer;">
+        <input type="checkbox" id="reanalyzeIncludeAnglesChk" style="width:auto; accent-color:var(--accent-bright);">
+        Measure &amp; include real MediaPipe joint angles (knees, elbows, trunk tilt)
+      </label>
+    </div>
+    <div class="dialog-footer">
+      <button type="button" class="btn-ghost" id="cancelReanalyzeBtn">Cancel</button>
+      <button type="button" class="btn-primary" id="confirmReanalyzeBtn">✨ Run Re-Analysis</button>
+    </div>
+  </dialog>
+
   <script>
     (() => {
       // Auto-migrate retired or invalid model IDs saved in localStorage
@@ -4929,11 +4952,42 @@
         // Analyze, Save Frames Only & Demos
         analyzeBtn.addEventListener('click', () => runAnalysis());
         saveFramesOnlyBtn.addEventListener('click', saveFramesOnlySession);
+        const reanalyzeDialog = document.getElementById('reanalyzeDialog');
+        const reanalyzeNotesInput = document.getElementById('reanalyzeNotesInput');
+        const reanalyzeIncludeAnglesChk = document.getElementById('reanalyzeIncludeAnglesChk');
+        let pendingReanalyzeFrames = [];
+
         analyzeStoredFramesBtn.addEventListener('click', () => {
           const frames = state.loadedStoredFrames.length > 0
             ? state.loadedStoredFrames
             : (state.currentReport?._referenceFrames || []);
-          if (frames.length > 0) runAnalysis(frames);
+          if (frames.length === 0) return;
+          pendingReanalyzeFrames = frames;
+          reanalyzeNotesInput.value = notesInput.value || '';
+          reanalyzeIncludeAnglesChk.checked = Boolean(savedFramePlayer.skeletonEnabled || state.skeletonEnabled);
+          document.getElementById('reanalyzeSubtitle').textContent = `Re-analyzing ${frames.length} stored frames. Enter any new coaching questions or instructions below (leave blank for a fresh full review).`;
+          reanalyzeDialog.showModal();
+          reanalyzeNotesInput.focus();
+        });
+        document.getElementById('closeReanalyzeDialogBtn')?.addEventListener('click', () => reanalyzeDialog.close());
+        document.getElementById('cancelReanalyzeBtn')?.addEventListener('click', () => reanalyzeDialog.close());
+        reanalyzeDialog?.addEventListener('click', (e) => { if (e.target === reanalyzeDialog) reanalyzeDialog.close(); });
+        document.getElementById('confirmReanalyzeBtn')?.addEventListener('click', async () => {
+          notesInput.value = reanalyzeNotesInput.value.trim();
+          const wantAngles = reanalyzeIncludeAnglesChk.checked;
+          const framesToRun = pendingReanalyzeFrames.slice();
+          reanalyzeDialog.close();
+          if (wantAngles && framesToRun.length > 0) {
+            setLoading(true, 'Measuring real joint angles on stored frames...', 'Running MediaPipe Pose before sending to Gemini.');
+            const targets = sampleEvenly(framesToRun, 8);
+            for (const f of targets) {
+              const entry = await ensurePoseForDataUrl(f.dataUrl);
+              if (entry?.metrics) {
+                f.poseSummary = formatPoseMetricsCompact(entry.metrics);
+              }
+            }
+          }
+          runAnalysis(framesToRun);
         });
         clearLoadedFramesBtn.addEventListener('click', () => {
           setLoadedStoredFrames([], '');
@@ -6553,8 +6607,23 @@
           const parts = [{ text: buildPrompt() }];
 
           if (usingStoredFrames) {
+            const storedAngleLines = [];
+            (savedFramePlayer.angles || []).forEach((ang, aIdx) => {
+              storedAngleLines.push(`Coach Protractor #${aIdx + 1}: ${ang.deg}°`);
+            });
             effectiveStoredFrames.forEach((f, fIdx) => {
-              parts.push({ text: `Stored Frame ${fIdx + 1} (${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (fIdx + 1)}) at ${Number(f.time || 0).toFixed(2)}s:` });
+              if (f.poseSummary) {
+                storedAngleLines.push(`Stored Frame ${fIdx + 1} [${f.label || 'F' + (fIdx + 1)} @ ${Number(f.time || 0).toFixed(2)}s]: ${f.poseSummary}`);
+              }
+            });
+            if (storedAngleLines.length > 0) {
+              parts.push({
+                text: `=== REAL MEASURED BIOMECHANICAL ANGLES (use these exact measured numbers rather than guessing angles) ===\n${storedAngleLines.join('\n')}`
+              });
+            }
+            effectiveStoredFrames.forEach((f, fIdx) => {
+              const poseNote = f.poseSummary ? ` | Measured Pose: ${f.poseSummary}` : '';
+              parts.push({ text: `Stored Frame ${fIdx + 1} (${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (fIdx + 1)}) at ${Number(f.time || 0).toFixed(2)}s${poseNote}:` });
               parts.push({
                 inlineData: {
                   mimeType: 'image/jpeg',
