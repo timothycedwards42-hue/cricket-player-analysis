@@ -2743,6 +2743,16 @@
               </div>
             </div>
 
+            <div class="phase-pin-row" id="skeletonConfigRow" style="display:none;">
+              <span class="phase-pin-label">🦴 Show:</span>
+              <div class="btn-group" id="skeletonPartToggles">
+                <button type="button" class="btn-sm btn-active" data-skel="spine" title="Head, spine/back alignment, shoulders &amp; hips">Head &amp; Back</button>
+                <button type="button" class="btn-sm btn-active" data-skel="hands" title="Arms and hands/wrists">Hands / Arms</button>
+                <button type="button" class="btn-sm" data-skel="legs" title="Hips, knees and ankles">Legs / Knees</button>
+                <button type="button" class="btn-sm" data-skel="labels" title="Show floating angle numbers directly on joints">On-Joint °</button>
+              </div>
+            </div>
+
             <div class="trim-row">
               <div class="btn-group">
                 <button type="button" class="btn-sm" id="setStartBtn" title="Mark start of shot or delivery">[ Set Start</button>
@@ -3448,6 +3458,13 @@
         angleModeEnabled: false,
         angleDraftPoints: [],
         skeletonEnabled: false,
+        skeletonParts: (() => {
+          try {
+            const saved = JSON.parse(localStorage.getItem('cpa_skeleton_parts') || 'null');
+            if (saved && typeof saved === 'object') return { spine: true, hands: true, legs: false, labels: false, ...saved };
+          } catch {}
+          return { spine: true, hands: true, legs: false, labels: false };
+        })(),
         latestPoseLandmarks: null,
         latestPoseMetrics: null,
         isDrawing: false,
@@ -3580,6 +3597,7 @@
       const tCtx = telestrator.getContext('2d');
       const poseHud = document.getElementById('poseHud');
       const skeletonToggleBtn = document.getElementById('skeletonToggleBtn');
+      const skeletonConfigRow = document.getElementById('skeletonConfigRow');
       const angleToggleBtn = document.getElementById('angleToggleBtn');
       const drawToggleBtn = document.getElementById('drawToggleBtn');
       const clearDrawBtn = document.getElementById('clearDrawBtn');
@@ -4312,10 +4330,27 @@
         pitchLengthSelect.addEventListener('change', updateSpeedUI);
         arrivalPointSelect.addEventListener('change', updateSpeedUI);
 
-        // Live MediaPipe AI Skeleton toggle
+        // Live MediaPipe AI Skeleton toggle & configurable body-part layers
+        const syncSkeletonPartButtons = () => {
+          document.querySelectorAll('#skeletonPartToggles button[data-skel]').forEach(btn => {
+            const key = btn.dataset.skel;
+            btn.classList.toggle('btn-active', Boolean(state.skeletonParts[key]));
+          });
+        };
+        syncSkeletonPartButtons();
+        document.querySelectorAll('#skeletonPartToggles button[data-skel]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const key = btn.dataset.skel;
+            state.skeletonParts[key] = !state.skeletonParts[key];
+            localStorage.setItem('cpa_skeleton_parts', JSON.stringify(state.skeletonParts));
+            syncSkeletonPartButtons();
+            redrawTelestrator();
+          });
+        });
         skeletonToggleBtn.addEventListener('click', async () => {
           state.skeletonEnabled = !state.skeletonEnabled;
           skeletonToggleBtn.classList.toggle('btn-active', state.skeletonEnabled);
+          if (skeletonConfigRow) skeletonConfigRow.style.display = state.skeletonEnabled ? 'flex' : 'none';
           if (state.skeletonEnabled) {
             skeletonToggleBtn.textContent = '⏳ Loading...';
             try {
@@ -4323,10 +4358,11 @@
               skeletonToggleBtn.textContent = '🦴 Skeleton ON';
               resizeTelestrator();
               await updateLivePoseOverlay(true);
-              showToast('✓ AI Skeleton & Joint Angles active');
+              showToast('✓ AI Skeleton active — toggle Head/Back, Hands, or Legs below');
             } catch (err) {
               state.skeletonEnabled = false;
               skeletonToggleBtn.classList.remove('btn-active');
+              if (skeletonConfigRow) skeletonConfigRow.style.display = 'none';
               skeletonToggleBtn.textContent = '🦴 Skeleton';
               showToast(`Could not load MediaPipe Pose: ${err.message}`);
             }
@@ -5595,52 +5631,80 @@
         const h = telestrator.height;
         tCtx.clearRect(0, 0, w, h);
 
-        // 1. Live MediaPipe Skeleton Overlay (aligned accurately to video rect inside container)
+        // 1. Live MediaPipe Skeleton Overlay (clean, configurable coaching layers)
         if (state.skeletonEnabled && state.latestPoseLandmarks) {
           const lm = state.latestPoseLandmarks;
+          const parts = state.skeletonParts || { spine: true, hands: true, legs: false, labels: false };
           const { ox, oy, rw, rh } = getVideoDisplayRect(w, h);
           const pt = (idx) => {
             const p = lm[idx];
             if (!p || (p.visibility ?? 1) < 0.35) return null;
             return { x: ox + p.x * rw, y: oy + p.y * rh };
           };
-
-          tCtx.save();
-          tCtx.lineWidth = 2.5;
-          tCtx.lineCap = 'round';
-          tCtx.strokeStyle = 'rgba(79, 195, 247, 0.9)';
-          POSE_CONNECTIONS.forEach(([i, j]) => {
-            const a = pt(i);
-            const b = pt(j);
+          const drawSeg = (a, b, color, width = 2) => {
             if (!a || !b) return;
+            tCtx.strokeStyle = color;
+            tCtx.lineWidth = width;
             tCtx.beginPath();
             tCtx.moveTo(a.x, a.y);
             tCtx.lineTo(b.x, b.y);
             tCtx.stroke();
-          });
-
-          // Draw key joints
-          [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28].forEach(idx => {
-            const p = pt(idx);
+          };
+          const drawDot = (p, color, r = 3.5) => {
             if (!p) return;
-            tCtx.fillStyle = idx === 0 ? '#ffb74d' : '#4caf50';
+            tCtx.fillStyle = color;
             tCtx.beginPath();
-            tCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            tCtx.arc(p.x, p.y, r, 0, Math.PI * 2);
             tCtx.fill();
             tCtx.strokeStyle = '#0e1118';
-            tCtx.lineWidth = 1.2;
+            tCtx.lineWidth = 1;
             tCtx.stroke();
-          });
+          };
 
-          // Annotate knee & elbow degrees right beside the joints
+          tCtx.save();
+          tCtx.lineCap = 'round';
+
+          // Head & Back / Spine Alignment layer
+          if (parts.spine) {
+            const head = pt(0);
+            const lSh = pt(11), rSh = pt(12);
+            const lHip = pt(23), rHip = pt(24);
+            const midSh = (lSh && rSh) ? { x: (lSh.x + rSh.x) / 2, y: (lSh.y + rSh.y) / 2 } : (lSh || rSh);
+            const midHip = (lHip && rHip) ? { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 } : (lHip || rHip);
+            // Subtle shoulder & hip bars + prominent spine/back axis
+            drawSeg(lSh, rSh, 'rgba(79, 195, 247, 0.55)', 1.6);
+            drawSeg(lHip, rHip, 'rgba(79, 195, 247, 0.55)', 1.6);
+            drawSeg(midHip, midSh, 'rgba(79, 195, 247, 0.92)', 2.4);
+            drawSeg(midSh, head, 'rgba(255, 183, 77, 0.85)', 2);
+            drawDot(head, '#ffb74d', 4.5);
+            drawDot(midSh, '#4fc3f7', 3);
+            drawDot(midHip, '#4fc3f7', 3);
+          }
+
+          // Hands & Arms layer
+          if (parts.hands) {
+            [[11, 13], [13, 15], [12, 14], [14, 16]].forEach(([i, j]) => {
+              drawSeg(pt(i), pt(j), 'rgba(76, 175, 80, 0.85)', 1.9);
+            });
+            drawDot(pt(15), '#81c784', 4);
+            drawDot(pt(16), '#81c784', 4);
+          }
+
+          // Legs & Knees layer
+          if (parts.legs) {
+            [[23, 25], [25, 27], [24, 26], [26, 28]].forEach(([i, j]) => {
+              drawSeg(pt(i), pt(j), 'rgba(79, 195, 247, 0.78)', 1.9);
+            });
+            drawDot(pt(25), '#4caf50', 3.5);
+            drawDot(pt(26), '#4caf50', 3.5);
+          }
+
+          // Optional on-joint degree labels (off by default to keep frame uncluttered)
           const m = state.latestPoseMetrics;
-          if (m) {
-            const badges = [
-              { idx: 25, val: m.leftKnee },
-              { idx: 26, val: m.rightKnee },
-              { idx: 13, val: m.leftElbow },
-              { idx: 14, val: m.rightElbow }
-            ];
+          if (parts.labels && m) {
+            const badges = [];
+            if (parts.legs) badges.push({ idx: 25, val: m.leftKnee }, { idx: 26, val: m.rightKnee });
+            if (parts.hands) badges.push({ idx: 13, val: m.leftElbow }, { idx: 14, val: m.rightElbow });
             tCtx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
             badges.forEach(b => {
               if (b.val === null) return;
