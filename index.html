@@ -6053,8 +6053,19 @@
           });
         }
 
+        // Re-grab pinned phase frames at the current zoom & aim settings so they match the regular frameset
+        const refreshedPinned = [];
+        for (const p of pinned) {
+          const pt = Math.min(dur - 0.02, Math.max(0, p.time || 0));
+          await seekVideo(videoPlayer, pt);
+          refreshedPinned.push({
+            ...p,
+            dataUrl: grabVideoFrameDataUrl(videoPlayer)
+          });
+        }
+
         await seekVideo(videoPlayer, prevTime);
-        clip.frames = [...extracted, ...pinned].sort((a, b) => a.time - b.time);
+        clip.frames = [...extracted, ...refreshedPinned].sort((a, b) => a.time - b.time);
         renderFilmstrip();
         renderClipTabs();
       }
@@ -6092,7 +6103,17 @@
                   label: `F${i + 1}`
                 });
               }
-              clip.frames = [...extracted, ...pinned].sort((a, b) => a.time - b.time);
+              // Also re-grab pinned phase frames at the current zoom & aim settings
+              const refreshedPinned = [];
+              for (const p of pinned) {
+                const pt = Math.min(dur - 0.02, Math.max(0, p.time || 0));
+                await seekVideo(v, pt);
+                refreshedPinned.push({
+                  ...p,
+                  dataUrl: grabVideoFrameDataUrl(v)
+                });
+              }
+              clip.frames = [...extracted, ...refreshedPinned].sort((a, b) => a.time - b.time);
               if (clip.id === state.activeClipId) {
                 renderFilmstrip();
                 renderClipTabs();
