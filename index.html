@@ -440,6 +440,31 @@
       main.workspace {
         grid-template-columns: 1fr;
       }
+      #toggleStudioBtn {
+        display: none;
+      }
+    }
+
+    body.studio-collapsed main.workspace {
+      grid-template-columns: 1fr;
+    }
+
+    body.studio-collapsed .left-panel {
+      display: none;
+    }
+
+    .inline-sbs-card {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid rgba(79, 195, 247, 0.45);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+
+    .inline-sbs-card.active {
+      display: flex;
     }
 
     .panel {
@@ -3121,8 +3146,12 @@
     <!-- RIGHT PANEL: BIOMECHANICAL & TACTICAL REPORT -->
     <section class="panel right-panel" aria-label="Analysis and Tactical Matchup Report">
       <div class="panel-header">
-        <h2 id="reportTitle">📊 Coaching &amp; Tactical Matchup Report</h2>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn-sm" id="toggleStudioBtn" title="Hide Video Studio &amp; Player Profile panel to expand Report full-width">◧ Hide Studio</button>
+          <h2 id="reportTitle">📊 Coaching &amp; Tactical Matchup Report</h2>
+        </div>
         <div class="btn-group">
+          <button type="button" class="btn-sm" id="toggleInlineSbsBtn" title="Compare any 2 saved videos side-by-side right inside the Report area (same player or different players)">🎞️ Split View</button>
           <button type="button" class="btn-sm" id="speakReportBtn" disabled title="Read verdict &amp; key cues aloud">🔊 Audio</button>
           <button type="button" class="btn-sm" id="emailReportBtn" disabled title="Email coaching &amp; training plan">✉️ Email</button>
           <button type="button" class="btn-sm" id="exportReportBtn" disabled title="Download Markdown report">⬇️ Export</button>
@@ -3134,6 +3163,76 @@
       <div class="panel-body" style="flex:1;">
         <!-- Loaded Multi-Report Switcher Bar (toggle between multiple opened analyses) -->
         <div class="loaded-reports-bar" id="loadedReportsBar" role="tablist" aria-label="Loaded analysis reports"></div>
+
+        <!-- Inline Side-by-Side 2-Video Viewer (Same Player or Multiple Players) -->
+        <div class="inline-sbs-card" id="inlineSbsCard">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+            <strong style="font-size:0.86rem; color:#b3e5fc;">🎞️ Side-by-Side 2-Video Compare (Same or Different Players)</strong>
+            <button type="button" class="btn-sm btn-ghost" id="closeInlineSbsBtn">Hide ✕</button>
+          </div>
+          <div class="sbs-grid">
+            <!-- LEFT VIDEO -->
+            <div class="sbs-pane">
+              <div style="padding:6px 8px; background:var(--surface); border-bottom:1px solid var(--border);">
+                <select id="inlineSbsSelectA" aria-label="Select Left Video" style="padding:4px 7px; font-size:0.75rem;"></select>
+              </div>
+              <div class="sbs-stage" id="inlineSbsStageA">
+                <img id="inlineSbsImgA" alt="Left comparison video frame">
+                <canvas id="inlineSbsCanvasA"></canvas>
+                <div class="pose-hud" id="inlineSbsHudA"></div>
+              </div>
+              <div class="sbs-pane-bar">
+                <span id="inlineSbsLabelA" style="font-variant-numeric:tabular-nums;">0/0</span>
+                <div class="btn-group">
+                  <button type="button" class="btn-sm" id="inlineSbsPrevA" title="Nudge Left video back 1 frame">◀</button>
+                  <button type="button" class="btn-sm" id="inlineSbsNextA" title="Nudge Left video forward 1 frame">▶</button>
+                </div>
+              </div>
+            </div>
+            <!-- RIGHT VIDEO -->
+            <div class="sbs-pane">
+              <div style="padding:6px 8px; background:var(--surface); border-bottom:1px solid var(--border);">
+                <select id="inlineSbsSelectB" aria-label="Select Right Video" style="padding:4px 7px; font-size:0.75rem;"></select>
+              </div>
+              <div class="sbs-stage" id="inlineSbsStageB">
+                <img id="inlineSbsImgB" alt="Right comparison video frame">
+                <canvas id="inlineSbsCanvasB"></canvas>
+                <div class="pose-hud" id="inlineSbsHudB"></div>
+              </div>
+              <div class="sbs-pane-bar">
+                <span id="inlineSbsLabelB" style="font-variant-numeric:tabular-nums;">0/0</span>
+                <div class="btn-group">
+                  <button type="button" class="btn-sm" id="inlineSbsPrevB" title="Nudge Right video back 1 frame">◀</button>
+                  <button type="button" class="btn-sm" id="inlineSbsNextB" title="Nudge Right video forward 1 frame">▶</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px;">
+            <div class="scrubber-row">
+              <span class="help-text" style="white-space:nowrap;">Sync Timeline:</span>
+              <input type="range" id="inlineSbsScrubber" min="0" max="0" step="1" value="0" aria-label="Inline side-by-side synchronized scrubber">
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="inlineSbsBackBoth">◀ Both</button>
+                <button type="button" class="btn-sm btn-primary" id="inlineSbsPlayBtn">▶ Play Both</button>
+                <button type="button" class="btn-sm" id="inlineSbsFwdBoth">Both ▶</button>
+                <select id="inlineSbsFpsSelect" aria-label="Playback speed" style="width:auto; padding:3px 6px; font-size:0.72rem;">
+                  <option value="1">1 fps</option>
+                  <option value="2">2 fps</option>
+                  <option value="4" selected>4 fps</option>
+                  <option value="8">8 fps</option>
+                </select>
+              </div>
+              <div class="btn-group">
+                <button type="button" class="btn-sm" id="inlineSbsGridBtn" title="Toggle alignment grid &amp; plumb line on both videos">⊞ Grid</button>
+                <button type="button" class="btn-sm" id="inlineSbsSkelBtn" title="Toggle AI skeleton &amp; joint angles on both videos">🦴 Skeleton</button>
+                <button type="button" class="btn-sm" id="inlineSbsExportBtn" title="Download side-by-side comparison PNG">📸 PNG</button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Empty State -->
         <div class="report-empty" id="reportEmpty">
@@ -10370,6 +10469,321 @@ create policy "Allow anon read/write for personal lab"
         loadSavedSession(selected[selected.length - 1], true);
         if (historyDialog.open) historyDialog.close();
         showToast(`📂 Loaded ${selected.length} report${selected.length === 1 ? '' : 's'} — use tabs at top of Report to toggle`);
+      });
+
+      // --- COLLAPSIBLE VIDEO STUDIO & INLINE SIDE-BY-SIDE 2-VIDEO REPORT VIEWER ---
+      const toggleStudioBtn = document.getElementById('toggleStudioBtn');
+      const toggleInlineSbsBtn = document.getElementById('toggleInlineSbsBtn');
+      const inlineSbsCard = document.getElementById('inlineSbsCard');
+      const inlineSbsSelectA = document.getElementById('inlineSbsSelectA');
+      const inlineSbsSelectB = document.getElementById('inlineSbsSelectB');
+      const inlineSbs = {
+        framesA: [],
+        framesB: [],
+        titleA: '',
+        titleB: '',
+        idxA: 0,
+        idxB: 0,
+        isPlaying: false,
+        timerId: null,
+        gridEnabled: false,
+        skeletonEnabled: false,
+        landmarksA: null,
+        metricsA: null,
+        landmarksB: null,
+        metricsB: null
+      };
+
+      toggleStudioBtn?.addEventListener('click', () => {
+        const collapsed = document.body.classList.toggle('studio-collapsed');
+        toggleStudioBtn.textContent = collapsed ? '◨ Show Studio' : '◧ Hide Studio';
+        toggleStudioBtn.classList.toggle('btn-active', collapsed);
+        toggleStudioBtn.title = collapsed
+          ? 'Restore Video Studio & Player Profile panel'
+          : 'Hide Video Studio & Player Profile panel to expand Report full-width';
+        setTimeout(() => {
+          if (savedFramePreviewBox.classList.contains('active')) {
+            applySavedFrameZoom();
+            redrawSavedFrameOverlay();
+          }
+          if (inlineSbsCard?.classList.contains('active')) {
+            redrawInlineSbsPane('A');
+            redrawInlineSbsPane('B');
+          }
+        }, 60);
+      });
+
+      function stopInlineSbsPlayback() {
+        if (inlineSbs.timerId) {
+          clearInterval(inlineSbs.timerId);
+          inlineSbs.timerId = null;
+        }
+        inlineSbs.isPlaying = false;
+        const btn = document.getElementById('inlineSbsPlayBtn');
+        if (btn) btn.textContent = '▶ Play Both';
+      }
+
+      function redrawInlineSbsPane(side) {
+        const stage = document.getElementById(side === 'A' ? 'inlineSbsStageA' : 'inlineSbsStageB');
+        const img = document.getElementById(side === 'A' ? 'inlineSbsImgA' : 'inlineSbsImgB');
+        const canvas = document.getElementById(side === 'A' ? 'inlineSbsCanvasA' : 'inlineSbsCanvasB');
+        const hud = document.getElementById(side === 'A' ? 'inlineSbsHudA' : 'inlineSbsHudB');
+        if (!stage || !canvas || !img) return;
+        const rect = stage.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, rect.width, rect.height);
+        if (inlineSbs.gridEnabled) {
+          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh);
+        }
+        const lm = side === 'A' ? inlineSbs.landmarksA : inlineSbs.landmarksB;
+        const metrics = side === 'A' ? inlineSbs.metricsA : inlineSbs.metricsB;
+        if (inlineSbs.skeletonEnabled && lm) {
+          drawSkeletonOnCtx(ctx, lm, metrics, ox, oy, rw, rh);
+          renderPoseHudInto(hud, true, metrics);
+        } else {
+          renderPoseHudInto(hud, false, null);
+        }
+      }
+
+      async function evalInlineSbsPose(side, dataUrl) {
+        if (!inlineSbs.skeletonEnabled || !dataUrl) {
+          if (side === 'A') { inlineSbs.landmarksA = null; inlineSbs.metricsA = null; }
+          else { inlineSbs.landmarksB = null; inlineSbs.metricsB = null; }
+          redrawInlineSbsPane(side);
+          return;
+        }
+        const entry = await ensurePoseForDataUrl(dataUrl);
+        if (side === 'A') { inlineSbs.landmarksA = entry?.landmarks || null; inlineSbs.metricsA = entry?.metrics || null; }
+        else { inlineSbs.landmarksB = entry?.landmarks || null; inlineSbs.metricsB = entry?.metrics || null; }
+        redrawInlineSbsPane(side);
+      }
+
+      function renderInlineSbsFrames() {
+        const fA = inlineSbs.framesA[inlineSbs.idxA];
+        const fB = inlineSbs.framesB[inlineSbs.idxB];
+        const imgA = document.getElementById('inlineSbsImgA');
+        const imgB = document.getElementById('inlineSbsImgB');
+        if (fA && imgA) {
+          imgA.src = fA.dataUrl;
+          document.getElementById('inlineSbsLabelA').textContent = `${inlineSbs.idxA + 1}/${inlineSbs.framesA.length} · ${fA.label || ''}`;
+        } else {
+          document.getElementById('inlineSbsLabelA').textContent = 'No frames';
+        }
+        if (fB && imgB) {
+          imgB.src = fB.dataUrl;
+          document.getElementById('inlineSbsLabelB').textContent = `${inlineSbs.idxB + 1}/${inlineSbs.framesB.length} · ${fB.label || ''}`;
+        } else {
+          document.getElementById('inlineSbsLabelB').textContent = 'No frames';
+        }
+        const maxLen = Math.max(inlineSbs.framesA.length, inlineSbs.framesB.length, 1);
+        const scr = document.getElementById('inlineSbsScrubber');
+        if (scr) {
+          scr.max = String(maxLen - 1);
+          scr.value = String(Math.min(maxLen - 1, Math.max(inlineSbs.idxA, inlineSbs.idxB)));
+        }
+        if (inlineSbs.skeletonEnabled) {
+          if (fA?.dataUrl) evalInlineSbsPose('A', fA.dataUrl);
+          if (fB?.dataUrl) evalInlineSbsPose('B', fB.dataUrl);
+        } else {
+          redrawInlineSbsPane('A');
+          redrawInlineSbsPane('B');
+        }
+      }
+
+      function loadInlineSbsSide(side, sessionId) {
+        const sess = cachedSessions.find(s => s.id === sessionId);
+        const frames = sess ? getSessionFramesList(sess) : [];
+        const label = sess ? `${sess.playerName} · ${sess.sessionTag || sess.fileStamp || ''}` : '';
+        const keyIdx = frames.findIndex(f => /RELEASE|IMPACT/i.test(f.label || ''));
+        if (side === 'A') {
+          inlineSbs.framesA = frames;
+          inlineSbs.titleA = label;
+          inlineSbs.idxA = keyIdx >= 0 ? keyIdx : 0;
+        } else {
+          inlineSbs.framesB = frames;
+          inlineSbs.titleB = label;
+          inlineSbs.idxB = keyIdx >= 0 ? keyIdx : 0;
+        }
+        renderInlineSbsFrames();
+      }
+
+      function populateInlineSbsSelectors() {
+        const videoSessions = cachedSessions
+          .filter(s => s.role !== 'training_plan' && s.role !== 'custom_drills' && getSessionFramesList(s).length > 0);
+        if (videoSessions.length === 0) return false;
+
+        const buildOptions = (selEl, selectedId) => {
+          selEl.textContent = '';
+          const byPlayer = new Map();
+          videoSessions.forEach(s => {
+            const p = (s.playerName || 'Unassigned').trim();
+            if (!byPlayer.has(p)) byPlayer.set(p, []);
+            byPlayer.get(p).push(s);
+          });
+          Array.from(byPlayer.keys()).sort((a, b) => a.localeCompare(b)).forEach(pName => {
+            const grp = document.createElement('optgroup');
+            grp.label = `👤 ${pName}`;
+            byPlayer.get(pName).forEach(s => {
+              const opt = document.createElement('option');
+              opt.value = s.id;
+              const icon = s.role === 'bowling' ? '⚡' : s.role === 'lbw' ? '☝️' : '🏏';
+              const stamp = s.fileStamp || formatFileTimestamp(new Date(s.savedAt));
+              opt.textContent = `${icon} ${pName} · ${s.sessionTag ? `${s.sessionTag} (${stamp})` : stamp}`;
+              grp.appendChild(opt);
+            });
+            selEl.appendChild(grp);
+          });
+          if (selectedId && videoSessions.some(s => s.id === selectedId)) {
+            selEl.value = selectedId;
+          }
+        };
+
+        // Prefer the 2 most recently loaded sessions in Report tabs, otherwise first 2 saved sessions
+        const defaultA = state.loadedSessions[0]?.id || videoSessions[Math.min(1, videoSessions.length - 1)]?.id;
+        const defaultB = state.loadedSessions[1]?.id || state.activeLoadedSessionId || videoSessions[0]?.id;
+        buildOptions(inlineSbsSelectA, inlineSbsSelectA.value || defaultA);
+        buildOptions(inlineSbsSelectB, inlineSbsSelectB.value || (defaultB === defaultA && videoSessions.length > 1 ? videoSessions.find(s => s.id !== defaultA)?.id : defaultB));
+        loadInlineSbsSide('A', inlineSbsSelectA.value);
+        loadInlineSbsSide('B', inlineSbsSelectB.value);
+        return true;
+      }
+
+      toggleInlineSbsBtn?.addEventListener('click', async () => {
+        const opening = !inlineSbsCard.classList.contains('active');
+        if (!opening) {
+          stopInlineSbsPlayback();
+          inlineSbsCard.classList.remove('active');
+          toggleInlineSbsBtn.classList.remove('btn-active');
+          return;
+        }
+        await refreshSavedCount();
+        if (!populateInlineSbsSelectors()) {
+          showToast('Save at least 1 video with frames first to use Split View');
+          return;
+        }
+        inlineSbsCard.classList.add('active');
+        toggleInlineSbsBtn.classList.add('btn-active');
+        if (window.innerWidth <= 1080) setMobileView('report');
+      });
+      document.getElementById('closeInlineSbsBtn')?.addEventListener('click', () => {
+        stopInlineSbsPlayback();
+        inlineSbsCard.classList.remove('active');
+        toggleInlineSbsBtn?.classList.remove('btn-active');
+      });
+      inlineSbsSelectA?.addEventListener('change', () => { stopInlineSbsPlayback(); loadInlineSbsSide('A', inlineSbsSelectA.value); });
+      inlineSbsSelectB?.addEventListener('change', () => { stopInlineSbsPlayback(); loadInlineSbsSide('B', inlineSbsSelectB.value); });
+      document.getElementById('inlineSbsImgA')?.addEventListener('load', () => {
+        if (inlineSbs.skeletonEnabled && inlineSbs.framesA[inlineSbs.idxA]?.dataUrl) evalInlineSbsPose('A', inlineSbs.framesA[inlineSbs.idxA].dataUrl);
+        else redrawInlineSbsPane('A');
+      });
+      document.getElementById('inlineSbsImgB')?.addEventListener('load', () => {
+        if (inlineSbs.skeletonEnabled && inlineSbs.framesB[inlineSbs.idxB]?.dataUrl) evalInlineSbsPose('B', inlineSbs.framesB[inlineSbs.idxB].dataUrl);
+        else redrawInlineSbsPane('B');
+      });
+      document.getElementById('inlineSbsPrevA')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxA = Math.max(0, inlineSbs.idxA - 1); renderInlineSbsFrames(); });
+      document.getElementById('inlineSbsNextA')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxA = Math.min(Math.max(0, inlineSbs.framesA.length - 1), inlineSbs.idxA + 1); renderInlineSbsFrames(); });
+      document.getElementById('inlineSbsPrevB')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxB = Math.max(0, inlineSbs.idxB - 1); renderInlineSbsFrames(); });
+      document.getElementById('inlineSbsNextB')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxB = Math.min(Math.max(0, inlineSbs.framesB.length - 1), inlineSbs.idxB + 1); renderInlineSbsFrames(); });
+      document.getElementById('inlineSbsBackBoth')?.addEventListener('click', () => {
+        stopInlineSbsPlayback();
+        inlineSbs.idxA = Math.max(0, inlineSbs.idxA - 1);
+        inlineSbs.idxB = Math.max(0, inlineSbs.idxB - 1);
+        renderInlineSbsFrames();
+      });
+      document.getElementById('inlineSbsFwdBoth')?.addEventListener('click', () => {
+        stopInlineSbsPlayback();
+        inlineSbs.idxA = Math.min(Math.max(0, inlineSbs.framesA.length - 1), inlineSbs.idxA + 1);
+        inlineSbs.idxB = Math.min(Math.max(0, inlineSbs.framesB.length - 1), inlineSbs.idxB + 1);
+        renderInlineSbsFrames();
+      });
+      document.getElementById('inlineSbsScrubber')?.addEventListener('input', (e) => {
+        stopInlineSbsPlayback();
+        const val = parseInt(e.target.value, 10) || 0;
+        const maxVal = Math.max(1, parseInt(e.target.max, 10) || 1);
+        const ratio = val / maxVal;
+        inlineSbs.idxA = Math.round(ratio * Math.max(0, inlineSbs.framesA.length - 1));
+        inlineSbs.idxB = Math.round(ratio * Math.max(0, inlineSbs.framesB.length - 1));
+        renderInlineSbsFrames();
+      });
+      document.getElementById('inlineSbsPlayBtn')?.addEventListener('click', () => {
+        if (inlineSbs.isPlaying) { stopInlineSbsPlayback(); return; }
+        const fps = parseFloat(document.getElementById('inlineSbsFpsSelect')?.value) || 4;
+        inlineSbs.isPlaying = true;
+        document.getElementById('inlineSbsPlayBtn').textContent = '⏸ Pause';
+        inlineSbs.timerId = setInterval(() => {
+          inlineSbs.idxA = (inlineSbs.idxA + 1) % Math.max(1, inlineSbs.framesA.length);
+          inlineSbs.idxB = (inlineSbs.idxB + 1) % Math.max(1, inlineSbs.framesB.length);
+          renderInlineSbsFrames();
+        }, Math.round(1000 / fps));
+      });
+      document.getElementById('inlineSbsGridBtn')?.addEventListener('click', (e) => {
+        inlineSbs.gridEnabled = !inlineSbs.gridEnabled;
+        e.currentTarget.classList.toggle('btn-active', inlineSbs.gridEnabled);
+        redrawInlineSbsPane('A');
+        redrawInlineSbsPane('B');
+      });
+      document.getElementById('inlineSbsSkelBtn')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        inlineSbs.skeletonEnabled = !inlineSbs.skeletonEnabled;
+        btn.classList.toggle('btn-active', inlineSbs.skeletonEnabled);
+        if (inlineSbs.skeletonEnabled) {
+          btn.textContent = '⏳ Loading...';
+          try {
+            await ensurePoseLandmarker();
+            btn.textContent = '🦴 Skeleton ON';
+            renderInlineSbsFrames();
+          } catch (err) {
+            inlineSbs.skeletonEnabled = false;
+            btn.classList.remove('btn-active');
+            btn.textContent = '🦴 Skeleton';
+            showToast(`Pose error: ${err.message}`);
+          }
+        } else {
+          btn.textContent = '🦴 Skeleton';
+          inlineSbs.landmarksA = null; inlineSbs.metricsA = null;
+          inlineSbs.landmarksB = null; inlineSbs.metricsB = null;
+          redrawInlineSbsPane('A');
+          redrawInlineSbsPane('B');
+        }
+      });
+      document.getElementById('inlineSbsExportBtn')?.addEventListener('click', () => {
+        const imgA = document.getElementById('inlineSbsImgA');
+        const imgB = document.getElementById('inlineSbsImgB');
+        if (!imgA?.naturalWidth || !imgB?.naturalWidth) return;
+        const paneW = 640, paneH = 420, gap = 12, capH = 44;
+        const c = document.createElement('canvas');
+        c.width = paneW * 2 + gap;
+        c.height = paneH + capH;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0e1118';
+        ctx.fillRect(0, 0, c.width, c.height);
+        const drawPane = (img, startX, title, lm, metrics) => {
+          const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, paneW, paneH);
+          ctx.drawImage(img, startX + ox, oy, rw, rh);
+          if (inlineSbs.gridEnabled) drawAlignmentGridOnCtx(ctx, startX + ox, oy, rw, rh);
+          if (inlineSbs.skeletonEnabled && lm) drawSkeletonOnCtx(ctx, lm, metrics, startX + ox, oy, rw, rh);
+          ctx.fillStyle = '#151822';
+          ctx.fillRect(startX, paneH, paneW, capH);
+          ctx.fillStyle = '#c7b088';
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText(title, startX + 10, paneH + 18);
+          if (inlineSbs.skeletonEnabled && metrics) {
+            ctx.fillStyle = '#b3e5fc';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText(formatPoseMetricsCompact(metrics), startX + 10, paneH + 35);
+          }
+        };
+        drawPane(imgA, 0, inlineSbs.titleA, inlineSbs.landmarksA, inlineSbs.metricsA);
+        drawPane(imgB, paneW + gap, inlineSbs.titleB, inlineSbs.landmarksB, inlineSbs.metricsB);
+        const a = document.createElement('a');
+        a.href = c.toDataURL('image/png');
+        a.download = `cricket-split-compare-${new Date().toISOString().slice(0, 10)}.png`;
+        a.click();
+        showToast('📸 Exported Side-by-Side Split View PNG');
       });
 
       openSideBySideBtn?.addEventListener('click', () => {
