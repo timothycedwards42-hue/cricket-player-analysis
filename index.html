@@ -3173,8 +3173,9 @@
           <div class="sbs-grid">
             <!-- LEFT VIDEO -->
             <div class="sbs-pane">
-              <div style="padding:6px 8px; background:var(--surface); border-bottom:1px solid var(--border);">
-                <select id="inlineSbsSelectA" aria-label="Select Left Video" style="padding:4px 7px; font-size:0.75rem;"></select>
+              <div style="padding:6px 8px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; gap:6px; align-items:center;">
+                <select id="inlineSbsPlayerA" aria-label="Filter Left Video by Player" style="width:auto; max-width:44%; padding:4px 6px; font-size:0.74rem; font-weight:600;"></select>
+                <select id="inlineSbsSelectA" aria-label="Select Left Video" style="flex:1; min-width:0; padding:4px 7px; font-size:0.75rem;"></select>
               </div>
               <div class="sbs-stage" id="inlineSbsStageA">
                 <img id="inlineSbsImgA" alt="Left comparison video frame">
@@ -3191,8 +3192,9 @@
             </div>
             <!-- RIGHT VIDEO -->
             <div class="sbs-pane">
-              <div style="padding:6px 8px; background:var(--surface); border-bottom:1px solid var(--border);">
-                <select id="inlineSbsSelectB" aria-label="Select Right Video" style="padding:4px 7px; font-size:0.75rem;"></select>
+              <div style="padding:6px 8px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; gap:6px; align-items:center;">
+                <select id="inlineSbsPlayerB" aria-label="Filter Right Video by Player" style="width:auto; max-width:44%; padding:4px 6px; font-size:0.74rem; font-weight:600;"></select>
+                <select id="inlineSbsSelectB" aria-label="Select Right Video" style="flex:1; min-width:0; padding:4px 7px; font-size:0.75rem;"></select>
               </div>
               <div class="sbs-stage" id="inlineSbsStageB">
                 <img id="inlineSbsImgB" alt="Right comparison video frame">
@@ -10611,15 +10613,36 @@ create policy "Allow anon read/write for personal lab"
         renderInlineSbsFrames();
       }
 
-      function populateInlineSbsSelectors() {
-        const videoSessions = cachedSessions
-          .filter(s => s.role !== 'training_plan' && s.role !== 'custom_drills' && getSessionFramesList(s).length > 0);
-        if (videoSessions.length === 0) return false;
+      const inlineSbsPlayerA = document.getElementById('inlineSbsPlayerA');
+      const inlineSbsPlayerB = document.getElementById('inlineSbsPlayerB');
 
-        const buildOptions = (selEl, selectedId) => {
-          selEl.textContent = '';
+      function getInlineSbsVideoSessions() {
+        return cachedSessions.filter(s => s.role !== 'training_plan' && s.role !== 'custom_drills' && getSessionFramesList(s).length > 0);
+      }
+
+      function populateInlineSbsSideOptions(side, preferredSessionId = '') {
+        const videoSessions = getInlineSbsVideoSessions();
+        const playerSel = side === 'A' ? inlineSbsPlayerA : inlineSbsPlayerB;
+        const vidSel = side === 'A' ? inlineSbsSelectA : inlineSbsSelectB;
+        if (!vidSel) return;
+        const playerFilter = playerSel ? playerSel.value : '';
+        const filtered = playerFilter
+          ? videoSessions.filter(s => (s.playerName || 'Unassigned').trim() === playerFilter)
+          : videoSessions;
+
+        vidSel.textContent = '';
+        if (playerFilter) {
+          filtered.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            const icon = s.role === 'bowling' ? '⚡' : s.role === 'lbw' ? '☝️' : '🏏';
+            const stamp = s.fileStamp || formatFileTimestamp(new Date(s.savedAt));
+            opt.textContent = `${icon} ${s.sessionTag ? `${s.sessionTag} (${stamp})` : stamp}`;
+            vidSel.appendChild(opt);
+          });
+        } else {
           const byPlayer = new Map();
-          videoSessions.forEach(s => {
+          filtered.forEach(s => {
             const p = (s.playerName || 'Unassigned').trim();
             if (!byPlayer.has(p)) byPlayer.set(p, []);
             byPlayer.get(p).push(s);
@@ -10635,22 +10658,49 @@ create policy "Allow anon read/write for personal lab"
               opt.textContent = `${icon} ${pName} · ${s.sessionTag ? `${s.sessionTag} (${stamp})` : stamp}`;
               grp.appendChild(opt);
             });
-            selEl.appendChild(grp);
+            vidSel.appendChild(grp);
           });
-          if (selectedId && videoSessions.some(s => s.id === selectedId)) {
-            selEl.value = selectedId;
-          }
-        };
+        }
+        if (preferredSessionId && filtered.some(s => s.id === preferredSessionId)) {
+          vidSel.value = preferredSessionId;
+        }
+        loadInlineSbsSide(side, vidSel.value);
+      }
+
+      function populateInlineSbsSelectors() {
+        const videoSessions = getInlineSbsVideoSessions();
+        if (videoSessions.length === 0) return false;
+
+        const playerNames = Array.from(new Set(videoSessions.map(s => (s.playerName || 'Unassigned').trim())))
+          .sort((a, b) => a.localeCompare(b));
+
+        [inlineSbsPlayerA, inlineSbsPlayerB].forEach(sel => {
+          if (!sel) return;
+          const prevVal = sel.value;
+          sel.textContent = '';
+          const allOpt = document.createElement('option');
+          allOpt.value = '';
+          allOpt.textContent = 'All Players';
+          sel.appendChild(allOpt);
+          playerNames.forEach(pName => {
+            const opt = document.createElement('option');
+            opt.value = pName;
+            opt.textContent = `👤 ${pName}`;
+            sel.appendChild(opt);
+          });
+          if (prevVal && playerNames.includes(prevVal)) sel.value = prevVal;
+        });
 
         // Prefer the 2 most recently loaded sessions in Report tabs, otherwise first 2 saved sessions
         const defaultA = state.loadedSessions[0]?.id || videoSessions[Math.min(1, videoSessions.length - 1)]?.id;
         const defaultB = state.loadedSessions[1]?.id || state.activeLoadedSessionId || videoSessions[0]?.id;
-        buildOptions(inlineSbsSelectA, inlineSbsSelectA.value || defaultA);
-        buildOptions(inlineSbsSelectB, inlineSbsSelectB.value || (defaultB === defaultA && videoSessions.length > 1 ? videoSessions.find(s => s.id !== defaultA)?.id : defaultB));
-        loadInlineSbsSide('A', inlineSbsSelectA.value);
-        loadInlineSbsSide('B', inlineSbsSelectB.value);
+        populateInlineSbsSideOptions('A', inlineSbsSelectA.value || defaultA);
+        populateInlineSbsSideOptions('B', inlineSbsSelectB.value || (defaultB === defaultA && videoSessions.length > 1 ? videoSessions.find(s => s.id !== defaultA)?.id : defaultB));
         return true;
       }
+
+      inlineSbsPlayerA?.addEventListener('change', () => { stopInlineSbsPlayback(); populateInlineSbsSideOptions('A'); });
+      inlineSbsPlayerB?.addEventListener('change', () => { stopInlineSbsPlayback(); populateInlineSbsSideOptions('B'); });
 
       toggleInlineSbsBtn?.addEventListener('click', async () => {
         const opening = !inlineSbsCard.classList.contains('active');
