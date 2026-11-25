@@ -2193,6 +2193,85 @@
       touch-action: none;
     }
 
+    .saved-frame-ghost-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      max-height: 440px;
+      object-fit: contain;
+      object-position: center;
+      opacity: 0.34;
+      pointer-events: none;
+      display: none;
+      z-index: 2;
+      mix-blend-mode: screen;
+    }
+
+    .saved-frame-ghost-img.active {
+      display: block;
+    }
+
+    .sbs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 720px) {
+      .sbs-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .sbs-pane {
+      background: #000;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sbs-stage {
+      position: relative;
+      background: #000;
+      aspect-ratio: 16 / 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .sbs-stage img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .sbs-stage canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    .sbs-pane-bar {
+      padding: 6px 8px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: var(--pitch);
+      flex-wrap: wrap;
+    }
+
     .saved-frame-preview-box img {
       width: 100%;
       height: auto;
@@ -3045,6 +3124,7 @@
             <div class="saved-frame-preview-box" id="savedFramePreviewBox">
               <div class="saved-frame-stage" id="savedFrameStage">
                 <img id="savedFrameLargeImg" alt="Selected video reference frame">
+                <img id="savedFrameGhostImg" class="saved-frame-ghost-img" alt="">
                 <canvas id="savedFrameOverlayCanvas"></canvas>
                 <div class="pose-hud" id="savedFramePoseHud" aria-live="polite"></div>
                 <div class="zoom-select-box" id="savedFrameZoomBox"></div>
@@ -3067,9 +3147,12 @@
                     </select>
                   </div>
                   <div class="btn-group">
+                    <button type="button" class="btn-sm" id="savedFrameGridBtn" title="Toggle vertical plumb line &amp; alignment grid">⊞ Grid</button>
+                    <button type="button" class="btn-sm" id="savedFrameGhostBtn" title="Overlay previous frame faintly (onion-skin motion trail)">👻 Trail</button>
                     <button type="button" class="btn-sm" id="savedFrameAngleBtn" title="Tap 3 points (e.g. Hip → Knee → Ankle) to measure exact angle">📐 Angle</button>
                     <button type="button" class="btn-sm" id="savedFrameDrawBtn" title="Draw alignment lines on stored frames">✏️ Draw</button>
                     <button type="button" class="btn-sm" id="savedFrameClearBtn" title="Clear lines &amp; angle measurements">Clear</button>
+                    <button type="button" class="btn-sm" id="savedFrameSnapBtn" title="Export annotated frame with skeleton, grid &amp; angles as PNG">📸 PNG</button>
                     <button type="button" class="btn-sm" id="savedFrameFsBtn" title="Fullscreen frame viewer with controls">⛶</button>
                     <button type="button" class="btn-sm btn-ghost" id="closeFramePreviewBtn">Hide ✕</button>
                   </div>
@@ -3431,7 +3514,8 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <input type="text" id="compareInstructionsInput" placeholder="Optional comparison instructions (e.g. Check if front-leg brace &amp; head alignment improved)" style="flex:1; min-width:200px;">
-          <button type="button" class="btn-primary" id="runCompareBtn" disabled>⚖️ Run Comparison</button>
+          <button type="button" id="openSideBySideBtn" disabled title="Visually compare both stored frame sequences side by side">🎞️ Side-by-Side</button>
+          <button type="button" class="btn-primary" id="runCompareBtn" disabled>⚖️ Run AI Comparison</button>
         </div>
       </div>
 
@@ -3567,6 +3651,83 @@
     </div>
     <div class="dialog-footer">
       <button type="button" class="btn-primary" id="doneHintsDialogBtn">Got It</button>
+    </div>
+  </dialog>
+
+  <!-- SIDE-BY-SIDE SYNCHRONIZED BEFORE VS. AFTER FRAME COMPARE DIALOG -->
+  <dialog id="sideBySideDialog" aria-labelledby="sbsDialogTitle" style="width:min(1040px, 96vw);">
+    <div class="dialog-header">
+      <div>
+        <h3 id="sbsDialogTitle">🎞️ Side-by-Side Before vs. After Visual Compare</h3>
+        <span class="help-text" id="sbsSubtitle">Scrub both sessions together, nudge either side to align Release/Impact, and toggle Skeleton or Grid.</span>
+      </div>
+      <button type="button" class="btn-sm btn-ghost" id="closeSbsDialogBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <div class="sbs-grid">
+        <!-- LEFT PANE: BEFORE / EARLIER -->
+        <div class="sbs-pane">
+          <div class="sbs-stage" id="sbsStageA">
+            <img id="sbsImgA" alt="Earlier session frame">
+            <canvas id="sbsCanvasA"></canvas>
+            <div class="pose-hud" id="sbsHudA"></div>
+          </div>
+          <div class="sbs-pane-bar">
+            <strong id="sbsTitleA">Before</strong>
+            <div class="btn-group">
+              <button type="button" class="btn-sm" id="sbsPrevA" title="Nudge Before frame back 1">◀</button>
+              <span id="sbsLabelA" style="font-variant-numeric:tabular-nums;">1/1</span>
+              <button type="button" class="btn-sm" id="sbsNextA" title="Nudge Before frame forward 1">▶</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT PANE: AFTER / LATER -->
+        <div class="sbs-pane">
+          <div class="sbs-stage" id="sbsStageB">
+            <img id="sbsImgB" alt="Later session frame">
+            <canvas id="sbsCanvasB"></canvas>
+            <div class="pose-hud" id="sbsHudB"></div>
+          </div>
+          <div class="sbs-pane-bar">
+            <strong id="sbsTitleB">After</strong>
+            <div class="btn-group">
+              <button type="button" class="btn-sm" id="sbsPrevB" title="Nudge After frame back 1">◀</button>
+              <span id="sbsLabelB" style="font-variant-numeric:tabular-nums;">1/1</span>
+              <button type="button" class="btn-sm" id="sbsNextB" title="Nudge After frame forward 1">▶</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SYNCHRONIZED PLAYBACK & OVERLAY CONTROLS -->
+      <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
+        <div class="scrubber-row">
+          <span class="help-text" style="white-space:nowrap;">Sync Timeline:</span>
+          <input type="range" id="sbsSyncScrubber" min="0" max="100" step="1" value="0" aria-label="Synchronized comparison scrubber">
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div class="btn-group">
+            <button type="button" class="btn-sm" id="sbsStepBackBoth" title="Step both back 1 frame">◀ Both</button>
+            <button type="button" class="btn-sm btn-primary" id="sbsPlayBothBtn">▶ Play Both</button>
+            <button type="button" class="btn-sm" id="sbsStepFwdBoth" title="Step both forward 1 frame">Both ▶</button>
+            <select id="sbsFpsSelect" aria-label="Playback speed" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+              <option value="1">1 fps</option>
+              <option value="2">2 fps</option>
+              <option value="4" selected>4 fps</option>
+              <option value="8">8 fps</option>
+            </select>
+          </div>
+          <div class="btn-group">
+            <button type="button" class="btn-sm" id="sbsGridBtn" title="Toggle plumb line &amp; alignment grid on both panes">⊞ Grid</button>
+            <button type="button" class="btn-sm" id="sbsSkelBtn" title="Toggle MediaPipe skeleton &amp; joint angles on both panes">🦴 Skeleton</button>
+            <button type="button" class="btn-sm" id="sbsExportPngBtn" title="Download side-by-side comparison PNG">📸 Export PNG</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button type="button" class="btn-ghost" id="doneSbsDialogBtn">Close</button>
     </div>
   </dialog>
 
@@ -7571,6 +7732,8 @@ For each improvement's diagram (top-down net/pitch view):
         angles: [],
         angleDraftPoints: [],
         dragStart: null,
+        gridEnabled: false,
+        ghostEnabled: false,
         skeletonEnabled: false,
         poseCache: new Map(), // dataUrl -> { landmarks, metrics }
         latestLandmarks: null,
@@ -7578,6 +7741,7 @@ For each improvement's diagram (top-down net/pitch view):
       };
 
       const savedFrameStage = document.getElementById('savedFrameStage');
+      const savedFrameGhostImg = document.getElementById('savedFrameGhostImg');
       const savedFrameOverlayCanvas = document.getElementById('savedFrameOverlayCanvas');
       const savedFramePoseHud = document.getElementById('savedFramePoseHud');
       const savedFrameZoomBox = document.getElementById('savedFrameZoomBox');
@@ -7585,9 +7749,12 @@ For each improvement's diagram (top-down net/pitch view):
       const savedFrameZoomSelect = document.getElementById('savedFrameZoomSelect');
       const savedFrameBoxZoomBtn = document.getElementById('savedFrameBoxZoomBtn');
       const savedFrameAimBtn = document.getElementById('savedFrameAimBtn');
+      const savedFrameGridBtn = document.getElementById('savedFrameGridBtn');
+      const savedFrameGhostBtn = document.getElementById('savedFrameGhostBtn');
       const savedFrameDrawBtn = document.getElementById('savedFrameDrawBtn');
       const savedFrameAngleBtn = document.getElementById('savedFrameAngleBtn');
       const savedFrameClearBtn = document.getElementById('savedFrameClearBtn');
+      const savedFrameSnapBtn = document.getElementById('savedFrameSnapBtn');
       const savedFrameFsBtn = document.getElementById('savedFrameFsBtn');
       const savedFrameSkelBtn = document.getElementById('savedFrameSkelBtn');
       const savedFrameSkelParts = document.getElementById('savedFrameSkelParts');
@@ -7620,10 +7787,52 @@ For each improvement's diagram (top-down net/pitch view):
         const scaleStr = savedFramePlayer.zoomLevel > 1 ? `scale(${savedFramePlayer.zoomLevel})` : '';
         savedFrameLargeImg.style.transformOrigin = originStr;
         savedFrameLargeImg.style.transform = scaleStr;
+        if (savedFrameGhostImg) {
+          savedFrameGhostImg.style.transformOrigin = originStr;
+          savedFrameGhostImg.style.transform = scaleStr;
+        }
         if (savedFrameOverlayCanvas) {
           savedFrameOverlayCanvas.style.transformOrigin = originStr;
           savedFrameOverlayCanvas.style.transform = scaleStr;
         }
+      }
+
+      function drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh) {
+        ctx.save();
+        // Subtle 3x3 alignment grid
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        [1 / 3, 2 / 3].forEach(frac => {
+          const x = ox + rw * frac;
+          const y = oy + rh * frac;
+          ctx.beginPath();
+          ctx.moveTo(x, oy);
+          ctx.lineTo(x, oy + rh);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(ox, y);
+          ctx.lineTo(ox + rw, y);
+          ctx.stroke();
+        });
+        // Prominent center vertical plumb line (for checking head-over-front-toe & falling away)
+        const midX = ox + rw * 0.5;
+        ctx.strokeStyle = 'rgba(255, 183, 77, 0.72)';
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(midX, oy);
+        ctx.lineTo(midX, oy + rh);
+        ctx.stroke();
+        // Horizontal shoulder/hip level reference line
+        const midY = oy + rh * 0.5;
+        ctx.strokeStyle = 'rgba(79, 195, 247, 0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(ox, midY);
+        ctx.lineTo(ox + rw, midY);
+        ctx.stroke();
+        ctx.restore();
       }
 
       function drawAngleOnCtx(ctx, pts, w, h, color = '#4fc3f7') {
@@ -7680,6 +7889,12 @@ For each improvement's diagram (top-down net/pitch view):
         savedFrameOverlayCanvas.height = rect.height;
         const ctx = savedFrameOverlayCanvas.getContext('2d');
         ctx.clearRect(0, 0, rect.width, rect.height);
+
+        // 0. Optional Alignment Grid & Vertical Plumb Line
+        if (savedFramePlayer.gridEnabled) {
+          const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
+          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh);
+        }
 
         // 1. Skeleton overlay
         if (savedFramePlayer.skeletonEnabled && savedFramePlayer.latestLandmarks) {
@@ -7946,6 +8161,122 @@ For each improvement's diagram (top-down net/pitch view):
         });
       });
 
+      // Grid, Ghost Trail & Snapshot PNG Export for Stored Frames Viewer
+      function updateSavedFrameGhost() {
+        if (!savedFrameGhostImg) return;
+        const prevIdx = savedFramePlayer.index - 1;
+        const prevFrame = prevIdx >= 0 ? savedFramePlayer.frames[prevIdx] : null;
+        if (savedFramePlayer.ghostEnabled && prevFrame?.dataUrl) {
+          savedFrameGhostImg.src = prevFrame.dataUrl;
+          savedFrameGhostImg.classList.add('active');
+        } else {
+          savedFrameGhostImg.classList.remove('active');
+          savedFrameGhostImg.removeAttribute('src');
+        }
+      }
+
+      savedFrameGridBtn?.addEventListener('click', () => {
+        savedFramePlayer.gridEnabled = !savedFramePlayer.gridEnabled;
+        savedFrameGridBtn.classList.toggle('btn-active', savedFramePlayer.gridEnabled);
+        redrawSavedFrameOverlay();
+      });
+
+      savedFrameGhostBtn?.addEventListener('click', () => {
+        savedFramePlayer.ghostEnabled = !savedFramePlayer.ghostEnabled;
+        savedFrameGhostBtn.classList.toggle('btn-active', savedFramePlayer.ghostEnabled);
+        updateSavedFrameGhost();
+        if (savedFramePlayer.ghostEnabled && savedFramePlayer.index === 0 && savedFramePlayer.frames.length > 1) {
+          showToast('👻 Step forward 1 frame (▶) to see the previous frame trail behind it');
+        }
+      });
+
+      savedFrameSnapBtn?.addEventListener('click', () => {
+        const f = savedFramePlayer.frames[savedFramePlayer.index];
+        if (!f || !savedFrameLargeImg.naturalWidth) return;
+        const iw = savedFrameLargeImg.naturalWidth;
+        const ih = savedFrameLargeImg.naturalHeight;
+        const zoom = Math.max(1, savedFramePlayer.zoomLevel || 1);
+        const cropW = iw / zoom;
+        const cropH = ih / zoom;
+        const fx = Math.max(0, Math.min(1, savedFramePlayer.zoomFocusX ?? 0.5));
+        const fy = Math.max(0, Math.min(1, savedFramePlayer.zoomFocusY ?? 0.5));
+        const sx = Math.max(0, Math.min(iw - cropW, fx * iw - cropW / 2));
+        const sy = Math.max(0, Math.min(ih - cropH, fy * ih - cropH / 2));
+
+        const outW = Math.max(720, Math.round(cropW));
+        const outH = Math.round(outW * (cropH / cropW));
+        const captionH = 38;
+        const c = document.createElement('canvas');
+        c.width = outW;
+        c.height = outH + captionH;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0e1118';
+        ctx.fillRect(0, 0, c.width, c.height);
+
+        // Draw cropped frame
+        ctx.drawImage(savedFrameLargeImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
+
+        // Draw ghost trail if active
+        if (savedFramePlayer.ghostEnabled && savedFrameGhostImg?.naturalWidth && savedFrameGhostImg.classList.contains('active')) {
+          ctx.save();
+          ctx.globalAlpha = 0.34;
+          ctx.drawImage(savedFrameGhostImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
+          ctx.restore();
+        }
+
+        // Map full-image coordinates into cropped export coordinates
+        const mapOffX = -(sx / cropW) * outW;
+        const mapOffY = -(sy / cropH) * outH;
+        const mapFullW = (iw / cropW) * outW;
+        const mapFullH = (ih / cropH) * outH;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, outW, outH);
+        ctx.clip();
+        if (savedFramePlayer.gridEnabled) {
+          drawAlignmentGridOnCtx(ctx, mapOffX, mapOffY, mapFullW, mapFullH);
+        }
+        if (savedFramePlayer.skeletonEnabled && savedFramePlayer.latestLandmarks) {
+          drawSkeletonOnCtx(ctx, savedFramePlayer.latestLandmarks, savedFramePlayer.latestMetrics, mapOffX, mapOffY, mapFullW, mapFullH);
+        }
+        // Draw user lines & angles
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        savedFramePlayer.drawings.forEach(d => {
+          ctx.strokeStyle = '#4caf50';
+          ctx.beginPath();
+          ctx.moveTo(mapOffX + d.x1 * mapFullW, mapOffY + d.y1 * mapFullH);
+          ctx.lineTo(mapOffX + d.x2 * mapFullW, mapOffY + d.y2 * mapFullH);
+          ctx.stroke();
+        });
+        savedFramePlayer.angles.forEach(a => {
+          const mappedPts = a.points.map(p => ({
+            x: (mapOffX + p.x * mapFullW) / outW,
+            y: (mapOffY + p.y * mapFullH) / outH
+          }));
+          drawAngleOnCtx(ctx, mappedPts, outW, outH, '#4fc3f7');
+        });
+        ctx.restore();
+
+        // Bottom caption bar with Player, Frame Label & Measured Angles
+        ctx.fillStyle = '#151822';
+        ctx.fillRect(0, outH, outW, captionH);
+        ctx.fillStyle = '#c7b088';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+        const pName = state.currentReport?._meta?.playerName || playerNameInput.value.trim() || 'Player';
+        const poseTxt = savedFramePlayer.skeletonEnabled && savedFramePlayer.latestMetrics
+          ? `  |  ${formatPoseMetricsCompact(savedFramePlayer.latestMetrics)}`
+          : '';
+        ctx.fillText(`${pName} · ${f.label || `F${savedFramePlayer.index + 1}`} @ ${Number(f.time || 0).toFixed(2)}s${poseTxt}`, 12, outH + 24);
+
+        const a = document.createElement('a');
+        a.href = c.toDataURL('image/png');
+        a.download = `${pName.replace(/[^a-z0-9_-]+/gi, '_')}-${(f.label || 'frame').replace(/\s+/g, '_')}.png`;
+        a.click();
+        showToast('📸 Exported annotated PNG snapshot');
+      });
+
       // Scrubber, Fullscreen, Draw & 3-Point Angle Protractor for Stored Frames Viewer
       savedFrameScrubber?.addEventListener('input', () => {
         stopSavedFramePlayback();
@@ -8061,6 +8392,7 @@ For each improvement's diagram (top-down net/pitch view):
           card.classList.toggle('active-frame', ci === safeIdx);
         });
         applySavedFrameZoom();
+        updateSavedFrameGhost();
         if (savedFramePlayer.skeletonEnabled && f.dataUrl) {
           evaluateSavedFramePose(f.dataUrl);
         } else {
@@ -9136,12 +9468,326 @@ create policy "Allow anon read/write for personal lab"
         }
       }
 
-      // --- BEFORE VS. AFTER COMPARISON ANALYSIS ---
+      // --- BEFORE VS. AFTER COMPARISON ANALYSIS & SIDE-BY-SIDE VISUAL VIEWER ---
+      const openSideBySideBtn = document.getElementById('openSideBySideBtn');
+      const sideBySideDialog = document.getElementById('sideBySideDialog');
+      const sbsState = {
+        framesA: [],
+        framesB: [],
+        titleA: 'Before',
+        titleB: 'After',
+        idxA: 0,
+        idxB: 0,
+        isPlaying: false,
+        timerId: null,
+        gridEnabled: false,
+        skeletonEnabled: false,
+        landmarksA: null,
+        metricsA: null,
+        landmarksB: null,
+        metricsB: null
+      };
+
+      function getSessionFramesList(session) {
+        const fromClips = (session?.clipsMeta || []).flatMap((c, ci) =>
+          (c.frames || []).map(f => ({
+            time: f.time,
+            dataUrl: f.dataUrl,
+            label: (session.clipsMeta.length > 1 ? `C${ci + 1} ` : '') + (f.label || 'Frame')
+          }))
+        );
+        return fromClips.length > 0 ? fromClips : (session?.report?._referenceFrames || []);
+      }
+
+      function stopSbsPlayback() {
+        if (sbsState.timerId) {
+          clearInterval(sbsState.timerId);
+          sbsState.timerId = null;
+        }
+        sbsState.isPlaying = false;
+        const btn = document.getElementById('sbsPlayBothBtn');
+        if (btn) btn.textContent = '▶ Play Both';
+      }
+
+      function getImgDisplayRectInStage(imgEl, stageW, stageH) {
+        const iw = imgEl.naturalWidth || 16;
+        const ih = imgEl.naturalHeight || 9;
+        const ia = iw / ih;
+        const ba = stageW / stageH;
+        let rw = stageW, rh = stageH, ox = 0, oy = 0;
+        if (ia > ba) {
+          rh = stageW / ia;
+          oy = (stageH - rh) / 2;
+        } else {
+          rw = stageH * ia;
+          ox = (stageW - rw) / 2;
+        }
+        return { ox, oy, rw, rh };
+      }
+
+      function redrawSbsPane(side) {
+        const stage = document.getElementById(side === 'A' ? 'sbsStageA' : 'sbsStageB');
+        const img = document.getElementById(side === 'A' ? 'sbsImgA' : 'sbsImgB');
+        const canvas = document.getElementById(side === 'A' ? 'sbsCanvasA' : 'sbsCanvasB');
+        const hud = document.getElementById(side === 'A' ? 'sbsHudA' : 'sbsHudB');
+        if (!stage || !canvas || !img) return;
+        const rect = stage.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, rect.width, rect.height);
+        if (sbsState.gridEnabled) {
+          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh);
+        }
+        const lm = side === 'A' ? sbsState.landmarksA : sbsState.landmarksB;
+        const metrics = side === 'A' ? sbsState.metricsA : sbsState.metricsB;
+        if (sbsState.skeletonEnabled && lm) {
+          drawSkeletonOnCtx(ctx, lm, metrics, ox, oy, rw, rh);
+          renderPoseHudInto(hud, true, metrics);
+        } else {
+          renderPoseHudInto(hud, false, null);
+        }
+      }
+
+      async function evalSbsPanePose(side, dataUrl) {
+        if (!sbsState.skeletonEnabled || !dataUrl) {
+          if (side === 'A') { sbsState.landmarksA = null; sbsState.metricsA = null; }
+          else { sbsState.landmarksB = null; sbsState.metricsB = null; }
+          redrawSbsPane(side);
+          return;
+        }
+        if (savedFramePlayer.poseCache.has(dataUrl)) {
+          const cached = savedFramePlayer.poseCache.get(dataUrl);
+          if (side === 'A') { sbsState.landmarksA = cached.landmarks; sbsState.metricsA = cached.metrics; }
+          else { sbsState.landmarksB = cached.landmarks; sbsState.metricsB = cached.metrics; }
+          redrawSbsPane(side);
+          return;
+        }
+        try {
+          const detector = await ensurePoseLandmarker();
+          const imgEl = document.getElementById(side === 'A' ? 'sbsImgA' : 'sbsImgB');
+          if (!imgEl.complete || !imgEl.naturalWidth) {
+            await new Promise(res => imgEl.addEventListener('load', res, { once: true }));
+          }
+          const res = detector.detect(imgEl);
+          const lm = res?.landmarks?.[0] || null;
+          const metrics = lm ? computePoseMetrics(lm) : null;
+          savedFramePlayer.poseCache.set(dataUrl, { landmarks: lm, metrics });
+          if (side === 'A') { sbsState.landmarksA = lm; sbsState.metricsA = metrics; }
+          else { sbsState.landmarksB = lm; sbsState.metricsB = metrics; }
+          redrawSbsPane(side);
+        } catch {}
+      }
+
+      function renderSbsFrames() {
+        const fA = sbsState.framesA[sbsState.idxA];
+        const fB = sbsState.framesB[sbsState.idxB];
+        const imgA = document.getElementById('sbsImgA');
+        const imgB = document.getElementById('sbsImgB');
+        if (fA && imgA) {
+          imgA.src = fA.dataUrl;
+          document.getElementById('sbsLabelA').textContent = `${sbsState.idxA + 1}/${sbsState.framesA.length} · ${fA.label || ''}`;
+        }
+        if (fB && imgB) {
+          imgB.src = fB.dataUrl;
+          document.getElementById('sbsLabelB').textContent = `${sbsState.idxB + 1}/${sbsState.framesB.length} · ${fB.label || ''}`;
+        }
+        const maxLen = Math.max(sbsState.framesA.length, sbsState.framesB.length, 1);
+        const syncScrubber = document.getElementById('sbsSyncScrubber');
+        if (syncScrubber) {
+          syncScrubber.max = String(maxLen - 1);
+          syncScrubber.value = String(Math.min(maxLen - 1, Math.max(sbsState.idxA, sbsState.idxB)));
+        }
+        if (sbsState.skeletonEnabled) {
+          if (fA?.dataUrl) evalSbsPanePose('A', fA.dataUrl);
+          if (fB?.dataUrl) evalSbsPanePose('B', fB.dataUrl);
+        } else {
+          redrawSbsPane('A');
+          redrawSbsPane('B');
+        }
+      }
+
+      function openSideBySideCompare(sessionA, sessionB) {
+        const framesA = getSessionFramesList(sessionA);
+        const framesB = getSessionFramesList(sessionB);
+        if (framesA.length === 0 || framesB.length === 0) {
+          showToast('Both selected sessions need stored frames for Side-by-Side view');
+          return;
+        }
+        stopSbsPlayback();
+        sbsState.framesA = framesA;
+        sbsState.framesB = framesB;
+        sbsState.titleA = `Before · ${sessionA.playerName} (${sessionA.fileStamp || ''})`;
+        sbsState.titleB = `After · ${sessionB.playerName} (${sessionB.fileStamp || ''})`;
+        // Auto-align to pinned Release/Impact if both have one, otherwise start at 0
+        const keyA = framesA.findIndex(f => /RELEASE|IMPACT/i.test(f.label || ''));
+        const keyB = framesB.findIndex(f => /RELEASE|IMPACT/i.test(f.label || ''));
+        sbsState.idxA = keyA >= 0 ? keyA : 0;
+        sbsState.idxB = keyB >= 0 ? keyB : 0;
+
+        document.getElementById('sbsTitleA').textContent = sbsState.titleA;
+        document.getElementById('sbsTitleB').textContent = sbsState.titleB;
+        if (historyDialog.open) historyDialog.close();
+        sideBySideDialog.showModal();
+        renderSbsFrames();
+      }
+
+      // Wire Side-by-Side Compare dialog controls
+      document.getElementById('sbsImgA')?.addEventListener('load', () => {
+        if (sbsState.skeletonEnabled && sbsState.framesA[sbsState.idxA]?.dataUrl) {
+          evalSbsPanePose('A', sbsState.framesA[sbsState.idxA].dataUrl);
+        } else redrawSbsPane('A');
+      });
+      document.getElementById('sbsImgB')?.addEventListener('load', () => {
+        if (sbsState.skeletonEnabled && sbsState.framesB[sbsState.idxB]?.dataUrl) {
+          evalSbsPanePose('B', sbsState.framesB[sbsState.idxB].dataUrl);
+        } else redrawSbsPane('B');
+      });
+      document.getElementById('closeSbsDialogBtn')?.addEventListener('click', () => { stopSbsPlayback(); sideBySideDialog.close(); });
+      document.getElementById('doneSbsDialogBtn')?.addEventListener('click', () => { stopSbsPlayback(); sideBySideDialog.close(); });
+      sideBySideDialog?.addEventListener('click', (e) => { if (e.target === sideBySideDialog) { stopSbsPlayback(); sideBySideDialog.close(); } });
+      document.getElementById('sbsPrevA')?.addEventListener('click', () => {
+        stopSbsPlayback();
+        sbsState.idxA = Math.max(0, sbsState.idxA - 1);
+        renderSbsFrames();
+      });
+      document.getElementById('sbsNextA')?.addEventListener('click', () => {
+        stopSbsPlayback();
+        sbsState.idxA = Math.min(sbsState.framesA.length - 1, sbsState.idxA + 1);
+        renderSbsFrames();
+      });
+      document.getElementById('sbsPrevB')?.addEventListener('click', () => {
+        stopSbsPlayback();
+        sbsState.idxB = Math.max(0, sbsState.idxB - 1);
+        renderSbsFrames();
+      });
+      document.getElementById('sbsNextB')?.addEventListener('click', () => {
+        stopSbsPlayback();
+        sbsState.idxB = Math.min(sbsState.framesB.length - 1, sbsState.idxB + 1);
+        renderSbsFrames();
+      });
+      document.getElementById('sbsStepBackBoth')?.addEventListener('click', () => {
+        stopSbsPlayback();
+        sbsState.idxA = Math.max(0, sbsState.idxA - 1);
+        sbsState.idxB = Math.max(0, sbsState.idxB - 1);
+        renderSbsFrames();
+      });
+      document.getElementById('sbsStepFwdBoth')?.addEventListener('click', () => {
+        stopSbsPlayback();
+        sbsState.idxA = Math.min(sbsState.framesA.length - 1, sbsState.idxA + 1);
+        sbsState.idxB = Math.min(sbsState.framesB.length - 1, sbsState.idxB + 1);
+        renderSbsFrames();
+      });
+      document.getElementById('sbsSyncScrubber')?.addEventListener('input', (e) => {
+        stopSbsPlayback();
+        const val = parseInt(e.target.value, 10) || 0;
+        const maxVal = Math.max(1, parseInt(e.target.max, 10) || 1);
+        const ratio = val / maxVal;
+        sbsState.idxA = Math.round(ratio * Math.max(0, sbsState.framesA.length - 1));
+        sbsState.idxB = Math.round(ratio * Math.max(0, sbsState.framesB.length - 1));
+        renderSbsFrames();
+      });
+      document.getElementById('sbsPlayBothBtn')?.addEventListener('click', () => {
+        if (sbsState.isPlaying) {
+          stopSbsPlayback();
+          return;
+        }
+        const fps = parseFloat(document.getElementById('sbsFpsSelect')?.value) || 4;
+        sbsState.isPlaying = true;
+        document.getElementById('sbsPlayBothBtn').textContent = '⏸ Pause';
+        sbsState.timerId = setInterval(() => {
+          sbsState.idxA = (sbsState.idxA + 1) % Math.max(1, sbsState.framesA.length);
+          sbsState.idxB = (sbsState.idxB + 1) % Math.max(1, sbsState.framesB.length);
+          renderSbsFrames();
+        }, Math.round(1000 / fps));
+      });
+      document.getElementById('sbsGridBtn')?.addEventListener('click', (e) => {
+        sbsState.gridEnabled = !sbsState.gridEnabled;
+        e.currentTarget.classList.toggle('btn-active', sbsState.gridEnabled);
+        redrawSbsPane('A');
+        redrawSbsPane('B');
+      });
+      document.getElementById('sbsSkelBtn')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        sbsState.skeletonEnabled = !sbsState.skeletonEnabled;
+        btn.classList.toggle('btn-active', sbsState.skeletonEnabled);
+        if (sbsState.skeletonEnabled) {
+          btn.textContent = '⏳ Loading...';
+          try {
+            await ensurePoseLandmarker();
+            btn.textContent = '🦴 Skeleton ON';
+            renderSbsFrames();
+          } catch (err) {
+            sbsState.skeletonEnabled = false;
+            btn.classList.remove('btn-active');
+            btn.textContent = '🦴 Skeleton';
+            showToast(`Pose error: ${err.message}`);
+          }
+        } else {
+          btn.textContent = '🦴 Skeleton';
+          sbsState.landmarksA = null; sbsState.metricsA = null;
+          sbsState.landmarksB = null; sbsState.metricsB = null;
+          redrawSbsPane('A');
+          redrawSbsPane('B');
+        }
+      });
+      document.getElementById('sbsExportPngBtn')?.addEventListener('click', () => {
+        const imgA = document.getElementById('sbsImgA');
+        const imgB = document.getElementById('sbsImgB');
+        if (!imgA?.naturalWidth || !imgB?.naturalWidth) return;
+        const paneW = 640, paneH = 420, gap = 12, capH = 44;
+        const c = document.createElement('canvas');
+        c.width = paneW * 2 + gap;
+        c.height = paneH + capH;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0e1118';
+        ctx.fillRect(0, 0, c.width, c.height);
+
+        const drawPane = (img, startX, title, lm, metrics) => {
+          const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, paneW, paneH);
+          ctx.drawImage(img, startX + ox, oy, rw, rh);
+          if (sbsState.gridEnabled) drawAlignmentGridOnCtx(ctx, startX + ox, oy, rw, rh);
+          if (sbsState.skeletonEnabled && lm) drawSkeletonOnCtx(ctx, lm, metrics, startX + ox, oy, rw, rh);
+          ctx.fillStyle = '#151822';
+          ctx.fillRect(startX, paneH, paneW, capH);
+          ctx.fillStyle = '#c7b088';
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText(title, startX + 10, paneH + 18);
+          if (sbsState.skeletonEnabled && metrics) {
+            ctx.fillStyle = '#b3e5fc';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText(formatPoseMetricsCompact(metrics), startX + 10, paneH + 35);
+          }
+        };
+        drawPane(imgA, 0, sbsState.titleA, sbsState.landmarksA, sbsState.metricsA);
+        drawPane(imgB, paneW + gap, sbsState.titleB, sbsState.landmarksB, sbsState.metricsB);
+
+        const a = document.createElement('a');
+        a.href = c.toDataURL('image/png');
+        a.download = `cricket-before-vs-after-${new Date().toISOString().slice(0, 10)}.png`;
+        a.click();
+        showToast('📸 Exported Side-by-Side Comparison PNG');
+      });
+
+      openSideBySideBtn?.addEventListener('click', () => {
+        if (state.compareIds.length !== 2) return;
+        const selected = state.compareIds
+          .map(id => cachedSessions.find(s => s.id === id))
+          .filter(Boolean)
+          .sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
+        if (selected.length === 2) {
+          openSideBySideCompare(selected[0], selected[1]);
+        }
+      });
+
       function updateCompareBarUI() {
         state.compareIds = state.compareIds.filter(id => cachedSessions.some(s => s.id === id));
         if (state.compareIds.length === 0) {
           compareBar.classList.remove('active');
           runCompareBtn.disabled = true;
+          if (openSideBySideBtn) openSideBySideBtn.disabled = true;
           return;
         }
         compareBar.classList.add('active');
@@ -9154,10 +9800,12 @@ create policy "Allow anon read/write for personal lab"
           const s1 = selected[0];
           compareBarTitle.textContent = `⚖️ Selected 1/2 (${s1.playerName} · ${s1.fileStamp || ''}) — tick 1 more file to compare`;
           runCompareBtn.disabled = true;
+          if (openSideBySideBtn) openSideBySideBtn.disabled = true;
         } else if (selected.length === 2) {
           const [a, b] = selected;
           compareBarTitle.textContent = `⚖️ Compare: ${a.playerName} (${a.fileStamp || 'Earlier'})  →  ${b.playerName} (${b.fileStamp || 'Later'})`;
           runCompareBtn.disabled = false;
+          if (openSideBySideBtn) openSideBySideBtn.disabled = false;
         }
       }
 
