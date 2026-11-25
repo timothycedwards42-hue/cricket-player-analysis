@@ -2193,22 +2193,17 @@
       touch-action: none;
     }
 
-    .saved-frame-ghost-img {
+    .saved-frame-trail-canvas {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      max-height: 440px;
-      object-fit: contain;
-      object-position: center;
-      opacity: 0.34;
       pointer-events: none;
       display: none;
       z-index: 2;
-      mix-blend-mode: screen;
     }
 
-    .saved-frame-ghost-img.active {
+    .saved-frame-trail-canvas.active {
       display: block;
     }
 
@@ -3124,7 +3119,7 @@
             <div class="saved-frame-preview-box" id="savedFramePreviewBox">
               <div class="saved-frame-stage" id="savedFrameStage">
                 <img id="savedFrameLargeImg" alt="Selected video reference frame">
-                <img id="savedFrameGhostImg" class="saved-frame-ghost-img" alt="">
+                <canvas id="savedFrameTrailCanvas" class="saved-frame-trail-canvas"></canvas>
                 <canvas id="savedFrameOverlayCanvas"></canvas>
                 <div class="pose-hud" id="savedFramePoseHud" aria-live="polite"></div>
                 <div class="zoom-select-box" id="savedFrameZoomBox"></div>
@@ -3147,8 +3142,15 @@
                     </select>
                   </div>
                   <div class="btn-group">
-                    <button type="button" class="btn-sm" id="savedFrameGridBtn" title="Toggle vertical plumb line &amp; alignment grid">⊞ Grid</button>
-                    <button type="button" class="btn-sm" id="savedFrameGhostBtn" title="Overlay previous frame faintly (onion-skin motion trail)">👻 Trail</button>
+                    <button type="button" class="btn-sm" id="savedFrameGridBtn" title="Toggle alignment grid &amp; plumb line (click frame to move center)">⊞ Grid</button>
+                    <button type="button" class="btn-sm" id="savedFrameGhostBtn" title="Composite motion trail of the last N frames (newest darkest, older lighter)">👻 Trail</button>
+                    <select id="savedFrameTrailCount" aria-label="Motion trail frame count" title="Number of previous frames in motion trail" style="display:none; width:auto; padding:3px 5px; font-size:0.72rem;">
+                      <option value="1">1f</option>
+                      <option value="2">2f</option>
+                      <option value="3" selected>3f</option>
+                      <option value="4">4f</option>
+                      <option value="5">5f</option>
+                    </select>
                     <button type="button" class="btn-sm" id="savedFrameAngleBtn" title="Tap 3 points (e.g. Hip → Knee → Ankle) to measure exact angle">📐 Angle</button>
                     <button type="button" class="btn-sm" id="savedFrameDrawBtn" title="Draw alignment lines on stored frames">✏️ Draw</button>
                     <button type="button" class="btn-sm" id="savedFrameClearBtn" title="Clear lines &amp; angle measurements">Clear</button>
@@ -7733,7 +7735,11 @@ For each improvement's diagram (top-down net/pitch view):
         angleDraftPoints: [],
         dragStart: null,
         gridEnabled: false,
+        gridCenterX: 0.5,
+        gridCenterY: 0.5,
         ghostEnabled: false,
+        trailCount: 3,
+        trailImgCache: new Map(),
         skeletonEnabled: false,
         poseCache: new Map(), // dataUrl -> { landmarks, metrics }
         latestLandmarks: null,
@@ -7741,7 +7747,8 @@ For each improvement's diagram (top-down net/pitch view):
       };
 
       const savedFrameStage = document.getElementById('savedFrameStage');
-      const savedFrameGhostImg = document.getElementById('savedFrameGhostImg');
+      const savedFrameTrailCanvas = document.getElementById('savedFrameTrailCanvas');
+      const savedFrameTrailCount = document.getElementById('savedFrameTrailCount');
       const savedFrameOverlayCanvas = document.getElementById('savedFrameOverlayCanvas');
       const savedFramePoseHud = document.getElementById('savedFramePoseHud');
       const savedFrameZoomBox = document.getElementById('savedFrameZoomBox');
@@ -7787,9 +7794,9 @@ For each improvement's diagram (top-down net/pitch view):
         const scaleStr = savedFramePlayer.zoomLevel > 1 ? `scale(${savedFramePlayer.zoomLevel})` : '';
         savedFrameLargeImg.style.transformOrigin = originStr;
         savedFrameLargeImg.style.transform = scaleStr;
-        if (savedFrameGhostImg) {
-          savedFrameGhostImg.style.transformOrigin = originStr;
-          savedFrameGhostImg.style.transform = scaleStr;
+        if (savedFrameTrailCanvas) {
+          savedFrameTrailCanvas.style.transformOrigin = originStr;
+          savedFrameTrailCanvas.style.transform = scaleStr;
         }
         if (savedFrameOverlayCanvas) {
           savedFrameOverlayCanvas.style.transformOrigin = originStr;
@@ -7797,40 +7804,53 @@ For each improvement's diagram (top-down net/pitch view):
         }
       }
 
-      function drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh) {
+      function drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh, cx = 0.5, cy = 0.5) {
         ctx.save();
-        // Subtle 3x3 alignment grid
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+        const midX = ox + rw * cx;
+        const midY = oy + rh * cy;
+        // Subtle outer alignment reference lines spaced around the chosen center
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
-        [1 / 3, 2 / 3].forEach(frac => {
-          const x = ox + rw * frac;
-          const y = oy + rh * frac;
-          ctx.beginPath();
-          ctx.moveTo(x, oy);
-          ctx.lineTo(x, oy + rh);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(ox, y);
-          ctx.lineTo(ox + rw, y);
-          ctx.stroke();
+        [-0.25, 0.25].forEach(delta => {
+          const x = ox + rw * (cx + delta);
+          if (x > ox && x < ox + rw) {
+            ctx.beginPath();
+            ctx.moveTo(x, oy);
+            ctx.lineTo(x, oy + rh);
+            ctx.stroke();
+          }
+          const y = oy + rh * (cy + delta);
+          if (y > oy && y < oy + rh) {
+            ctx.beginPath();
+            ctx.moveTo(ox, y);
+            ctx.lineTo(ox + rw, y);
+            ctx.stroke();
+          }
         });
-        // Prominent center vertical plumb line (for checking head-over-front-toe & falling away)
-        const midX = ox + rw * 0.5;
-        ctx.strokeStyle = 'rgba(255, 183, 77, 0.72)';
-        ctx.lineWidth = 1.6;
+        // Prominent vertical plumb line through clicked center (head-over-front-toe / falling away)
+        ctx.strokeStyle = 'rgba(255, 183, 77, 0.85)';
+        ctx.lineWidth = 1.8;
         ctx.setLineDash([6, 4]);
         ctx.beginPath();
         ctx.moveTo(midX, oy);
         ctx.lineTo(midX, oy + rh);
         ctx.stroke();
-        // Horizontal shoulder/hip level reference line
-        const midY = oy + rh * 0.5;
-        ctx.strokeStyle = 'rgba(79, 195, 247, 0.45)';
-        ctx.lineWidth = 1.2;
+        // Horizontal level reference line through clicked center
+        ctx.strokeStyle = 'rgba(79, 195, 247, 0.65)';
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.moveTo(ox, midY);
         ctx.lineTo(ox + rw, midY);
+        ctx.stroke();
+        // Center anchor dot
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(midX, midY, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 183, 77, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = '#0e1118';
+        ctx.lineWidth = 1.2;
         ctx.stroke();
         ctx.restore();
       }
@@ -7890,10 +7910,10 @@ For each improvement's diagram (top-down net/pitch view):
         const ctx = savedFrameOverlayCanvas.getContext('2d');
         ctx.clearRect(0, 0, rect.width, rect.height);
 
-        // 0. Optional Alignment Grid & Vertical Plumb Line
+        // 0. Optional Alignment Grid & Vertical Plumb Line (centered at user-clicked point)
         if (savedFramePlayer.gridEnabled) {
           const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
-          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh);
+          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh, savedFramePlayer.gridCenterX, savedFramePlayer.gridCenterY);
         }
 
         // 1. Skeleton overlay
@@ -8009,6 +8029,7 @@ For each improvement's diagram (top-down net/pitch view):
         if (savedFramePreviewBox.classList.contains('active')) {
           applySavedFrameZoom();
           redrawSavedFrameOverlay();
+          if (savedFramePlayer.ghostEnabled) updateSavedFrameGhost();
         }
       });
       savedFrameZoomSelect?.addEventListener('change', () => {
@@ -8061,6 +8082,24 @@ For each improvement's diagram (top-down net/pitch view):
           exitSavedFrameModes();
           applySavedFrameZoom();
           showToast(savedFramePlayer.zoomLevel > 1 ? `🎯 Aim updated at ${savedFramePlayer.zoomLevel}×` : '🎯 Aim point set — choose 2× or 3× Zoom when ready');
+          return;
+        }
+        // Click anywhere on the frame when Grid is ON (and not drawing/zooming) to move the grid/plumb-line center!
+        if (savedFramePlayer.gridEnabled && !savedFramePlayer.boxZoomMode && !savedFramePlayer.drawMode && !savedFramePlayer.angleMode) {
+          e.preventDefault();
+          const rect = savedFrameStage.getBoundingClientRect();
+          const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
+          const zoom = Math.max(1, savedFramePlayer.zoomLevel || 1);
+          const originPxX = ox + savedFramePlayer.zoomFocusX * rw;
+          const originPxY = oy + savedFramePlayer.zoomFocusY * rh;
+          const rawX = e.clientX - rect.left;
+          const rawY = e.clientY - rect.top;
+          // Invert CSS scale(zoom) around (originPxX, originPxY) so clicks work accurately even while zoomed in!
+          const unzoomX = originPxX + (rawX - originPxX) / zoom;
+          const unzoomY = originPxY + (rawY - originPxY) / zoom;
+          savedFramePlayer.gridCenterX = Math.max(0.02, Math.min(0.98, (unzoomX - ox) / (rw || rect.width)));
+          savedFramePlayer.gridCenterY = Math.max(0.02, Math.min(0.98, (unzoomY - oy) / (rh || rect.height)));
+          redrawSavedFrameOverlay();
           return;
         }
         if (!savedFramePlayer.boxZoomMode) return;
@@ -8161,36 +8200,99 @@ For each improvement's diagram (top-down net/pitch view):
         });
       });
 
-      // Grid, Ghost Trail & Snapshot PNG Export for Stored Frames Viewer
-      function updateSavedFrameGhost() {
-        if (!savedFrameGhostImg) return;
-        const prevIdx = savedFramePlayer.index - 1;
-        const prevFrame = prevIdx >= 0 ? savedFramePlayer.frames[prevIdx] : null;
-        if (savedFramePlayer.ghostEnabled && prevFrame?.dataUrl) {
-          savedFrameGhostImg.src = prevFrame.dataUrl;
-          savedFrameGhostImg.classList.add('active');
-        } else {
-          savedFrameGhostImg.classList.remove('active');
-          savedFrameGhostImg.removeAttribute('src');
+      // Grid, Multi-Frame Composite Motion Trail & Snapshot PNG Export for Stored Frames Viewer
+      function loadCachedTrailImg(dataUrl) {
+        if (!dataUrl) return Promise.resolve(null);
+        const existing = savedFramePlayer.trailImgCache.get(dataUrl);
+        if (existing && existing.complete && existing.naturalWidth) return Promise.resolve(existing);
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            savedFramePlayer.trailImgCache.set(dataUrl, img);
+            resolve(img);
+          };
+          img.onerror = () => resolve(null);
+          img.src = dataUrl;
+        });
+      }
+
+      // Draw a clean weighted-average stroboscopic trail of the last N frames + current frame
+      // (oldest frame lightest, most recent previous frame darker, current frame darkest/sharpest)
+      function drawTrailCompositeOnCtx(ctx, imgsOldestToNewest, sx, sy, sw, sh, dx, dy, dw, dh) {
+        const len = imgsOldestToNewest.length;
+        if (len === 0) return;
+        // Exponential weights so each newer frame is noticeably stronger than the older one
+        // while static background remains at 100% normal brightness!
+        const weights = imgsOldestToNewest.map((_, i) => Math.pow(1.85, i));
+        let cumWeight = 0;
+        ctx.save();
+        imgsOldestToNewest.forEach((img, i) => {
+          if (!img || !img.naturalWidth) return;
+          const w = weights[i];
+          cumWeight += w;
+          ctx.globalAlpha = i === 0 ? 1 : (w / cumWeight);
+          ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+        });
+        ctx.restore();
+      }
+
+      async function updateSavedFrameGhost() {
+        if (!savedFrameTrailCanvas || !savedFrameStage) return;
+        if (!savedFramePlayer.ghostEnabled) {
+          savedFrameTrailCanvas.classList.remove('active');
+          return;
         }
+        const curIdx = savedFramePlayer.index;
+        const n = Math.max(1, Math.min(5, savedFramePlayer.trailCount || 3));
+        const startIdx = Math.max(0, curIdx - n);
+        if (startIdx >= curIdx) {
+          savedFrameTrailCanvas.classList.remove('active');
+          return;
+        }
+        const frameSlice = savedFramePlayer.frames.slice(startIdx, curIdx + 1);
+        const imgs = (await Promise.all(frameSlice.map(fr => loadCachedTrailImg(fr.dataUrl)))).filter(Boolean);
+        // Ensure we're still on the same frame & trail is still enabled
+        if (!savedFramePlayer.ghostEnabled || savedFramePlayer.index !== curIdx || imgs.length < 2) {
+          savedFrameTrailCanvas.classList.remove('active');
+          return;
+        }
+        const rect = savedFrameStage.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        savedFrameTrailCanvas.width = rect.width;
+        savedFrameTrailCanvas.height = rect.height;
+        const ctx = savedFrameTrailCanvas.getContext('2d');
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
+        const first = imgs[0];
+        drawTrailCompositeOnCtx(ctx, imgs, 0, 0, first.naturalWidth, first.naturalHeight, ox, oy, rw, rh);
+        savedFrameTrailCanvas.classList.add('active');
       }
 
       savedFrameGridBtn?.addEventListener('click', () => {
         savedFramePlayer.gridEnabled = !savedFramePlayer.gridEnabled;
         savedFrameGridBtn.classList.toggle('btn-active', savedFramePlayer.gridEnabled);
         redrawSavedFrameOverlay();
+        if (savedFramePlayer.gridEnabled) {
+          showToast('⊞ Grid ON — tap anywhere on the frame to move the plumb line center');
+        }
       });
 
       savedFrameGhostBtn?.addEventListener('click', () => {
         savedFramePlayer.ghostEnabled = !savedFramePlayer.ghostEnabled;
         savedFrameGhostBtn.classList.toggle('btn-active', savedFramePlayer.ghostEnabled);
+        if (savedFrameTrailCount) savedFrameTrailCount.style.display = savedFramePlayer.ghostEnabled ? 'inline-block' : 'none';
         updateSavedFrameGhost();
         if (savedFramePlayer.ghostEnabled && savedFramePlayer.index === 0 && savedFramePlayer.frames.length > 1) {
-          showToast('👻 Step forward 1 frame (▶) to see the previous frame trail behind it');
+          showToast('👻 Step forward (▶) to see the multi-frame motion trail');
         }
       });
 
-      savedFrameSnapBtn?.addEventListener('click', () => {
+      savedFrameTrailCount?.addEventListener('change', () => {
+        savedFramePlayer.trailCount = parseInt(savedFrameTrailCount.value, 10) || 3;
+        updateSavedFrameGhost();
+      });
+
+      savedFrameSnapBtn?.addEventListener('click', async () => {
         const f = savedFramePlayer.frames[savedFramePlayer.index];
         if (!f || !savedFrameLargeImg.naturalWidth) return;
         const iw = savedFrameLargeImg.naturalWidth;
@@ -8213,15 +8315,20 @@ For each improvement's diagram (top-down net/pitch view):
         ctx.fillStyle = '#0e1118';
         ctx.fillRect(0, 0, c.width, c.height);
 
-        // Draw cropped frame
-        ctx.drawImage(savedFrameLargeImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
-
-        // Draw ghost trail if active
-        if (savedFramePlayer.ghostEnabled && savedFrameGhostImg?.naturalWidth && savedFrameGhostImg.classList.contains('active')) {
-          ctx.save();
-          ctx.globalAlpha = 0.34;
-          ctx.drawImage(savedFrameGhostImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
-          ctx.restore();
+        // Draw multi-frame composite trail (if active & >1 frame) or single cropped frame
+        let drewTrail = false;
+        if (savedFramePlayer.ghostEnabled && savedFramePlayer.index > 0) {
+          const n = Math.max(1, Math.min(5, savedFramePlayer.trailCount || 3));
+          const startIdx = Math.max(0, savedFramePlayer.index - n);
+          const slice = savedFramePlayer.frames.slice(startIdx, savedFramePlayer.index + 1);
+          const imgs = (await Promise.all(slice.map(fr => loadCachedTrailImg(fr.dataUrl)))).filter(Boolean);
+          if (imgs.length >= 2) {
+            drawTrailCompositeOnCtx(ctx, imgs, sx, sy, cropW, cropH, 0, 0, outW, outH);
+            drewTrail = true;
+          }
+        }
+        if (!drewTrail) {
+          ctx.drawImage(savedFrameLargeImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
         }
 
         // Map full-image coordinates into cropped export coordinates
@@ -8235,7 +8342,7 @@ For each improvement's diagram (top-down net/pitch view):
         ctx.rect(0, 0, outW, outH);
         ctx.clip();
         if (savedFramePlayer.gridEnabled) {
-          drawAlignmentGridOnCtx(ctx, mapOffX, mapOffY, mapFullW, mapFullH);
+          drawAlignmentGridOnCtx(ctx, mapOffX, mapOffY, mapFullW, mapFullH, savedFramePlayer.gridCenterX, savedFramePlayer.gridCenterY);
         }
         if (savedFramePlayer.skeletonEnabled && savedFramePlayer.latestLandmarks) {
           drawSkeletonOnCtx(ctx, savedFramePlayer.latestLandmarks, savedFramePlayer.latestMetrics, mapOffX, mapOffY, mapFullW, mapFullH);
@@ -8295,6 +8402,7 @@ For each improvement's diagram (top-down net/pitch view):
           setTimeout(() => {
             applySavedFrameZoom();
             redrawSavedFrameOverlay();
+            if (savedFramePlayer.ghostEnabled) updateSavedFrameGhost();
           }, 80);
         }
       });
