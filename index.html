@@ -606,6 +606,86 @@
       cursor: crosshair;
     }
 
+    .pose-hud {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      z-index: 6;
+      display: none;
+      flex-wrap: wrap;
+      gap: 4px;
+      max-width: calc(100% - 16px);
+      pointer-events: none;
+    }
+
+    .pose-hud.active {
+      display: flex;
+    }
+
+    .pose-hud-pill {
+      background: rgba(12, 16, 24, 0.84);
+      border: 1px solid rgba(79, 195, 247, 0.55);
+      color: #e3f5ff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+      backdrop-filter: blur(4px);
+    }
+
+    .phase-pin-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding-top: 4px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .phase-pin-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--pitch);
+    }
+
+    .hints-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .hint-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .hint-card h4 {
+      font-size: 0.84rem;
+      color: var(--pitch);
+      margin: 0;
+    }
+
+    .hint-card p, .hint-card li {
+      font-size: 0.78rem;
+      color: #dce0ee;
+      line-height: 1.42;
+    }
+
+    .hint-card ul {
+      margin: 0;
+      padding-left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
     .video-controls-bar {
       display: flex;
       flex-direction: column;
@@ -2527,6 +2607,7 @@
         <span id="apiStatusText">AI Key Not Set</span>
       </button>
       <button type="button" id="historyBtn" title="View or manage saved player folders (Local &amp; Supabase)">📁 Folders<span id="savedCount" style="display:none;">0</span></button>
+      <button type="button" id="hintsBtn" title="Filming, framing, and biomechanics hints for best AI results">💡 Hints</button>
     </div>
   </header>
 
@@ -2601,6 +2682,7 @@
           <div class="video-container" id="videoContainer">
             <video id="videoPlayer" playsinline preload="metadata"></video>
             <canvas id="telestrator"></canvas>
+            <div class="pose-hud" id="poseHud" aria-live="polite"></div>
             <div class="zoom-target-dot" id="zoomTargetDot" title="Zoom focal point"></div>
           </div>
 
@@ -2631,10 +2713,17 @@
 
               <div class="btn-group">
                 <button type="button" class="btn-sm" id="captureFrameBtn" title="Bookmark current frame for AI analysis">📸 Pin</button>
-                <button type="button" class="btn-sm" id="drawToggleBtn" title="Toggle telestrator drawing overlay">✏️ Draw</button>
-                <button type="button" class="btn-sm" id="clearDrawBtn" title="Clear drawings">Clear</button>
+                <button type="button" class="btn-sm" id="skeletonToggleBtn" title="Toggle live AI body skeleton &amp; real joint-angle measurement (MediaPipe)">🦴 Skeleton</button>
+                <button type="button" class="btn-sm" id="angleToggleBtn" title="Tap 3 points (e.g. Hip → Knee → Ankle) to measure exact joint angle">📐 Angle</button>
+                <button type="button" class="btn-sm" id="drawToggleBtn" title="Toggle telestrator line drawing overlay">✏️ Draw</button>
+                <button type="button" class="btn-sm" id="clearDrawBtn" title="Clear lines &amp; angle measurements">Clear</button>
                 <button type="button" class="btn-sm" id="videoFullscreenBtn" title="Fullscreen video player">⛶</button>
               </div>
+            </div>
+
+            <div class="phase-pin-row" id="phasePinRow">
+              <span class="phase-pin-label">📌 Pin Key Phase:</span>
+              <div class="btn-group" id="phasePinButtons"></div>
             </div>
 
             <div class="trim-row">
@@ -3279,6 +3368,52 @@
     </div>
   </dialog>
 
+  <!-- HINTS & BEST PRACTICES DIALOG -->
+  <dialog id="hintsDialog" aria-labelledby="hintsDialogTitle" style="width:min(700px, 95vw);">
+    <div class="dialog-header">
+      <h3 id="hintsDialogTitle">💡 Hints for Best Biomechanical Results</h3>
+      <button type="button" class="btn-sm btn-ghost" id="closeHintsDialogBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <p class="help-text">
+        Follow these filming and setup tips to give Gemini crystal-clear frames and real measured joint angles rather than guesswork.
+      </p>
+      <div class="hints-grid">
+        <div class="hint-card">
+          <h4>🎥 1. Film in 120fps / 240fps Slow-Mo</h4>
+          <p>Even though frames are sampled as stills, high-speed phone video removes motion blur on the wrist, seam, and bat face—making every frame dramatically sharper.</p>
+        </div>
+        <div class="hint-card">
+          <h4>📐 2. Use 2 Complementary Angles</h4>
+          <ul>
+            <li><strong>Side-on:</strong> Best for front-knee brace, stride length, head-over-front-toe, and bat swing arc.</li>
+            <li><strong>Behind / Umpire POV:</strong> Best for alignment, falling away, arm path, seam presentation, and LBW line.</li>
+          </ul>
+          <p>Tap <strong>+ Add Angle / Clip</strong> to analyze both together.</p>
+        </div>
+        <div class="hint-card">
+          <h4>🎯 3. Fill the Frame &amp; Use a Tripod</h4>
+          <p>Place the camera closer—or use <strong>2× + 🎯 Aim Zoom</strong>—so the player fills 60–80% of the view. Keeping the tripod in the same spot makes <strong>Before vs. After</strong> comparisons much more accurate.</p>
+        </div>
+        <div class="hint-card">
+          <h4>✂️ 4. Tight Trim + Pin Key Phases</h4>
+          <p>Trim the Action Window to <strong>1.5–2.0s</strong> around the action (20–30 frames), then step with <strong>-1f / +1f</strong> and tap the <strong>📌 Pin Key Phase</strong> buttons (<strong>BFC</strong>, <strong>FFC</strong>, <strong>Release</strong> or <strong>Trigger</strong>, <strong>Stride</strong>, <strong>Impact</strong>) so Gemini sees the exact critical moments.</p>
+        </div>
+        <div class="hint-card">
+          <h4>🦴 5. Turn On Skeleton &amp; 📐 Angle Tool</h4>
+          <p>Enable <strong>🦴 Skeleton</strong> to track real joint angles (knee brace, elbow angle, trunk lateral tilt) directly in your browser and send those measured numbers to Gemini. Use <strong>📐 Angle</strong> (tap 3 points: e.g. Hip → Knee → Ankle) to measure any custom angle on a paused frame.</p>
+        </div>
+        <div class="hint-card">
+          <h4>🧠 6. Add Ball Outcome &amp; Pick Pro</h4>
+          <p>In <strong>Focus Areas &amp; Notes</strong>, mention what happened to the ball (e.g. <em>"dragging down leg"</em> or <em>"beaten on inside edge"</em>). Use a <strong>Gemini Pro</strong> model for deep biomechanical or Before/After reviews, and <strong>Flash</strong> for quick net checks.</p>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button type="button" class="btn-primary" id="doneHintsDialogBtn">Got It</button>
+    </div>
+  </dialog>
+
   <script>
     (() => {
       // Auto-migrate retired or invalid model IDs saved in localStorage
@@ -3308,6 +3443,11 @@
         focusAreas: [],
         isSpeaking: false,
         drawingEnabled: false,
+        angleModeEnabled: false,
+        angleDraftPoints: [],
+        skeletonEnabled: false,
+        latestPoseLandmarks: null,
+        latestPoseMetrics: null,
         isDrawing: false,
         drawStart: null,
         currentReport: null,
@@ -3436,8 +3576,14 @@
 
       const telestrator = document.getElementById('telestrator');
       const tCtx = telestrator.getContext('2d');
+      const poseHud = document.getElementById('poseHud');
+      const skeletonToggleBtn = document.getElementById('skeletonToggleBtn');
+      const angleToggleBtn = document.getElementById('angleToggleBtn');
       const drawToggleBtn = document.getElementById('drawToggleBtn');
       const clearDrawBtn = document.getElementById('clearDrawBtn');
+      const phasePinButtons = document.getElementById('phasePinButtons');
+      const hintsBtn = document.getElementById('hintsBtn');
+      const hintsDialog = document.getElementById('hintsDialog');
 
       const roleBattingBtn = document.getElementById('roleBattingBtn');
       const roleBowlingBtn = document.getElementById('roleBowlingBtn');
@@ -3918,9 +4064,16 @@
           }
           videoScrubber.value = videoPlayer.currentTime;
           updateTimeReadout();
+          if (state.skeletonEnabled) updateLivePoseOverlay(false);
+        });
+        videoPlayer.addEventListener('seeked', () => {
+          if (state.skeletonEnabled) updateLivePoseOverlay(true);
         });
         videoPlayer.addEventListener('play', () => playPauseBtn.textContent = '⏸ Pause');
-        videoPlayer.addEventListener('pause', () => playPauseBtn.textContent = '▶ Play');
+        videoPlayer.addEventListener('pause', () => {
+          playPauseBtn.textContent = '▶ Play';
+          if (state.skeletonEnabled) updateLivePoseOverlay(true);
+        });
 
         videoScrubber.addEventListener('input', () => {
           videoPlayer.currentTime = parseFloat(videoScrubber.value);
@@ -4081,7 +4234,8 @@
             releaseTime: clip.releaseTime,
             arrivalTime: clip.arrivalTime,
             frames: clip.frames.map(f => ({ ...f })),
-            drawings: clip.drawings.map(d => ({ ...d }))
+            drawings: clip.drawings.map(d => ({ ...d })),
+            angles: (clip.angles || []).map(a => ({ ...a, points: a.points.map(p => ({ ...p })) }))
           };
           state.clips.push(cutClip);
           renderClipTabs();
@@ -4098,12 +4252,14 @@
           renderFilmstrip();
           renderClipTabs();
         };
+        window._pinSpecialFrame = pinSpecialFrame;
         markReleaseBtn.addEventListener('click', () => {
           const clip = getActiveClip();
           if (!clip || !videoPlayer.duration) return;
           clip.releaseTime = videoPlayer.currentTime;
           pinSpecialFrame(clip, 'EXACT RELEASE', clip.releaseTime);
           updateSpeedUI();
+          showToast(`✓ Pinned EXACT RELEASE @ ${clip.releaseTime.toFixed(2)}s`);
         });
         markArrivalBtn.addEventListener('click', () => {
           const clip = getActiveClip();
@@ -4111,6 +4267,7 @@
           clip.arrivalTime = videoPlayer.currentTime;
           pinSpecialFrame(clip, 'ARRIVAL', clip.arrivalTime);
           updateSpeedUI();
+          showToast(`✓ Pinned ARRIVAL @ ${clip.arrivalTime.toFixed(2)}s`);
         });
         resetSpeedBtn.addEventListener('click', () => {
           const clip = getActiveClip();
@@ -4126,20 +4283,100 @@
         pitchLengthSelect.addEventListener('change', updateSpeedUI);
         arrivalPointSelect.addEventListener('change', updateSpeedUI);
 
-        // Telestrator drawing
+        // Live MediaPipe AI Skeleton toggle
+        skeletonToggleBtn.addEventListener('click', async () => {
+          state.skeletonEnabled = !state.skeletonEnabled;
+          skeletonToggleBtn.classList.toggle('btn-active', state.skeletonEnabled);
+          if (state.skeletonEnabled) {
+            skeletonToggleBtn.textContent = '⏳ Loading...';
+            try {
+              await ensurePoseLandmarker();
+              skeletonToggleBtn.textContent = '🦴 Skeleton ON';
+              resizeTelestrator();
+              await updateLivePoseOverlay(true);
+              showToast('✓ AI Skeleton & Joint Angles active');
+            } catch (err) {
+              state.skeletonEnabled = false;
+              skeletonToggleBtn.classList.remove('btn-active');
+              skeletonToggleBtn.textContent = '🦴 Skeleton';
+              showToast(`Could not load MediaPipe Pose: ${err.message}`);
+            }
+          } else {
+            skeletonToggleBtn.textContent = '🦴 Skeleton';
+            state.latestPoseLandmarks = null;
+            state.latestPoseMetrics = null;
+            renderPoseHud(null);
+            redrawTelestrator();
+          }
+        });
+
+        // Hints Dialog events
+        hintsBtn.addEventListener('click', () => hintsDialog.showModal());
+        document.getElementById('closeHintsDialogBtn').addEventListener('click', () => hintsDialog.close());
+        document.getElementById('doneHintsDialogBtn').addEventListener('click', () => hintsDialog.close());
+        hintsDialog.addEventListener('click', (e) => {
+          if (e.target === hintsDialog) hintsDialog.close();
+        });
+
+        // Telestrator drawing & 3-Point Angle Protractor
         window.addEventListener('resize', resizeTelestrator);
+        const syncTelestratorInteractive = () => {
+          telestrator.classList.toggle('drawing-enabled', state.drawingEnabled || state.angleModeEnabled);
+        };
         drawToggleBtn.addEventListener('click', () => {
           state.drawingEnabled = !state.drawingEnabled;
-          telestrator.classList.toggle('drawing-enabled', state.drawingEnabled);
+          if (state.drawingEnabled) {
+            state.angleModeEnabled = false;
+            state.angleDraftPoints = [];
+            angleToggleBtn.classList.remove('btn-active');
+          }
           drawToggleBtn.classList.toggle('btn-active', state.drawingEnabled);
+          syncTelestratorInteractive();
+          redrawTelestrator();
+        });
+        angleToggleBtn.addEventListener('click', () => {
+          state.angleModeEnabled = !state.angleModeEnabled;
+          state.angleDraftPoints = [];
+          if (state.angleModeEnabled) {
+            state.drawingEnabled = false;
+            drawToggleBtn.classList.remove('btn-active');
+            showToast('📐 Tap 3 points on frame (e.g. Hip → Knee → Ankle)');
+          }
+          angleToggleBtn.classList.toggle('btn-active', state.angleModeEnabled);
+          syncTelestratorInteractive();
+          redrawTelestrator();
         });
         clearDrawBtn.addEventListener('click', () => {
           const clip = getActiveClip();
-          if (clip) clip.drawings = [];
+          if (clip) {
+            clip.drawings = [];
+            clip.angles = [];
+          }
+          state.angleDraftPoints = [];
           redrawTelestrator();
         });
         telestrator.addEventListener('pointerdown', (e) => {
-          if (!state.drawingEnabled || !getActiveClip()) return;
+          const clip = getActiveClip();
+          if (!clip) return;
+          if (state.angleModeEnabled) {
+            const pt = getCanvasPoint(e);
+            state.angleDraftPoints.push(pt);
+            if (state.angleDraftPoints.length === 3) {
+              const [p1, v, p3] = state.angleDraftPoints;
+              const deg = calcAngleDeg(p1, v, p3);
+              if (!Array.isArray(clip.angles)) clip.angles = [];
+              clip.angles.push({
+                time: videoPlayer.currentTime || 0,
+                deg: deg ?? 0,
+                points: state.angleDraftPoints.map(p => ({ ...p }))
+              });
+              state.angleDraftPoints = [];
+              showToast(`📐 Measured ${deg ?? 0}° @ ${(videoPlayer.currentTime || 0).toFixed(2)}s`);
+            }
+            redrawTelestrator();
+            return;
+          }
+          if (!state.drawingEnabled) return;
           state.isDrawing = true;
           const pt = getCanvasPoint(e);
           state.drawStart = pt;
@@ -4304,6 +4541,53 @@
         });
       }
 
+      const PHASE_PINS = {
+        bowling: [
+          { label: 'BFC', btn: '📌 BFC', title: 'Pin Back-Foot Contact frame' },
+          { label: 'FFC', btn: '📌 FFC', title: 'Pin Front-Foot Contact frame' },
+          { label: 'EXACT RELEASE', btn: '📌 Release', title: 'Pin exact ball release frame (also sets Speed Estimator release)' }
+        ],
+        batting: [
+          { label: 'TRIGGER', btn: '📌 Trigger', title: 'Pin pre-ball trigger / backlift frame' },
+          { label: 'STRIDE', btn: '📌 Stride', title: 'Pin front-foot plant / stride frame' },
+          { label: 'IMPACT', btn: '📌 Impact', title: 'Pin exact bat-ball contact frame' }
+        ],
+        lbw: [
+          { label: 'PITCHING', btn: '📌 Pitching', title: 'Pin exact ball pitching frame' },
+          { label: 'IMPACT', btn: '📌 Impact', title: 'Pin exact pad/bat impact frame' }
+        ]
+      };
+
+      function renderPhasePinButtons() {
+        if (!phasePinButtons) return;
+        phasePinButtons.textContent = '';
+        const items = PHASE_PINS[state.role] || PHASE_PINS.batting;
+        items.forEach(item => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'btn-sm';
+          b.textContent = item.btn;
+          b.title = item.title;
+          b.addEventListener('click', () => {
+            const clip = getActiveClip();
+            if (!clip || !videoPlayer.duration) {
+              showToast('Upload or record a video first');
+              return;
+            }
+            const t = videoPlayer.currentTime;
+            if (item.label === 'EXACT RELEASE') {
+              clip.releaseTime = t;
+              updateSpeedUI();
+            }
+            if (typeof window._pinSpecialFrame === 'function') {
+              window._pinSpecialFrame(clip, item.label, t);
+            }
+            showToast(`✓ Pinned ${item.label} @ ${t.toFixed(2)}s`);
+          });
+          phasePinButtons.appendChild(b);
+        });
+      }
+
       function setRole(role) {
         state.role = role;
         state.focusAreas = [];
@@ -4315,6 +4599,7 @@
         populateStyleOptions();
         autoFillPlayerDefaults(playerNameInput.value.trim());
         renderFocusChips();
+        renderPhasePinButtons();
         updateActivePlayerBadge();
         updateAnalyzeButtonLabel();
       }
@@ -4822,7 +5107,8 @@
             releaseTime: null,
             arrivalTime: null,
             frames: [],
-            drawings: []
+            drawings: [],
+            angles: []
           };
           state.clips.push(clip);
           if (firstNewId === null) firstNewId = id;
@@ -5014,13 +5300,320 @@
         };
       }
 
+      // --- MEDIAPIPE POSE SKELETON & REAL JOINT-ANGLE ENGINE ---
+      let poseLandmarker = null;
+      let poseLoaderPromise = null;
+      let lastPoseEvalMs = 0;
+
+      const POSE_CONNECTIONS = [
+        [11, 12], [11, 23], [12, 24], [23, 24], // Torso
+        [11, 13], [13, 15],                     // Left arm
+        [12, 14], [14, 16],                     // Right arm
+        [23, 25], [25, 27], [27, 31],           // Left leg
+        [24, 26], [26, 28], [28, 32]            // Right leg
+      ];
+
+      async function ensurePoseLandmarker() {
+        if (poseLandmarker) return poseLandmarker;
+        if (poseLoaderPromise) return poseLoaderPromise;
+        poseLoaderPromise = (async () => {
+          const visionMod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+          const { FilesetResolver, PoseLandmarker } = visionMod;
+          const wasmFileset = await FilesetResolver.forVisionTasks(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+          );
+          const modelUrl = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+          try {
+            poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
+              baseOptions: { modelAssetPath: modelUrl, delegate: 'GPU' },
+              runningMode: 'IMAGE',
+              numPoses: 1
+            });
+          } catch {
+            poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
+              baseOptions: { modelAssetPath: modelUrl, delegate: 'CPU' },
+              runningMode: 'IMAGE',
+              numPoses: 1
+            });
+          }
+          return poseLandmarker;
+        })();
+        try {
+          return await poseLoaderPromise;
+        } catch (err) {
+          poseLoaderPromise = null;
+          throw err;
+        }
+      }
+
+      function calcAngleDeg(a, b, c) {
+        if (!a || !b || !c) return null;
+        if ((a.visibility ?? 1) < 0.35 || (b.visibility ?? 1) < 0.35 || (c.visibility ?? 1) < 0.35) return null;
+        const v1x = a.x - b.x;
+        const v1y = a.y - b.y;
+        const v2x = c.x - b.x;
+        const v2y = c.y - b.y;
+        const mag1 = Math.hypot(v1x, v1y);
+        const mag2 = Math.hypot(v2x, v2y);
+        if (mag1 < 1e-4 || mag2 < 1e-4) return null;
+        const cosVal = Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / (mag1 * mag2)));
+        return Math.round((Math.acos(cosVal) * 180) / Math.PI);
+      }
+
+      function computePoseMetrics(lm) {
+        if (!Array.isArray(lm) || lm.length < 29) return null;
+        const leftKnee = calcAngleDeg(lm[23], lm[25], lm[27]);
+        const rightKnee = calcAngleDeg(lm[24], lm[26], lm[28]);
+        const leftElbow = calcAngleDeg(lm[11], lm[13], lm[15]);
+        const rightElbow = calcAngleDeg(lm[12], lm[14], lm[16]);
+
+        let trunkTilt = null;
+        if ((lm[11]?.visibility ?? 1) > 0.35 && (lm[12]?.visibility ?? 1) > 0.35 && (lm[23]?.visibility ?? 1) > 0.35 && (lm[24]?.visibility ?? 1) > 0.35) {
+          const midShX = (lm[11].x + lm[12].x) / 2;
+          const midShY = (lm[11].y + lm[12].y) / 2;
+          const midHipX = (lm[23].x + lm[24].x) / 2;
+          const midHipY = (lm[23].y + lm[24].y) / 2;
+          const dx = midShX - midHipX;
+          const dy = midHipY - midShY; // upward is positive
+          if (Math.hypot(dx, dy) > 0.02) {
+            trunkTilt = Math.round(Math.abs((Math.atan2(dx, dy) * 180) / Math.PI));
+          }
+        }
+
+        let shoulderTilt = null;
+        if ((lm[11]?.visibility ?? 1) > 0.35 && (lm[12]?.visibility ?? 1) > 0.35) {
+          const dx = lm[12].x - lm[11].x;
+          const dy = lm[12].y - lm[11].y;
+          if (Math.hypot(dx, dy) > 0.02) {
+            shoulderTilt = Math.round(Math.abs((Math.atan2(dy, Math.abs(dx)) * 180) / Math.PI));
+          }
+        }
+
+        return { leftKnee, rightKnee, leftElbow, rightElbow, trunkTilt, shoulderTilt };
+      }
+
+      function formatPoseMetricsCompact(m) {
+        if (!m) return '';
+        const parts = [];
+        if (m.leftKnee !== null) parts.push(`L-Knee ${m.leftKnee}°`);
+        if (m.rightKnee !== null) parts.push(`R-Knee ${m.rightKnee}°`);
+        if (m.leftElbow !== null) parts.push(`L-Elbow ${m.leftElbow}°`);
+        if (m.rightElbow !== null) parts.push(`R-Elbow ${m.rightElbow}°`);
+        if (m.trunkTilt !== null) parts.push(`Trunk Tilt ${m.trunkTilt}°`);
+        if (m.shoulderTilt !== null) parts.push(`Shoulder Tilt ${m.shoulderTilt}°`);
+        return parts.join(', ');
+      }
+
+      function renderPoseHud(m) {
+        poseHud.textContent = '';
+        if (!state.skeletonEnabled || !m) {
+          poseHud.classList.remove('active');
+          return;
+        }
+        const items = [];
+        if (m.leftKnee !== null) items.push(`L-Knee: ${m.leftKnee}°`);
+        if (m.rightKnee !== null) items.push(`R-Knee: ${m.rightKnee}°`);
+        if (m.leftElbow !== null) items.push(`L-Elbow: ${m.leftElbow}°`);
+        if (m.rightElbow !== null) items.push(`R-Elbow: ${m.rightElbow}°`);
+        if (m.trunkTilt !== null) items.push(`Trunk Tilt: ${m.trunkTilt}°`);
+        if (items.length === 0) {
+          poseHud.classList.remove('active');
+          return;
+        }
+        items.forEach(txt => {
+          const pill = document.createElement('span');
+          pill.className = 'pose-hud-pill';
+          pill.textContent = txt;
+          poseHud.appendChild(pill);
+        });
+        poseHud.classList.add('active');
+      }
+
+      async function updateLivePoseOverlay(force = false) {
+        if (!state.skeletonEnabled || !videoPlayer.videoWidth || videoPlayer.readyState < 2) {
+          if (!state.skeletonEnabled) {
+            state.latestPoseLandmarks = null;
+            state.latestPoseMetrics = null;
+            renderPoseHud(null);
+            redrawTelestrator();
+          }
+          return;
+        }
+        const now = performance.now();
+        if (!force && now - lastPoseEvalMs < 130) return;
+        lastPoseEvalMs = now;
+        try {
+          const lmDetector = await ensurePoseLandmarker();
+          const res = lmDetector.detect(videoPlayer);
+          const lm = res?.landmarks?.[0] || null;
+          state.latestPoseLandmarks = lm;
+          state.latestPoseMetrics = lm ? computePoseMetrics(lm) : null;
+          renderPoseHud(state.latestPoseMetrics);
+          redrawTelestrator();
+        } catch (err) {
+          console.warn('Pose detection error:', err);
+        }
+      }
+
+      async function detectPoseOnDataUrl(dataUrl) {
+        try {
+          const lmDetector = await ensurePoseLandmarker();
+          const img = await new Promise((resolve, reject) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = reject;
+            el.src = dataUrl;
+          });
+          const res = lmDetector.detect(img);
+          const lm = res?.landmarks?.[0] || null;
+          return lm ? computePoseMetrics(lm) : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function getVideoDisplayRect(w, h) {
+        const vw = videoPlayer.videoWidth || 16;
+        const vh = videoPlayer.videoHeight || 9;
+        const videoAspect = vw / vh;
+        const boxAspect = w / h;
+        let rw = w, rh = h, ox = 0, oy = 0;
+        if (videoAspect > boxAspect) {
+          rh = w / videoAspect;
+          oy = (h - rh) / 2;
+        } else {
+          rw = h * videoAspect;
+          ox = (w - rw) / 2;
+        }
+        return { ox, oy, rw, rh };
+      }
+
+      function drawAngleMeasurement(pts, w, h, color = '#4fc3f7') {
+        if (!Array.isArray(pts) || pts.length === 0) return;
+        const toPx = p => ({ x: p.x * w, y: p.y * h });
+        const pxPts = pts.map(toPx);
+
+        tCtx.save();
+        tCtx.strokeStyle = color;
+        tCtx.fillStyle = color;
+        tCtx.lineWidth = 2.5;
+
+        // Draw points
+        pxPts.forEach((p, idx) => {
+          tCtx.beginPath();
+          tCtx.arc(p.x, p.y, idx === 1 ? 5 : 4, 0, Math.PI * 2);
+          tCtx.fill();
+        });
+
+        // Draw rays
+        if (pxPts.length >= 2) {
+          tCtx.beginPath();
+          tCtx.moveTo(pxPts[0].x, pxPts[0].y);
+          tCtx.lineTo(pxPts[1].x, pxPts[1].y);
+          if (pxPts.length === 3) tCtx.lineTo(pxPts[2].x, pxPts[2].y);
+          tCtx.stroke();
+        }
+
+        // Draw arc + degree readout badge when 3 points complete
+        if (pxPts.length === 3) {
+          const [p1, v, p3] = pxPts;
+          const a1 = Math.atan2(p1.y - v.y, p1.x - v.x);
+          const a2 = Math.atan2(p3.y - v.y, p3.x - v.x);
+          let diff = a2 - a1;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          const deg = Math.round(Math.abs((diff * 180) / Math.PI));
+
+          tCtx.beginPath();
+          tCtx.arc(v.x, v.y, 20, a1, a1 + diff, diff < 0);
+          tCtx.stroke();
+
+          const label = `${deg}°`;
+          tCtx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+          const tw = tCtx.measureText(label).width;
+          const bx = Math.min(w - tw - 12, Math.max(6, v.x + 12));
+          const by = Math.min(h - 24, Math.max(6, v.y - 22));
+          tCtx.fillStyle = 'rgba(12, 16, 24, 0.88)';
+          tCtx.fillRect(bx - 4, by - 2, tw + 10, 18);
+          tCtx.strokeStyle = color;
+          tCtx.lineWidth = 1;
+          tCtx.strokeRect(bx - 4, by - 2, tw + 10, 18);
+          tCtx.fillStyle = '#ffffff';
+          tCtx.fillText(label, bx + 1, by + 11);
+        }
+        tCtx.restore();
+      }
+
       function redrawTelestrator(previewStart = null, previewEnd = null) {
         const w = telestrator.width;
         const h = telestrator.height;
         tCtx.clearRect(0, 0, w, h);
+
+        // 1. Live MediaPipe Skeleton Overlay (aligned accurately to video rect inside container)
+        if (state.skeletonEnabled && state.latestPoseLandmarks) {
+          const lm = state.latestPoseLandmarks;
+          const { ox, oy, rw, rh } = getVideoDisplayRect(w, h);
+          const pt = (idx) => {
+            const p = lm[idx];
+            if (!p || (p.visibility ?? 1) < 0.35) return null;
+            return { x: ox + p.x * rw, y: oy + p.y * rh };
+          };
+
+          tCtx.save();
+          tCtx.lineWidth = 2.5;
+          tCtx.lineCap = 'round';
+          tCtx.strokeStyle = 'rgba(79, 195, 247, 0.9)';
+          POSE_CONNECTIONS.forEach(([i, j]) => {
+            const a = pt(i);
+            const b = pt(j);
+            if (!a || !b) return;
+            tCtx.beginPath();
+            tCtx.moveTo(a.x, a.y);
+            tCtx.lineTo(b.x, b.y);
+            tCtx.stroke();
+          });
+
+          // Draw key joints
+          [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28].forEach(idx => {
+            const p = pt(idx);
+            if (!p) return;
+            tCtx.fillStyle = idx === 0 ? '#ffb74d' : '#4caf50';
+            tCtx.beginPath();
+            tCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            tCtx.fill();
+            tCtx.strokeStyle = '#0e1118';
+            tCtx.lineWidth = 1.2;
+            tCtx.stroke();
+          });
+
+          // Annotate knee & elbow degrees right beside the joints
+          const m = state.latestPoseMetrics;
+          if (m) {
+            const badges = [
+              { idx: 25, val: m.leftKnee },
+              { idx: 26, val: m.rightKnee },
+              { idx: 13, val: m.leftElbow },
+              { idx: 14, val: m.rightElbow }
+            ];
+            tCtx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            badges.forEach(b => {
+              if (b.val === null) return;
+              const p = pt(b.idx);
+              if (!p) return;
+              const txt = `${b.val}°`;
+              const tw = tCtx.measureText(txt).width;
+              tCtx.fillStyle = 'rgba(12, 16, 24, 0.82)';
+              tCtx.fillRect(p.x + 6, p.y - 11, tw + 6, 15);
+              tCtx.fillStyle = '#ffe082';
+              tCtx.fillText(txt, p.x + 9, p.y);
+            });
+          }
+          tCtx.restore();
+        }
+
+        // 2. User Telestrator Lines
         tCtx.lineWidth = 3;
         tCtx.lineCap = 'round';
-
         const drawLine = (x1, y1, x2, y2, color) => {
           tCtx.strokeStyle = color;
           tCtx.beginPath();
@@ -5033,6 +5626,12 @@
         (clip?.drawings || []).forEach(d => drawLine(d.x1, d.y1, d.x2, d.y2, '#4caf50'));
         if (previewStart && previewEnd) {
           drawLine(previewStart.x, previewStart.y, previewEnd.x, previewEnd.y, '#ffb74d');
+        }
+
+        // 3. User 3-Point Protractor Angle Measurements
+        (clip?.angles || []).forEach(ang => drawAngleMeasurement(ang.points, w, h, '#4fc3f7'));
+        if (state.angleDraftPoints.length > 0) {
+          drawAngleMeasurement(state.angleDraftPoints, w, h, '#ffb74d');
         }
       }
 
@@ -5078,7 +5677,7 @@
         const end = Math.max(start + 0.05, Math.min(clip.trimEnd ?? dur, dur));
         const span = Math.max(0.05, end - start);
 
-        const pinned = clip.frames.filter(f => f.label === 'Pinned' || f.label === 'EXACT RELEASE' || f.label === 'ARRIVAL');
+        const pinned = clip.frames.filter(f => !/^F\d+$/.test(f.label || ''));
         const extracted = [];
 
         for (let i = 0; i < count; i++) {
@@ -5264,10 +5863,45 @@
 
             const singleClip = state.clips[0];
             const fileSizeMb = singleClip.file.size / (1024 * 1024);
-            const useFullVideo = !isMultiClip && (
+            const hasSpecialPins = singleClip.frames.some(f => !/^F\d+$/.test(f.label || ''));
+            const useFullVideo = !isMultiClip && !hasSpecialPins && !state.skeletonEnabled && (
               (state.analysisMode === 'video' && fileSizeMb <= 18) ||
               (state.analysisMode === 'auto' && !singleClip.trimCustom && fileSizeMb <= 15)
             );
+
+            // Collect real measured joint angles (MediaPipe Pose + manual Protractor angles)
+            const measuredAngleLines = [];
+            state.clips.forEach((clip, cIdx) => {
+              (clip.angles || []).forEach((ang, aIdx) => {
+                measuredAngleLines.push(`Clip ${cIdx + 1} Coach Protractor #${aIdx + 1} @ ${ang.time.toFixed(2)}s: ${ang.deg}°`);
+              });
+            });
+
+            if (state.skeletonEnabled) {
+              setLoading(true, 'Measuring real joint angles (MediaPipe Pose)...', 'Computing knee brace, elbow angle, and trunk tilt on key frames.');
+              for (let cIdx = 0; cIdx < state.clips.length; cIdx++) {
+                const clip = state.clips[cIdx];
+                const namedFrames = clip.frames.filter(f => !/^F\d+$/.test(f.label || ''));
+                const regularFrames = sampleEvenly(clip.frames.filter(f => /^F\d+$/.test(f.label || '')), 6);
+                const targets = [...namedFrames, ...regularFrames]
+                  .filter((f, idx, arr) => arr.indexOf(f) === idx)
+                  .sort((a, b) => a.time - b.time);
+                for (const f of targets) {
+                  const m = await detectPoseOnDataUrl(f.dataUrl);
+                  const summary = formatPoseMetricsCompact(m);
+                  if (summary) {
+                    f.poseSummary = summary;
+                    measuredAngleLines.push(`Clip ${cIdx + 1} [${f.label} @ ${f.time.toFixed(2)}s]: ${summary}`);
+                  }
+                }
+              }
+            }
+
+            if (measuredAngleLines.length > 0) {
+              parts.push({
+                text: `=== REAL MEASURED BIOMECHANICAL ANGLES (use these exact measured numbers rather than guessing angles) ===\n${measuredAngleLines.join('\n')}`
+              });
+            }
 
             if (useFullVideo) {
               setLoading(true, 'Encoding video clip...', `Sending full video (${fileSizeMb.toFixed(1)} MB) to ${state.model}.`);
@@ -5293,7 +5927,8 @@
                   text: `=== CLIP ${cIdx + 1} of ${state.clips.length}: "${clip.name}" | Camera Angle: ${clip.angle} | Window: ${winDesc} ===`
                 });
                 clip.frames.forEach((f, fIdx) => {
-                  parts.push({ text: `Clip ${cIdx + 1} (${clip.angle}) — Frame ${fIdx + 1} (${f.label}) at ${f.time.toFixed(2)}s:` });
+                  const poseNote = f.poseSummary ? ` | Measured Pose: ${f.poseSummary}` : '';
+                  parts.push({ text: `Clip ${cIdx + 1} (${clip.angle}) — Frame ${fIdx + 1} (${f.label}) at ${f.time.toFixed(2)}s${poseNote}:` });
                   parts.push({
                     inlineData: {
                       mimeType: 'image/jpeg',
