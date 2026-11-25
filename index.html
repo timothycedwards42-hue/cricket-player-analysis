@@ -2720,9 +2720,27 @@
               </div>
             </div>
 
-            <div class="phase-pin-row" id="phasePinRow">
-              <span class="phase-pin-label">📌 Pin Key Phase:</span>
-              <div class="btn-group" id="phasePinButtons"></div>
+            <div class="phase-pin-row" id="framingRow">
+              <div class="btn-group">
+                <span class="phase-pin-label">🔍 Framing:</span>
+                <select id="zoomSelect" aria-label="Center crop zoom for wide-angle footage" title="Crop zoom (great for wide-angle smart glasses footage)" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+                  <option value="1" selected>1× Zoom</option>
+                  <option value="2">2× Zoom</option>
+                  <option value="3">3× Zoom</option>
+                </select>
+                <button type="button" class="btn-sm" id="aimZoomBtn" title="Click on the batter or stumps in the video to set the zoom target">🎯 Aim</button>
+                <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+                  <option value="12">12 frames</option>
+                  <option value="16">16 frames</option>
+                  <option value="20" selected>20 frames</option>
+                  <option value="24">24 frames</option>
+                  <option value="30">30 frames</option>
+                </select>
+              </div>
+              <div class="btn-group" id="phasePinRow">
+                <span class="phase-pin-label">📌 Pin:</span>
+                <div class="btn-group" id="phasePinButtons"></div>
+              </div>
             </div>
 
             <div class="trim-row">
@@ -2750,22 +2768,7 @@
           <div class="filmstrip-section">
             <div class="filmstrip-header">
               <span>Keyframes queued for analysis (<strong id="frameCount">0</strong>)</span>
-              <div class="btn-group">
-                <select id="zoomSelect" aria-label="Center crop zoom for wide-angle footage" title="Crop zoom (great for wide-angle smart glasses footage)" style="width:auto; padding:3px 6px; font-size:0.74rem;">
-                  <option value="1" selected>1× Zoom</option>
-                  <option value="2">2× Zoom</option>
-                  <option value="3">3× Zoom</option>
-                </select>
-                <button type="button" class="btn-sm" id="aimZoomBtn" title="Click on the batter or stumps in the video to set the zoom target">🎯 Aim</button>
-                <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
-                  <option value="12">12 frames</option>
-                  <option value="16">16 frames</option>
-                  <option value="20" selected>20 frames</option>
-                  <option value="24">24 frames</option>
-                  <option value="30">30 frames</option>
-                </select>
-                <button type="button" class="btn-sm btn-ghost" id="autoExtractBtn">Sample Window</button>
-              </div>
+              <button type="button" class="btn-sm btn-ghost" id="autoExtractBtn">↻ Re-Sample Window</button>
             </div>
             <div class="filmstrip" id="filmstrip"></div>
           </div>
