@@ -2133,7 +2133,33 @@
     }
 
     .saved-frame-preview-box.active {
-      display: block;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .saved-frame-preview-box:fullscreen,
+    .saved-frame-preview-box:-webkit-full-screen {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      border: none;
+      border-radius: 0;
+    }
+
+    .saved-frame-preview-box:fullscreen .saved-frame-stage,
+    .saved-frame-preview-box:-webkit-full-screen .saved-frame-stage {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .saved-frame-preview-box:fullscreen img,
+    .saved-frame-preview-box:-webkit-full-screen img {
+      max-height: 100%;
+      height: 100%;
+      width: 100%;
+      object-fit: contain;
     }
 
     .saved-frame-stage {
@@ -2145,7 +2171,8 @@
       justify-content: center;
     }
 
-    .saved-frame-stage.aim-mode {
+    .saved-frame-stage.aim-mode,
+    .saved-frame-stage.draw-mode {
       cursor: crosshair;
       touch-action: none;
       user-select: none;
@@ -2158,6 +2185,12 @@
       height: 100%;
       pointer-events: none;
       z-index: 4;
+    }
+
+    .saved-frame-stage canvas.drawing-enabled {
+      pointer-events: auto;
+      cursor: crosshair;
+      touch-action: none;
     }
 
     .saved-frame-preview-box img {
@@ -3016,8 +3049,12 @@
                 <div class="pose-hud" id="savedFramePoseHud" aria-live="polite"></div>
                 <div class="zoom-select-box" id="savedFrameZoomBox"></div>
               </div>
-              <div style="padding:6px 8px; font-size:0.74rem; color:var(--pitch); display:flex; flex-direction:column; gap:6px; background:var(--surface);">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+              <div style="padding:7px 9px; font-size:0.74rem; color:var(--pitch); display:flex; flex-direction:column; gap:6px; background:var(--surface);">
+                <div class="scrubber-row">
+                  <input type="range" id="savedFrameScrubber" min="0" max="0" step="1" value="0" aria-label="Stored frame timeline">
+                  <span id="savedFrameLargeLabel" style="font-variant-numeric:tabular-nums; white-space:nowrap;"></span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
                   <div class="btn-group">
                     <button type="button" class="btn-sm" id="savedFramePrevBtn" title="Previous frame">◀</button>
                     <button type="button" class="btn-sm btn-primary" id="savedFramePlayBtn">▶ Play</button>
@@ -3029,8 +3066,13 @@
                       <option value="8">8 fps</option>
                     </select>
                   </div>
-                  <span id="savedFrameLargeLabel"></span>
-                  <button type="button" class="btn-sm btn-ghost" id="closeFramePreviewBtn">Close ✕</button>
+                  <div class="btn-group">
+                    <button type="button" class="btn-sm" id="savedFrameAngleBtn" title="Tap 3 points (e.g. Hip → Knee → Ankle) to measure exact angle">📐 Angle</button>
+                    <button type="button" class="btn-sm" id="savedFrameDrawBtn" title="Draw alignment lines on stored frames">✏️ Draw</button>
+                    <button type="button" class="btn-sm" id="savedFrameClearBtn" title="Clear lines &amp; angle measurements">Clear</button>
+                    <button type="button" class="btn-sm" id="savedFrameFsBtn" title="Fullscreen frame viewer with controls">⛶</button>
+                    <button type="button" class="btn-sm btn-ghost" id="closeFramePreviewBtn">Hide ✕</button>
+                  </div>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:5px;">
                   <div class="btn-group">
@@ -7521,6 +7563,13 @@ For each improvement's diagram (top-down net/pitch view):
         zoomFocusY: 0.5,
         aimMode: false,
         boxZoomMode: false,
+        drawMode: false,
+        angleMode: false,
+        isDrawing: false,
+        drawStart: null,
+        drawings: [],
+        angles: [],
+        angleDraftPoints: [],
         dragStart: null,
         skeletonEnabled: false,
         poseCache: new Map(), // dataUrl -> { landmarks, metrics }
@@ -7532,9 +7581,14 @@ For each improvement's diagram (top-down net/pitch view):
       const savedFrameOverlayCanvas = document.getElementById('savedFrameOverlayCanvas');
       const savedFramePoseHud = document.getElementById('savedFramePoseHud');
       const savedFrameZoomBox = document.getElementById('savedFrameZoomBox');
+      const savedFrameScrubber = document.getElementById('savedFrameScrubber');
       const savedFrameZoomSelect = document.getElementById('savedFrameZoomSelect');
       const savedFrameBoxZoomBtn = document.getElementById('savedFrameBoxZoomBtn');
       const savedFrameAimBtn = document.getElementById('savedFrameAimBtn');
+      const savedFrameDrawBtn = document.getElementById('savedFrameDrawBtn');
+      const savedFrameAngleBtn = document.getElementById('savedFrameAngleBtn');
+      const savedFrameClearBtn = document.getElementById('savedFrameClearBtn');
+      const savedFrameFsBtn = document.getElementById('savedFrameFsBtn');
       const savedFrameSkelBtn = document.getElementById('savedFrameSkelBtn');
       const savedFrameSkelParts = document.getElementById('savedFrameSkelParts');
 
@@ -7572,7 +7626,53 @@ For each improvement's diagram (top-down net/pitch view):
         }
       }
 
-      function redrawSavedFrameOverlay() {
+      function drawAngleOnCtx(ctx, pts, w, h, color = '#4fc3f7') {
+        if (!ctx || !Array.isArray(pts) || pts.length === 0) return;
+        const pxPts = pts.map(p => ({ x: p.x * w, y: p.y * h }));
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 2.5;
+        pxPts.forEach((p, idx) => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, idx === 1 ? 5 : 4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        if (pxPts.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(pxPts[0].x, pxPts[0].y);
+          ctx.lineTo(pxPts[1].x, pxPts[1].y);
+          if (pxPts.length === 3) ctx.lineTo(pxPts[2].x, pxPts[2].y);
+          ctx.stroke();
+        }
+        if (pxPts.length === 3) {
+          const [p1, v, p3] = pxPts;
+          const a1 = Math.atan2(p1.y - v.y, p1.x - v.x);
+          const a2 = Math.atan2(p3.y - v.y, p3.x - v.x);
+          let diff = a2 - a1;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          const deg = Math.round(Math.abs((diff * 180) / Math.PI));
+          ctx.beginPath();
+          ctx.arc(v.x, v.y, 20, a1, a1 + diff, diff < 0);
+          ctx.stroke();
+          const label = `${deg}°`;
+          ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+          const tw = ctx.measureText(label).width;
+          const bx = Math.min(w - tw - 12, Math.max(6, v.x + 12));
+          const by = Math.min(h - 24, Math.max(6, v.y - 22));
+          ctx.fillStyle = 'rgba(12, 16, 24, 0.88)';
+          ctx.fillRect(bx - 4, by - 2, tw + 10, 18);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(bx - 4, by - 2, tw + 10, 18);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(label, bx + 1, by + 11);
+        }
+        ctx.restore();
+      }
+
+      function redrawSavedFrameOverlay(previewStart = null, previewEnd = null) {
         if (!savedFrameOverlayCanvas || !savedFrameStage) return;
         const rect = savedFrameStage.getBoundingClientRect();
         if (!rect.width || !rect.height) return;
@@ -7580,9 +7680,32 @@ For each improvement's diagram (top-down net/pitch view):
         savedFrameOverlayCanvas.height = rect.height;
         const ctx = savedFrameOverlayCanvas.getContext('2d');
         ctx.clearRect(0, 0, rect.width, rect.height);
+
+        // 1. Skeleton overlay
         if (savedFramePlayer.skeletonEnabled && savedFramePlayer.latestLandmarks) {
           const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
           drawSkeletonOnCtx(ctx, savedFramePlayer.latestLandmarks, savedFramePlayer.latestMetrics, ox, oy, rw, rh);
+        }
+
+        // 2. Drawn lines
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        const drawLine = (x1, y1, x2, y2, color) => {
+          ctx.strokeStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(x1 * rect.width, y1 * rect.height);
+          ctx.lineTo(x2 * rect.width, y2 * rect.height);
+          ctx.stroke();
+        };
+        savedFramePlayer.drawings.forEach(d => drawLine(d.x1, d.y1, d.x2, d.y2, '#4caf50'));
+        if (previewStart && previewEnd) {
+          drawLine(previewStart.x, previewStart.y, previewEnd.x, previewEnd.y, '#ffb74d');
+        }
+
+        // 3. 3-point angle protractor measurements
+        savedFramePlayer.angles.forEach(a => drawAngleOnCtx(ctx, a.points, rect.width, rect.height, '#4fc3f7'));
+        if (savedFramePlayer.angleDraftPoints.length > 0) {
+          drawAngleOnCtx(ctx, savedFramePlayer.angleDraftPoints, rect.width, rect.height, '#ffb74d');
         }
       }
 
@@ -7823,6 +7946,105 @@ For each improvement's diagram (top-down net/pitch view):
         });
       });
 
+      // Scrubber, Fullscreen, Draw & 3-Point Angle Protractor for Stored Frames Viewer
+      savedFrameScrubber?.addEventListener('input', () => {
+        stopSavedFramePlayback();
+        showSavedFrameAt(parseInt(savedFrameScrubber.value, 10) || 0);
+      });
+      savedFrameFsBtn?.addEventListener('click', () => {
+        toggleElementFullscreen(savedFramePreviewBox, savedFramePreviewBox);
+      });
+      document.addEventListener('fullscreenchange', () => {
+        const isFs = document.fullscreenElement === savedFramePreviewBox;
+        if (savedFrameFsBtn) {
+          savedFrameFsBtn.textContent = isFs ? '✕ Exit' : '⛶';
+          savedFrameFsBtn.title = isFs ? 'Exit fullscreen' : 'Fullscreen frame viewer with controls';
+        }
+        if (savedFramePreviewBox.classList.contains('active')) {
+          setTimeout(() => {
+            applySavedFrameZoom();
+            redrawSavedFrameOverlay();
+          }, 80);
+        }
+      });
+
+      const syncSavedCanvasInteractive = () => {
+        const on = savedFramePlayer.drawMode || savedFramePlayer.angleMode;
+        savedFrameOverlayCanvas?.classList.toggle('drawing-enabled', on);
+        savedFrameStage?.classList.toggle('draw-mode', on);
+      };
+      savedFrameDrawBtn?.addEventListener('click', () => {
+        const next = !savedFramePlayer.drawMode;
+        exitSavedFrameModes();
+        savedFramePlayer.angleMode = false;
+        savedFramePlayer.angleDraftPoints = [];
+        savedFrameAngleBtn?.classList.remove('btn-active');
+        savedFramePlayer.drawMode = next;
+        savedFrameDrawBtn.classList.toggle('btn-active', next);
+        syncSavedCanvasInteractive();
+        redrawSavedFrameOverlay();
+      });
+      savedFrameAngleBtn?.addEventListener('click', () => {
+        const next = !savedFramePlayer.angleMode;
+        exitSavedFrameModes();
+        savedFramePlayer.drawMode = false;
+        savedFrameDrawBtn?.classList.remove('btn-active');
+        savedFramePlayer.angleMode = next;
+        savedFramePlayer.angleDraftPoints = [];
+        savedFrameAngleBtn.classList.toggle('btn-active', next);
+        syncSavedCanvasInteractive();
+        redrawSavedFrameOverlay();
+        if (next) showToast('📐 Tap 3 points on frame (e.g. Hip → Knee → Ankle)');
+      });
+      savedFrameClearBtn?.addEventListener('click', () => {
+        savedFramePlayer.drawings = [];
+        savedFramePlayer.angles = [];
+        savedFramePlayer.angleDraftPoints = [];
+        redrawSavedFrameOverlay();
+      });
+      const getSavedCanvasPt = (e) => {
+        const rect = savedFrameOverlayCanvas.getBoundingClientRect();
+        return {
+          x: Math.max(0, Math.min(1, (e.clientX - rect.left) / (rect.width || 1))),
+          y: Math.max(0, Math.min(1, (e.clientY - rect.top) / (rect.height || 1)))
+        };
+      };
+      savedFrameOverlayCanvas?.addEventListener('pointerdown', (e) => {
+        if (savedFramePlayer.angleMode) {
+          e.preventDefault();
+          const pt = getSavedCanvasPt(e);
+          savedFramePlayer.angleDraftPoints.push(pt);
+          if (savedFramePlayer.angleDraftPoints.length === 3) {
+            const [p1, v, p3] = savedFramePlayer.angleDraftPoints;
+            const deg = calcAngleDeg(p1, v, p3);
+            savedFramePlayer.angles.push({ deg: deg ?? 0, points: savedFramePlayer.angleDraftPoints.map(p => ({ ...p })) });
+            savedFramePlayer.angleDraftPoints = [];
+            showToast(`📐 Measured ${deg ?? 0}°`);
+          }
+          redrawSavedFrameOverlay();
+          return;
+        }
+        if (!savedFramePlayer.drawMode) return;
+        e.preventDefault();
+        savedFramePlayer.isDrawing = true;
+        savedFramePlayer.drawStart = getSavedCanvasPt(e);
+        try { savedFrameOverlayCanvas.setPointerCapture(e.pointerId); } catch {}
+      });
+      savedFrameOverlayCanvas?.addEventListener('pointermove', (e) => {
+        if (!savedFramePlayer.isDrawing || !savedFramePlayer.drawStart) return;
+        e.preventDefault();
+        redrawSavedFrameOverlay(savedFramePlayer.drawStart, getSavedCanvasPt(e));
+      });
+      savedFrameOverlayCanvas?.addEventListener('pointerup', (e) => {
+        if (!savedFramePlayer.isDrawing || !savedFramePlayer.drawStart) return;
+        e.preventDefault();
+        const pt = getSavedCanvasPt(e);
+        savedFramePlayer.drawings.push({ x1: savedFramePlayer.drawStart.x, y1: savedFramePlayer.drawStart.y, x2: pt.x, y2: pt.y });
+        savedFramePlayer.isDrawing = false;
+        savedFramePlayer.drawStart = null;
+        redrawSavedFrameOverlay();
+      });
+
       function showSavedFrameAt(idx) {
         if (!savedFramePlayer.frames.length) return;
         const safeIdx = Math.max(0, Math.min(idx, savedFramePlayer.frames.length - 1));
@@ -7830,7 +8052,11 @@ For each improvement's diagram (top-down net/pitch view):
         const f = savedFramePlayer.frames[safeIdx];
         savedFramePreviewBox.classList.add('active');
         savedFrameLargeImg.src = f.dataUrl;
-        savedFrameLargeLabel.textContent = `Frame ${safeIdx + 1}/${savedFramePlayer.frames.length} · ${f.angle ? f.angle + ' · ' : ''}${f.label || 'F' + (safeIdx + 1)} @ ${Number(f.time || 0).toFixed(2)}s`;
+        savedFrameLargeLabel.textContent = `${safeIdx + 1}/${savedFramePlayer.frames.length} · ${f.label || 'F' + (safeIdx + 1)} @ ${Number(f.time || 0).toFixed(2)}s`;
+        if (savedFrameScrubber) {
+          savedFrameScrubber.max = String(Math.max(0, savedFramePlayer.frames.length - 1));
+          savedFrameScrubber.value = String(safeIdx);
+        }
         Array.from(savedFramesStrip.children).forEach((card, ci) => {
           card.classList.toggle('active-frame', ci === safeIdx);
         });
@@ -7918,6 +8144,12 @@ For each improvement's diagram (top-down net/pitch view):
           card.append(img, lbl);
           savedFramesStrip.appendChild(card);
         });
+        // Auto-open the interactive viewer immediately (landing on Release/Impact if pinned, otherwise Frame 1)
+        savedFramePlayer.drawings = [];
+        savedFramePlayer.angles = [];
+        savedFramePlayer.angleDraftPoints = [];
+        const keyIdx = savedFramePlayer.frames.findIndex(f => /RELEASE|IMPACT/i.test(f.label || ''));
+        showSavedFrameAt(keyIdx >= 0 ? keyIdx : 0);
       }
 
       // --- SUPABASE CLOUD STORAGE SYNC ---
