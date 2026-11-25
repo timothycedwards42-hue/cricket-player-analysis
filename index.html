@@ -5858,21 +5858,30 @@
           const wasmFileset = await FilesetResolver.forVisionTasks(
             'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
           );
-          const modelUrl = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
-          try {
-            poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
-              baseOptions: { modelAssetPath: modelUrl, delegate: 'GPU' },
-              runningMode: 'IMAGE',
-              numPoses: 1
-            });
-          } catch {
-            poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
-              baseOptions: { modelAssetPath: modelUrl, delegate: 'CPU' },
-              runningMode: 'IMAGE',
-              numPoses: 1
-            });
+          // Prefer Heavy model for cricket side-on profiles, pads & fast arms; fallback cleanly if needed
+          const modelCandidates = [
+            'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task',
+            'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+            'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
+          ];
+          let lastErr = null;
+          for (const modelUrl of modelCandidates) {
+            for (const delegate of ['GPU', 'CPU']) {
+              try {
+                poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
+                  baseOptions: { modelAssetPath: modelUrl, delegate },
+                  runningMode: 'IMAGE',
+                  numPoses: 3,
+                  minPoseDetectionConfidence: 0.45,
+                  minPosePresenceConfidence: 0.45
+                });
+                return poseLandmarker;
+              } catch (err) {
+                lastErr = err;
+              }
+            }
           }
-          return poseLandmarker;
+          throw lastErr || new Error('Could not initialize MediaPipe PoseLandmarker');
         })();
         try {
           return await poseLoaderPromise;
@@ -5880,6 +5889,122 @@
           poseLoaderPromise = null;
           throw err;
         }
+      }
+
+      const poseCropCanvas = document.createElement('canvas');
+
+      function getPoseTorsoCenter(lm) {
+        if (!Array.isArray(lm) || lm.length < 25) return null;
+        const pts = [11, 12, 23, 24].map(i => lm[i]).filter(p => p && (p.visibility ?? 1) > 0.25);
+        if (!pts.length) return null;
+        const x = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+        const y = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const minY = Math.min(...pts.map(p => p.y));
+        const maxY = Math.max(...pts.map(p => p.y));
+        return { x, y, span: Math.max(0.05, maxY - minY) };
+      }
+
+      function selectBestPose(allLandmarks, focusX = 0.5, focusY = 0.5, prevTorso = null) {
+        if (!Array.isArray(allLandmarks) || allLandmarks.length === 0) return null;
+        if (allLandmarks.length === 1) return allLandmarks[0];
+        const target = prevTorso || { x: focusX, y: focusY };
+        let best = allLandmarks[0];
+        let bestScore = Infinity;
+        for (const lm of allLandmarks) {
+          const c = getPoseTorsoCenter(lm);
+          if (!c) continue;
+          const dist = Math.hypot(c.x - target.x, c.y - target.y);
+          // Strongly prefer proximity to tracked player / Aim center, with mild bonus for foreground size
+          const score = dist - Math.min(0.12, c.span * 0.25);
+          if (score < bestScore) {
+            bestScore = score;
+            best = lm;
+          }
+        }
+        return best;
+      }
+
+      // Run MediaPipe Heavy on the zoomed crop when zoomed in (>1x) for 2-3x more pixels on the player,
+      // then map normalized landmarks seamlessly back into full-frame [0..1] coordinates.
+      async function detectPoseWithZoom(mediaEl, zoomLevel = 1, focusX = 0.5, focusY = 0.5, prevTorso = null) {
+        const detector = await ensurePoseLandmarker();
+        const mw = mediaEl.videoWidth || mediaEl.naturalWidth || 0;
+        const mh = mediaEl.videoHeight || mediaEl.naturalHeight || 0;
+        if (!mw || !mh) return null;
+
+        const z = Math.max(1, zoomLevel || 1);
+        if (z > 1.05) {
+          const cropW = mw / z;
+          const cropH = mh / z;
+          const fx = Math.max(0, Math.min(1, focusX ?? 0.5));
+          const fy = Math.max(0, Math.min(1, focusY ?? 0.5));
+          const sx = Math.max(0, Math.min(mw - cropW, fx * mw - cropW / 2));
+          const sy = Math.max(0, Math.min(mh - cropH, fy * mh - cropH / 2));
+          const scale = Math.min(1, 720 / cropW);
+          poseCropCanvas.width = Math.max(64, Math.round(cropW * scale));
+          poseCropCanvas.height = Math.max(64, Math.round(cropH * scale));
+          const pCtx = poseCropCanvas.getContext('2d');
+          pCtx.drawImage(mediaEl, sx, sy, cropW, cropH, 0, 0, poseCropCanvas.width, poseCropCanvas.height);
+
+          const res = detector.detect(poseCropCanvas);
+          const mappedAll = (res?.landmarks || []).map(lm =>
+            lm.map(p => ({
+              x: (sx + p.x * cropW) / mw,
+              y: (sy + p.y * cropH) / mh,
+              z: p.z,
+              visibility: p.visibility
+            }))
+          );
+          return selectBestPose(mappedAll, fx, fy, prevTorso);
+        }
+
+        const res = detector.detect(mediaEl);
+        return selectBestPose(res?.landmarks || [], focusX, focusY, prevTorso);
+      }
+
+      // 1-frame dropout gap-filling & impossible-jump glitch rejection across a frame sequence
+      function stabilizeLandmarkSequence(rawList) {
+        if (!Array.isArray(rawList) || rawList.length < 3) return rawList || [];
+        const out = rawList.map(lm => lm ? lm.map(p => ({ ...p })) : null);
+
+        // Pass 1: Fill single-frame dropouts (null sandwiched between two valid frames)
+        for (let i = 1; i < out.length - 1; i++) {
+          if (!out[i] && out[i - 1] && out[i + 1]) {
+            out[i] = out[i - 1].map((pPrev, j) => {
+              const pNext = out[i + 1][j];
+              if (!pPrev || !pNext) return pPrev || pNext;
+              return {
+                x: (pPrev.x + pNext.x) / 2,
+                y: (pPrev.y + pNext.y) / 2,
+                z: ((pPrev.z || 0) + (pNext.z || 0)) / 2,
+                visibility: Math.min(pPrev.visibility ?? 1, pNext.visibility ?? 1)
+              };
+            });
+          }
+        }
+
+        // Pass 2: Reject single-frame joint teleports / wrong-limb spikes
+        for (let i = 1; i < out.length - 1; i++) {
+          const prev = out[i - 1], cur = out[i], next = out[i + 1];
+          if (!prev || !cur || !next) continue;
+          for (let j = 0; j < cur.length; j++) {
+            const p0 = prev[j], p1 = cur[j], p2 = next[j];
+            if (!p0 || !p1 || !p2) continue;
+            if ((p0.visibility ?? 1) < 0.35 || (p2.visibility ?? 1) < 0.35) continue;
+            const d01 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            const d12 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const d02 = Math.hypot(p2.x - p0.x, p2.y - p0.y);
+            if (d01 > 0.16 && d12 > 0.16 && d02 < 0.14) {
+              cur[j] = {
+                x: (p0.x + p2.x) / 2,
+                y: (p0.y + p2.y) / 2,
+                z: ((p0.z || 0) + (p2.z || 0)) / 2,
+                visibility: Math.min(p0.visibility ?? 1, p2.visibility ?? 1)
+              };
+            }
+          }
+        }
+        return out;
       }
 
       function calcAngleDeg(a, b, c) {
@@ -6066,9 +6191,8 @@
         if (!force && now - lastPoseEvalMs < 130) return;
         lastPoseEvalMs = now;
         try {
-          const lmDetector = await ensurePoseLandmarker();
-          const res = lmDetector.detect(videoPlayer);
-          const lm = res?.landmarks?.[0] || null;
+          const prevTorso = getPoseTorsoCenter(state.latestPoseLandmarks);
+          const lm = await detectPoseWithZoom(videoPlayer, state.zoomLevel, state.zoomFocusX, state.zoomFocusY, prevTorso);
           state.latestPoseLandmarks = lm;
           state.latestPoseMetrics = lm ? computePoseMetrics(lm) : null;
           renderPoseHud(state.latestPoseMetrics);
@@ -6080,15 +6204,13 @@
 
       async function detectPoseOnDataUrl(dataUrl) {
         try {
-          const lmDetector = await ensurePoseLandmarker();
           const img = await new Promise((resolve, reject) => {
             const el = new Image();
             el.onload = () => resolve(el);
             el.onerror = reject;
             el.src = dataUrl;
           });
-          const res = lmDetector.detect(img);
-          const lm = res?.landmarks?.[0] || null;
+          const lm = await detectPoseWithZoom(img, 1, 0.5, 0.5, null);
           return lm ? computePoseMetrics(lm) : null;
         } catch {
           return null;
@@ -7950,6 +8072,13 @@ For each improvement's diagram (top-down net/pitch view):
         }
       }
 
+      function getSavedPoseCacheKey(dataUrl) {
+        const z = (savedFramePlayer.zoomLevel || 1).toFixed(1);
+        const fx = (savedFramePlayer.zoomFocusX ?? 0.5).toFixed(2);
+        const fy = (savedFramePlayer.zoomFocusY ?? 0.5).toFixed(2);
+        return z === '1.0' ? dataUrl : `${dataUrl}|z${z}_${fx}_${fy}`;
+      }
+
       async function evaluateSavedFramePose(dataUrl) {
         if (!savedFramePlayer.skeletonEnabled || !dataUrl) {
           savedFramePlayer.latestLandmarks = null;
@@ -7958,25 +8087,26 @@ For each improvement's diagram (top-down net/pitch view):
           redrawSavedFrameOverlay();
           return;
         }
-        if (savedFramePlayer.poseCache.has(dataUrl)) {
-          const cached = savedFramePlayer.poseCache.get(dataUrl);
-          savedFramePlayer.latestLandmarks = cached.landmarks;
-          savedFramePlayer.latestMetrics = cached.metrics;
-          renderPoseHudInto(savedFramePoseHud, true, cached.metrics);
-          redrawSavedFrameOverlay();
-          return;
-        }
+        const curIdx = savedFramePlayer.index;
         try {
-          const detector = await ensurePoseLandmarker();
-          if (!savedFrameLargeImg.complete || !savedFrameLargeImg.naturalWidth) {
-            await new Promise(res => savedFrameLargeImg.addEventListener('load', res, { once: true }));
+          const prevTorso = getPoseTorsoCenter(savedFramePlayer.latestLandmarks);
+          const curEntry = await ensurePoseForDataUrl(dataUrl, prevTorso);
+          let lm = curEntry?.landmarks || null;
+
+          // 1-frame dropout / spike stabilization using immediate neighbors when available
+          const prevF = curIdx > 0 ? savedFramePlayer.frames[curIdx - 1] : null;
+          const nextF = curIdx < savedFramePlayer.frames.length - 1 ? savedFramePlayer.frames[curIdx + 1] : null;
+          if (prevF && nextF) {
+            const pEntry = savedFramePlayer.poseCache.get(getSavedPoseCacheKey(prevF.dataUrl));
+            const nEntry = savedFramePlayer.poseCache.get(getSavedPoseCacheKey(nextF.dataUrl));
+            if (pEntry?.landmarks && nEntry?.landmarks) {
+              const stabilized = stabilizeLandmarkSequence([pEntry.landmarks, lm, nEntry.landmarks]);
+              lm = stabilized[1];
+            }
           }
-          const res = detector.detect(savedFrameLargeImg);
-          const lm = res?.landmarks?.[0] || null;
+
           const metrics = lm ? computePoseMetrics(lm) : null;
-          savedFramePlayer.poseCache.set(dataUrl, { landmarks: lm, metrics });
-          // Only apply if user is still viewing this exact frame
-          if (savedFrameLargeImg.src === dataUrl || savedFramePlayer.frames[savedFramePlayer.index]?.dataUrl === dataUrl) {
+          if (savedFramePlayer.index === curIdx) {
             savedFramePlayer.latestLandmarks = lm;
             savedFramePlayer.latestMetrics = metrics;
             renderPoseHudInto(savedFramePoseHud, true, metrics);
@@ -8038,6 +8168,12 @@ For each improvement's diagram (top-down net/pitch view):
           if (savedFramePlayer.ghostEnabled) updateSavedFrameGhost();
         }
       });
+      const refreshSavedFramePosesOnZoom = () => {
+        const cur = savedFramePlayer.frames[savedFramePlayer.index];
+        if (!cur?.dataUrl) return;
+        if (savedFramePlayer.skeletonEnabled) evaluateSavedFramePose(cur.dataUrl);
+        if (savedFramePlayer.pathsEnabled || savedFramePlayer.ghostEnabled) updateSavedFrameGhost();
+      };
       savedFrameZoomSelect?.addEventListener('change', () => {
         savedFramePlayer.zoomLevel = parseFloat(savedFrameZoomSelect.value) || 1;
         if (savedFramePlayer.zoomLevel <= 1) {
@@ -8045,6 +8181,7 @@ For each improvement's diagram (top-down net/pitch view):
           savedFramePlayer.zoomFocusY = 0.5;
         }
         applySavedFrameZoom();
+        refreshSavedFramePosesOnZoom();
       });
       savedFrameBoxZoomBtn?.addEventListener('click', () => {
         const next = !savedFramePlayer.boxZoomMode;
@@ -8159,6 +8296,7 @@ For each improvement's diagram (top-down net/pitch view):
         savedFramePlayer.zoomLevel = Math.max(1.2, Math.min(4.0, Number(Math.min(vW / bw, vH / bh).toFixed(1))));
         setSavedFrameZoomSelectValue(savedFramePlayer.zoomLevel);
         applySavedFrameZoom();
+        refreshSavedFramePosesOnZoom();
         showToast(`🔍 Box zoomed to ${savedFramePlayer.zoomLevel}×`);
       });
       savedFrameStage?.addEventListener('pointercancel', () => {
@@ -8207,24 +8345,29 @@ For each improvement's diagram (top-down net/pitch view):
       });
 
       // Grid, Joint Path Traces, Stroboscopic Ghost Skeletons & Snapshot PNG Export
-      async function ensurePoseForDataUrl(dataUrl) {
+      async function ensurePoseForDataUrl(dataUrl, prevTorso = null) {
         if (!dataUrl) return null;
-        if (savedFramePlayer.poseCache.has(dataUrl)) {
-          return savedFramePlayer.poseCache.get(dataUrl);
+        const cacheKey = getSavedPoseCacheKey(dataUrl);
+        if (savedFramePlayer.poseCache.has(cacheKey)) {
+          return savedFramePlayer.poseCache.get(cacheKey);
         }
         try {
-          const detector = await ensurePoseLandmarker();
           const img = await new Promise((resolve, reject) => {
             const el = new Image();
             el.onload = () => resolve(el);
             el.onerror = reject;
             el.src = dataUrl;
           });
-          const res = detector.detect(img);
-          const lm = res?.landmarks?.[0] || null;
+          const lm = await detectPoseWithZoom(
+            img,
+            savedFramePlayer.zoomLevel,
+            savedFramePlayer.zoomFocusX,
+            savedFramePlayer.zoomFocusY,
+            prevTorso
+          );
           const metrics = lm ? computePoseMetrics(lm) : null;
           const entry = { landmarks: lm, metrics };
-          savedFramePlayer.poseCache.set(dataUrl, entry);
+          savedFramePlayer.poseCache.set(cacheKey, entry);
           return entry;
         } catch {
           return null;
@@ -8316,16 +8459,31 @@ For each improvement's diagram (top-down net/pitch view):
         const curIdx = savedFramePlayer.index;
         const n = savedFramePlayer.trailCount >= 99 ? curIdx : Math.max(1, Math.min(12, savedFramePlayer.trailCount || 5));
         const startIdx = Math.max(0, curIdx - n);
-        const slice = savedFramePlayer.frames.slice(startIdx, curIdx + 1);
-        const entries = [];
+        const endIdx = Math.min(savedFramePlayer.frames.length - 1, curIdx + 1); // include 1 lookahead frame for spike filtering
+        const slice = savedFramePlayer.frames.slice(startIdx, endIdx + 1);
+        const rawEntries = [];
+        let runningTorso = null;
         for (const fr of slice) {
-          const res = await ensurePoseForDataUrl(fr.dataUrl);
-          entries.push(res?.landmarks || null);
+          const res = await ensurePoseForDataUrl(fr.dataUrl, runningTorso);
+          const lm = res?.landmarks || null;
+          if (lm) runningTorso = getPoseTorsoCenter(lm) || runningTorso;
+          rawEntries.push(lm);
         }
         if (savedFramePlayer.index !== curIdx || (!savedFramePlayer.pathsEnabled && !savedFramePlayer.ghostEnabled)) {
           return;
         }
-        savedFramePlayer.trailLandmarks = entries;
+        const stabilized = stabilizeLandmarkSequence(rawEntries);
+        // Trim lookahead frame if we fetched one beyond curIdx
+        const targetLen = curIdx - startIdx + 1;
+        savedFramePlayer.trailLandmarks = stabilized.slice(0, targetLen);
+        if (savedFramePlayer.skeletonEnabled && savedFramePlayer.trailLandmarks.length > 0) {
+          const curLm = savedFramePlayer.trailLandmarks[savedFramePlayer.trailLandmarks.length - 1];
+          if (curLm) {
+            savedFramePlayer.latestLandmarks = curLm;
+            savedFramePlayer.latestMetrics = computePoseMetrics(curLm);
+            renderPoseHudInto(savedFramePoseHud, true, savedFramePlayer.latestMetrics);
+          }
+        }
         redrawSavedFrameOverlay();
       }
 
