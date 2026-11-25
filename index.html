@@ -3119,7 +3119,6 @@
             <div class="saved-frame-preview-box" id="savedFramePreviewBox">
               <div class="saved-frame-stage" id="savedFrameStage">
                 <img id="savedFrameLargeImg" alt="Selected video reference frame">
-                <canvas id="savedFrameTrailCanvas" class="saved-frame-trail-canvas"></canvas>
                 <canvas id="savedFrameOverlayCanvas"></canvas>
                 <div class="pose-hud" id="savedFramePoseHud" aria-live="polite"></div>
                 <div class="zoom-select-box" id="savedFrameZoomBox"></div>
@@ -3143,13 +3142,14 @@
                   </div>
                   <div class="btn-group">
                     <button type="button" class="btn-sm" id="savedFrameGridBtn" title="Toggle alignment grid &amp; plumb line (click frame to move center)">⊞ Grid</button>
-                    <button type="button" class="btn-sm" id="savedFrameGhostBtn" title="Composite motion trail of the last N frames (newest darkest, older lighter)">👻 Trail</button>
-                    <select id="savedFrameTrailCount" aria-label="Motion trail frame count" title="Number of previous frames in motion trail" style="display:none; width:auto; padding:3px 5px; font-size:0.72rem;">
-                      <option value="1">1f</option>
+                    <button type="button" class="btn-sm" id="savedFramePathsBtn" title="Trace glowing motion paths of Head (amber), Hands (green), and Hips (cyan)">📈 Paths</button>
+                    <button type="button" class="btn-sm" id="savedFrameGhostBtn" title="Draw fading stroboscopic stick-figure skeletons from previous frames">👻 Ghost</button>
+                    <select id="savedFrameTrailCount" aria-label="Trail history length" title="How many previous frames to include in Paths &amp; Ghost Skeletons" style="display:none; width:auto; padding:3px 5px; font-size:0.72rem;">
                       <option value="2">2f</option>
-                      <option value="3" selected>3f</option>
-                      <option value="4">4f</option>
-                      <option value="5">5f</option>
+                      <option value="3">3f</option>
+                      <option value="5" selected>5f</option>
+                      <option value="8">8f</option>
+                      <option value="99">All</option>
                     </select>
                     <button type="button" class="btn-sm" id="savedFrameAngleBtn" title="Tap 3 points (e.g. Hip → Knee → Ankle) to measure exact angle">📐 Angle</button>
                     <button type="button" class="btn-sm" id="savedFrameDrawBtn" title="Draw alignment lines on stored frames">✏️ Draw</button>
@@ -7737,9 +7737,10 @@ For each improvement's diagram (top-down net/pitch view):
         gridEnabled: false,
         gridCenterX: 0.5,
         gridCenterY: 0.5,
+        pathsEnabled: false,
         ghostEnabled: false,
-        trailCount: 3,
-        trailImgCache: new Map(),
+        trailCount: 5,
+        trailLandmarks: [], // array of landmark arrays from oldest -> current
         skeletonEnabled: false,
         poseCache: new Map(), // dataUrl -> { landmarks, metrics }
         latestLandmarks: null,
@@ -7747,7 +7748,7 @@ For each improvement's diagram (top-down net/pitch view):
       };
 
       const savedFrameStage = document.getElementById('savedFrameStage');
-      const savedFrameTrailCanvas = document.getElementById('savedFrameTrailCanvas');
+      const savedFramePathsBtn = document.getElementById('savedFramePathsBtn');
       const savedFrameTrailCount = document.getElementById('savedFrameTrailCount');
       const savedFrameOverlayCanvas = document.getElementById('savedFrameOverlayCanvas');
       const savedFramePoseHud = document.getElementById('savedFramePoseHud');
@@ -7794,10 +7795,6 @@ For each improvement's diagram (top-down net/pitch view):
         const scaleStr = savedFramePlayer.zoomLevel > 1 ? `scale(${savedFramePlayer.zoomLevel})` : '';
         savedFrameLargeImg.style.transformOrigin = originStr;
         savedFrameLargeImg.style.transform = scaleStr;
-        if (savedFrameTrailCanvas) {
-          savedFrameTrailCanvas.style.transformOrigin = originStr;
-          savedFrameTrailCanvas.style.transform = scaleStr;
-        }
         if (savedFrameOverlayCanvas) {
           savedFrameOverlayCanvas.style.transformOrigin = originStr;
           savedFrameOverlayCanvas.style.transform = scaleStr;
@@ -7911,14 +7908,23 @@ For each improvement's diagram (top-down net/pitch view):
         ctx.clearRect(0, 0, rect.width, rect.height);
 
         // 0. Optional Alignment Grid & Vertical Plumb Line (centered at user-clicked point)
+        const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
         if (savedFramePlayer.gridEnabled) {
-          const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
           drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh, savedFramePlayer.gridCenterX, savedFramePlayer.gridCenterY);
         }
 
-        // 1. Skeleton overlay
+        // 0.5. Stroboscopic Ghost Skeletons (previous frames, crisp fading vector skeletons)
+        if (savedFramePlayer.ghostEnabled && savedFramePlayer.trailLandmarks.length > 1) {
+          drawGhostSkeletonsOnCtx(ctx, savedFramePlayer.trailLandmarks.slice(0, -1), ox, oy, rw, rh);
+        }
+
+        // 0.75. Joint Path Traces (Head = amber, Hands = green, Hips = cyan)
+        if (savedFramePlayer.pathsEnabled && savedFramePlayer.trailLandmarks.length > 1) {
+          drawJointPathsOnCtx(ctx, savedFramePlayer.trailLandmarks, ox, oy, rw, rh);
+        }
+
+        // 1. Live Current-Frame Skeleton overlay
         if (savedFramePlayer.skeletonEnabled && savedFramePlayer.latestLandmarks) {
-          const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
           drawSkeletonOnCtx(ctx, savedFramePlayer.latestLandmarks, savedFramePlayer.latestMetrics, ox, oy, rw, rh);
         }
 
@@ -8200,72 +8206,133 @@ For each improvement's diagram (top-down net/pitch view):
         });
       });
 
-      // Grid, Multi-Frame Composite Motion Trail & Snapshot PNG Export for Stored Frames Viewer
-      function loadCachedTrailImg(dataUrl) {
-        if (!dataUrl) return Promise.resolve(null);
-        const existing = savedFramePlayer.trailImgCache.get(dataUrl);
-        if (existing && existing.complete && existing.naturalWidth) return Promise.resolve(existing);
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            savedFramePlayer.trailImgCache.set(dataUrl, img);
-            resolve(img);
-          };
-          img.onerror = () => resolve(null);
-          img.src = dataUrl;
-        });
+      // Grid, Joint Path Traces, Stroboscopic Ghost Skeletons & Snapshot PNG Export
+      async function ensurePoseForDataUrl(dataUrl) {
+        if (!dataUrl) return null;
+        if (savedFramePlayer.poseCache.has(dataUrl)) {
+          return savedFramePlayer.poseCache.get(dataUrl);
+        }
+        try {
+          const detector = await ensurePoseLandmarker();
+          const img = await new Promise((resolve, reject) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = reject;
+            el.src = dataUrl;
+          });
+          const res = detector.detect(img);
+          const lm = res?.landmarks?.[0] || null;
+          const metrics = lm ? computePoseMetrics(lm) : null;
+          const entry = { landmarks: lm, metrics };
+          savedFramePlayer.poseCache.set(dataUrl, entry);
+          return entry;
+        } catch {
+          return null;
+        }
       }
 
-      // Draw a clean weighted-average stroboscopic trail of the last N frames + current frame
-      // (oldest frame lightest, most recent previous frame darker, current frame darkest/sharpest)
-      function drawTrailCompositeOnCtx(ctx, imgsOldestToNewest, sx, sy, sw, sh, dx, dy, dw, dh) {
-        const len = imgsOldestToNewest.length;
-        if (len === 0) return;
-        // Exponential weights so each newer frame is noticeably stronger than the older one
-        // while static background remains at 100% normal brightness!
-        const weights = imgsOldestToNewest.map((_, i) => Math.pow(1.85, i));
-        let cumWeight = 0;
+      function drawGhostSkeletonsOnCtx(ctx, prevLandmarksList, ox, oy, rw, rh) {
+        const count = prevLandmarksList.length;
+        if (count === 0) return;
+        const savedLabels = state.skeletonParts?.labels;
+        // Temporarily suppress floating degree text on ghost skeletons so frame stays clean
+        if (state.skeletonParts) state.skeletonParts.labels = false;
+        prevLandmarksList.forEach((lm, i) => {
+          if (!lm) return;
+          const t = count === 1 ? 1 : i / (count - 1);
+          const alpha = 0.16 + t * 0.40; // oldest 0.16 -> most recent previous 0.56
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          drawSkeletonOnCtx(ctx, lm, null, ox, oy, rw, rh);
+          ctx.restore();
+        });
+        if (state.skeletonParts) state.skeletonParts.labels = savedLabels;
+      }
+
+      function drawJointPathsOnCtx(ctx, lmListOldestToNewest, ox, oy, rw, rh) {
+        if (!Array.isArray(lmListOldestToNewest) || lmListOldestToNewest.length < 2) return;
+        const extractSeries = (getter) => lmListOldestToNewest.map(lm => {
+          if (!lm) return null;
+          const p = getter(lm);
+          if (!p) return null;
+          return { x: ox + p.x * rw, y: oy + p.y * rh };
+        });
+
+        const getVisPt = (lm, idx) => {
+          const p = lm[idx];
+          return (p && (p.visibility ?? 1) >= 0.35) ? p : null;
+        };
+        const getMidHip = (lm) => {
+          const a = getVisPt(lm, 23);
+          const b = getVisPt(lm, 24);
+          if (a && b) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          return a || b;
+        };
+
+        const tracks = [
+          { name: 'Head', pts: extractSeries(lm => getVisPt(lm, 0)), rgb: '255, 183, 77' },      // Amber
+          { name: 'L-Hand', pts: extractSeries(lm => getVisPt(lm, 15)), rgb: '102, 187, 106' },  // Green
+          { name: 'R-Hand', pts: extractSeries(lm => getVisPt(lm, 16)), rgb: '129, 199, 132' },  // Bright Green
+          { name: 'Hips', pts: extractSeries(getMidHip), rgb: '79, 195, 247' }                   // Cyan
+        ];
+
         ctx.save();
-        imgsOldestToNewest.forEach((img, i) => {
-          if (!img || !img.naturalWidth) return;
-          const w = weights[i];
-          cumWeight += w;
-          ctx.globalAlpha = i === 0 ? 1 : (w / cumWeight);
-          ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        tracks.forEach(tr => {
+          const total = tr.pts.length;
+          for (let i = 1; i < total; i++) {
+            const p0 = tr.pts[i - 1];
+            const p1 = tr.pts[i];
+            if (!p0 || !p1) continue;
+            const prog = i / (total - 1); // 0..1 (oldest -> newest)
+            const alpha = 0.22 + prog * 0.76;
+            const width = 1.6 + prog * 2.0;
+            ctx.strokeStyle = `rgba(${tr.rgb}, ${alpha.toFixed(2)})`;
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.stroke();
+
+            // Subtle waypoint dot
+            ctx.fillStyle = `rgba(${tr.rgb}, ${Math.min(1, alpha + 0.1).toFixed(2)})`;
+            ctx.beginPath();
+            ctx.arc(p1.x, p1.y, i === total - 1 ? 4.2 : 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
         });
         ctx.restore();
       }
 
       async function updateSavedFrameGhost() {
-        if (!savedFrameTrailCanvas || !savedFrameStage) return;
-        if (!savedFramePlayer.ghostEnabled) {
-          savedFrameTrailCanvas.classList.remove('active');
+        const needsTrail = savedFramePlayer.pathsEnabled || savedFramePlayer.ghostEnabled;
+        if (!needsTrail) {
+          savedFramePlayer.trailLandmarks = [];
+          redrawSavedFrameOverlay();
           return;
         }
         const curIdx = savedFramePlayer.index;
-        const n = Math.max(1, Math.min(5, savedFramePlayer.trailCount || 3));
+        const n = savedFramePlayer.trailCount >= 99 ? curIdx : Math.max(1, Math.min(12, savedFramePlayer.trailCount || 5));
         const startIdx = Math.max(0, curIdx - n);
-        if (startIdx >= curIdx) {
-          savedFrameTrailCanvas.classList.remove('active');
+        const slice = savedFramePlayer.frames.slice(startIdx, curIdx + 1);
+        const entries = [];
+        for (const fr of slice) {
+          const res = await ensurePoseForDataUrl(fr.dataUrl);
+          entries.push(res?.landmarks || null);
+        }
+        if (savedFramePlayer.index !== curIdx || (!savedFramePlayer.pathsEnabled && !savedFramePlayer.ghostEnabled)) {
           return;
         }
-        const frameSlice = savedFramePlayer.frames.slice(startIdx, curIdx + 1);
-        const imgs = (await Promise.all(frameSlice.map(fr => loadCachedTrailImg(fr.dataUrl)))).filter(Boolean);
-        // Ensure we're still on the same frame & trail is still enabled
-        if (!savedFramePlayer.ghostEnabled || savedFramePlayer.index !== curIdx || imgs.length < 2) {
-          savedFrameTrailCanvas.classList.remove('active');
-          return;
+        savedFramePlayer.trailLandmarks = entries;
+        redrawSavedFrameOverlay();
+      }
+
+      function syncTrailCountVisibility() {
+        if (savedFrameTrailCount) {
+          savedFrameTrailCount.style.display = (savedFramePlayer.pathsEnabled || savedFramePlayer.ghostEnabled) ? 'inline-block' : 'none';
         }
-        const rect = savedFrameStage.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
-        savedFrameTrailCanvas.width = rect.width;
-        savedFrameTrailCanvas.height = rect.height;
-        const ctx = savedFrameTrailCanvas.getContext('2d');
-        ctx.clearRect(0, 0, rect.width, rect.height);
-        const { ox, oy, rw, rh } = getSavedFrameDisplayRect(rect.width, rect.height);
-        const first = imgs[0];
-        drawTrailCompositeOnCtx(ctx, imgs, 0, 0, first.naturalWidth, first.naturalHeight, ox, oy, rw, rh);
-        savedFrameTrailCanvas.classList.add('active');
       }
 
       savedFrameGridBtn?.addEventListener('click', () => {
@@ -8277,18 +8344,44 @@ For each improvement's diagram (top-down net/pitch view):
         }
       });
 
-      savedFrameGhostBtn?.addEventListener('click', () => {
+      savedFramePathsBtn?.addEventListener('click', async () => {
+        savedFramePlayer.pathsEnabled = !savedFramePlayer.pathsEnabled;
+        savedFramePathsBtn.classList.toggle('btn-active', savedFramePlayer.pathsEnabled);
+        syncTrailCountVisibility();
+        if (savedFramePlayer.pathsEnabled) {
+          savedFramePathsBtn.textContent = '⏳ Tracking...';
+          await updateSavedFrameGhost();
+          savedFramePathsBtn.textContent = '📈 Paths ON';
+          if (savedFramePlayer.index === 0 && savedFramePlayer.frames.length > 1) {
+            showToast('📈 Step forward (▶) to see Head (amber), Hands (green) & Hips (cyan) paths');
+          } else {
+            showToast('📈 Joint Paths active: Amber = Head · Green = Hands · Cyan = Hips');
+          }
+        } else {
+          savedFramePathsBtn.textContent = '📈 Paths';
+          await updateSavedFrameGhost();
+        }
+      });
+
+      savedFrameGhostBtn?.addEventListener('click', async () => {
         savedFramePlayer.ghostEnabled = !savedFramePlayer.ghostEnabled;
         savedFrameGhostBtn.classList.toggle('btn-active', savedFramePlayer.ghostEnabled);
-        if (savedFrameTrailCount) savedFrameTrailCount.style.display = savedFramePlayer.ghostEnabled ? 'inline-block' : 'none';
-        updateSavedFrameGhost();
-        if (savedFramePlayer.ghostEnabled && savedFramePlayer.index === 0 && savedFramePlayer.frames.length > 1) {
-          showToast('👻 Step forward (▶) to see the multi-frame motion trail');
+        syncTrailCountVisibility();
+        if (savedFramePlayer.ghostEnabled) {
+          savedFrameGhostBtn.textContent = '⏳ Loading...';
+          await updateSavedFrameGhost();
+          savedFrameGhostBtn.textContent = '👻 Ghost ON';
+          if (savedFramePlayer.index === 0 && savedFramePlayer.frames.length > 1) {
+            showToast('👻 Step forward (▶) to see fading ghost skeletons from previous frames');
+          }
+        } else {
+          savedFrameGhostBtn.textContent = '👻 Ghost';
+          await updateSavedFrameGhost();
         }
       });
 
       savedFrameTrailCount?.addEventListener('change', () => {
-        savedFramePlayer.trailCount = parseInt(savedFrameTrailCount.value, 10) || 3;
+        savedFramePlayer.trailCount = parseInt(savedFrameTrailCount.value, 10) || 5;
         updateSavedFrameGhost();
       });
 
@@ -8315,21 +8408,8 @@ For each improvement's diagram (top-down net/pitch view):
         ctx.fillStyle = '#0e1118';
         ctx.fillRect(0, 0, c.width, c.height);
 
-        // Draw multi-frame composite trail (if active & >1 frame) or single cropped frame
-        let drewTrail = false;
-        if (savedFramePlayer.ghostEnabled && savedFramePlayer.index > 0) {
-          const n = Math.max(1, Math.min(5, savedFramePlayer.trailCount || 3));
-          const startIdx = Math.max(0, savedFramePlayer.index - n);
-          const slice = savedFramePlayer.frames.slice(startIdx, savedFramePlayer.index + 1);
-          const imgs = (await Promise.all(slice.map(fr => loadCachedTrailImg(fr.dataUrl)))).filter(Boolean);
-          if (imgs.length >= 2) {
-            drawTrailCompositeOnCtx(ctx, imgs, sx, sy, cropW, cropH, 0, 0, outW, outH);
-            drewTrail = true;
-          }
-        }
-        if (!drewTrail) {
-          ctx.drawImage(savedFrameLargeImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
-        }
+        // Draw crisp cropped current frame
+        ctx.drawImage(savedFrameLargeImg, sx, sy, cropW, cropH, 0, 0, outW, outH);
 
         // Map full-image coordinates into cropped export coordinates
         const mapOffX = -(sx / cropW) * outW;
@@ -8343,6 +8423,12 @@ For each improvement's diagram (top-down net/pitch view):
         ctx.clip();
         if (savedFramePlayer.gridEnabled) {
           drawAlignmentGridOnCtx(ctx, mapOffX, mapOffY, mapFullW, mapFullH, savedFramePlayer.gridCenterX, savedFramePlayer.gridCenterY);
+        }
+        if (savedFramePlayer.ghostEnabled && savedFramePlayer.trailLandmarks.length > 1) {
+          drawGhostSkeletonsOnCtx(ctx, savedFramePlayer.trailLandmarks.slice(0, -1), mapOffX, mapOffY, mapFullW, mapFullH);
+        }
+        if (savedFramePlayer.pathsEnabled && savedFramePlayer.trailLandmarks.length > 1) {
+          drawJointPathsOnCtx(ctx, savedFramePlayer.trailLandmarks, mapOffX, mapOffY, mapFullW, mapFullH);
         }
         if (savedFramePlayer.skeletonEnabled && savedFramePlayer.latestLandmarks) {
           drawSkeletonOnCtx(ctx, savedFramePlayer.latestLandmarks, savedFramePlayer.latestMetrics, mapOffX, mapOffY, mapFullW, mapFullH);
