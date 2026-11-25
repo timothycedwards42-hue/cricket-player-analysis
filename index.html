@@ -3181,12 +3181,23 @@
                 <img id="inlineSbsImgA" alt="Left comparison video frame">
                 <canvas id="inlineSbsCanvasA"></canvas>
                 <div class="pose-hud" id="inlineSbsHudA"></div>
+                <div class="zoom-select-box" id="inlineSbsZoomBoxA"></div>
               </div>
               <div class="sbs-pane-bar">
-                <span id="inlineSbsLabelA" style="font-variant-numeric:tabular-nums;">0/0</span>
                 <div class="btn-group">
                   <button type="button" class="btn-sm" id="inlineSbsPrevA" title="Nudge Left video back 1 frame">◀</button>
+                  <span id="inlineSbsLabelA" style="font-variant-numeric:tabular-nums;">0/0</span>
                   <button type="button" class="btn-sm" id="inlineSbsNextA" title="Nudge Left video forward 1 frame">▶</button>
+                </div>
+                <div class="btn-group">
+                  <select id="inlineSbsZoomA" aria-label="Left video zoom" style="width:auto; padding:2px 5px; font-size:0.7rem;">
+                    <option value="1" selected>1×</option>
+                    <option value="2">2×</option>
+                    <option value="3">3×</option>
+                  </select>
+                  <button type="button" class="btn-sm" id="inlineSbsBoxZoomA" title="Drag a box on Left video to custom zoom">🔍</button>
+                  <button type="button" class="btn-sm" id="inlineSbsGridA" title="Toggle Left alignment grid (click frame to move center)">⊞</button>
+                  <button type="button" class="btn-sm" id="inlineSbsSkelA" title="Toggle Left AI skeleton &amp; joint angles">🦴</button>
                 </div>
               </div>
             </div>
@@ -3200,12 +3211,23 @@
                 <img id="inlineSbsImgB" alt="Right comparison video frame">
                 <canvas id="inlineSbsCanvasB"></canvas>
                 <div class="pose-hud" id="inlineSbsHudB"></div>
+                <div class="zoom-select-box" id="inlineSbsZoomBoxB"></div>
               </div>
               <div class="sbs-pane-bar">
-                <span id="inlineSbsLabelB" style="font-variant-numeric:tabular-nums;">0/0</span>
                 <div class="btn-group">
                   <button type="button" class="btn-sm" id="inlineSbsPrevB" title="Nudge Right video back 1 frame">◀</button>
+                  <span id="inlineSbsLabelB" style="font-variant-numeric:tabular-nums;">0/0</span>
                   <button type="button" class="btn-sm" id="inlineSbsNextB" title="Nudge Right video forward 1 frame">▶</button>
+                </div>
+                <div class="btn-group">
+                  <select id="inlineSbsZoomB" aria-label="Right video zoom" style="width:auto; padding:2px 5px; font-size:0.7rem;">
+                    <option value="1" selected>1×</option>
+                    <option value="2">2×</option>
+                    <option value="3">3×</option>
+                  </select>
+                  <button type="button" class="btn-sm" id="inlineSbsBoxZoomB" title="Drag a box on Right video to custom zoom">🔍</button>
+                  <button type="button" class="btn-sm" id="inlineSbsGridB" title="Toggle Right alignment grid (click frame to move center)">⊞</button>
+                  <button type="button" class="btn-sm" id="inlineSbsSkelB" title="Toggle Right AI skeleton &amp; joint angles">🦴</button>
                 </div>
               </div>
             </div>
@@ -3228,9 +3250,7 @@
                 </select>
               </div>
               <div class="btn-group">
-                <button type="button" class="btn-sm" id="inlineSbsGridBtn" title="Toggle alignment grid &amp; plumb line on both videos">⊞ Grid</button>
-                <button type="button" class="btn-sm" id="inlineSbsSkelBtn" title="Toggle AI skeleton &amp; joint angles on both videos">🦴 Skeleton</button>
-                <button type="button" class="btn-sm" id="inlineSbsExportBtn" title="Download side-by-side comparison PNG">📸 PNG</button>
+                <button type="button" class="btn-sm" id="inlineSbsExportBtn" title="Download side-by-side comparison PNG">📸 Export PNG</button>
               </div>
             </div>
           </div>
@@ -10479,21 +10499,27 @@ create policy "Allow anon read/write for personal lab"
       const inlineSbsCard = document.getElementById('inlineSbsCard');
       const inlineSbsSelectA = document.getElementById('inlineSbsSelectA');
       const inlineSbsSelectB = document.getElementById('inlineSbsSelectB');
-      const inlineSbs = {
-        framesA: [],
-        framesB: [],
-        titleA: '',
-        titleB: '',
-        idxA: 0,
-        idxB: 0,
-        isPlaying: false,
-        timerId: null,
+      const makeInlinePaneState = () => ({
+        frames: [],
+        title: '',
+        idx: 0,
         gridEnabled: false,
+        gridCenterX: 0.5,
+        gridCenterY: 0.5,
         skeletonEnabled: false,
-        landmarksA: null,
-        metricsA: null,
-        landmarksB: null,
-        metricsB: null
+        zoomLevel: 1,
+        zoomFocusX: 0.5,
+        zoomFocusY: 0.5,
+        boxZoomMode: false,
+        dragStart: null,
+        landmarks: null,
+        metrics: null
+      });
+      const inlineSbs = {
+        A: makeInlinePaneState(),
+        B: makeInlinePaneState(),
+        isPlaying: false,
+        timerId: null
       };
 
       toggleStudioBtn?.addEventListener('click', () => {
@@ -10509,6 +10535,8 @@ create policy "Allow anon read/write for personal lab"
             redrawSavedFrameOverlay();
           }
           if (inlineSbsCard?.classList.contains('active')) {
+            applyInlineSbsZoom('A');
+            applyInlineSbsZoom('B');
             redrawInlineSbsPane('A');
             redrawInlineSbsPane('B');
           }
@@ -10525,11 +10553,54 @@ create policy "Allow anon read/write for personal lab"
         if (btn) btn.textContent = '▶ Play Both';
       }
 
+      function applyInlineSbsZoom(side) {
+        const p = inlineSbs[side];
+        const stage = document.getElementById(`inlineSbsStage${side}`);
+        const img = document.getElementById(`inlineSbsImg${side}`);
+        const canvas = document.getElementById(`inlineSbsCanvas${side}`);
+        if (!stage || !img) return;
+        const rect = stage.getBoundingClientRect();
+        let originStr = `${(p.zoomFocusX * 100).toFixed(1)}% ${(p.zoomFocusY * 100).toFixed(1)}%`;
+        if (rect.width > 0 && rect.height > 0 && img.naturalWidth > 0) {
+          const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, rect.width, rect.height);
+          const oxPct = ((ox + p.zoomFocusX * rw) / rect.width) * 100;
+          const oyPct = ((oy + p.zoomFocusY * rh) / rect.height) * 100;
+          originStr = `${oxPct.toFixed(1)}% ${oyPct.toFixed(1)}%`;
+        }
+        const scaleStr = p.zoomLevel > 1 ? `scale(${p.zoomLevel})` : '';
+        img.style.transformOrigin = originStr;
+        img.style.transform = scaleStr;
+        if (canvas) {
+          canvas.style.transformOrigin = originStr;
+          canvas.style.transform = scaleStr;
+        }
+      }
+
+      function setInlineSbsZoomSelect(side, val) {
+        const sel = document.getElementById(`inlineSbsZoom${side}`);
+        if (!sel) return;
+        const rounded = Number(val.toFixed(1));
+        const strVal = String(rounded);
+        let opt = Array.from(sel.options).find(o => Number(o.value) === rounded);
+        if (!opt) {
+          opt = Array.from(sel.options).find(o => o.dataset.customZoom === 'true');
+          if (!opt) {
+            opt = document.createElement('option');
+            opt.dataset.customZoom = 'true';
+            sel.appendChild(opt);
+          }
+          opt.value = strVal;
+          opt.textContent = `${strVal}×`;
+        }
+        sel.value = opt.value;
+      }
+
       function redrawInlineSbsPane(side) {
-        const stage = document.getElementById(side === 'A' ? 'inlineSbsStageA' : 'inlineSbsStageB');
-        const img = document.getElementById(side === 'A' ? 'inlineSbsImgA' : 'inlineSbsImgB');
-        const canvas = document.getElementById(side === 'A' ? 'inlineSbsCanvasA' : 'inlineSbsCanvasB');
-        const hud = document.getElementById(side === 'A' ? 'inlineSbsHudA' : 'inlineSbsHudB');
+        const p = inlineSbs[side];
+        const stage = document.getElementById(`inlineSbsStage${side}`);
+        const img = document.getElementById(`inlineSbsImg${side}`);
+        const canvas = document.getElementById(`inlineSbsCanvas${side}`);
+        const hud = document.getElementById(`inlineSbsHud${side}`);
         if (!stage || !canvas || !img) return;
         const rect = stage.getBoundingClientRect();
         if (!rect.width || !rect.height) return;
@@ -10538,61 +10609,71 @@ create policy "Allow anon read/write for personal lab"
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, rect.width, rect.height);
         const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, rect.width, rect.height);
-        if (inlineSbs.gridEnabled) {
-          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh);
+        if (p.gridEnabled) {
+          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh, p.gridCenterX, p.gridCenterY);
         }
-        const lm = side === 'A' ? inlineSbs.landmarksA : inlineSbs.landmarksB;
-        const metrics = side === 'A' ? inlineSbs.metricsA : inlineSbs.metricsB;
-        if (inlineSbs.skeletonEnabled && lm) {
-          drawSkeletonOnCtx(ctx, lm, metrics, ox, oy, rw, rh);
-          renderPoseHudInto(hud, true, metrics);
+        if (p.skeletonEnabled && p.landmarks) {
+          drawSkeletonOnCtx(ctx, p.landmarks, p.metrics, ox, oy, rw, rh);
+          renderPoseHudInto(hud, true, p.metrics);
         } else {
           renderPoseHudInto(hud, false, null);
         }
       }
 
       async function evalInlineSbsPose(side, dataUrl) {
-        if (!inlineSbs.skeletonEnabled || !dataUrl) {
-          if (side === 'A') { inlineSbs.landmarksA = null; inlineSbs.metricsA = null; }
-          else { inlineSbs.landmarksB = null; inlineSbs.metricsB = null; }
+        const p = inlineSbs[side];
+        if (!p.skeletonEnabled || !dataUrl) {
+          p.landmarks = null;
+          p.metrics = null;
           redrawInlineSbsPane(side);
           return;
         }
-        const entry = await ensurePoseForDataUrl(dataUrl);
-        if (side === 'A') { inlineSbs.landmarksA = entry?.landmarks || null; inlineSbs.metricsA = entry?.metrics || null; }
-        else { inlineSbs.landmarksB = entry?.landmarks || null; inlineSbs.metricsB = entry?.metrics || null; }
-        redrawInlineSbsPane(side);
+        const zKey = p.zoomLevel > 1.05 ? `${dataUrl}|z${p.zoomLevel.toFixed(1)}_${p.zoomFocusX.toFixed(2)}_${p.zoomFocusY.toFixed(2)}` : dataUrl;
+        if (savedFramePlayer.poseCache.has(zKey)) {
+          const cached = savedFramePlayer.poseCache.get(zKey);
+          p.landmarks = cached.landmarks;
+          p.metrics = cached.metrics;
+          redrawInlineSbsPane(side);
+          return;
+        }
+        try {
+          const img = await new Promise((resolve, reject) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = reject;
+            el.src = dataUrl;
+          });
+          const prevTorso = getPoseTorsoCenter(p.landmarks);
+          const lm = await detectPoseWithZoom(img, p.zoomLevel, p.zoomFocusX, p.zoomFocusY, prevTorso);
+          const metrics = lm ? computePoseMetrics(lm) : null;
+          savedFramePlayer.poseCache.set(zKey, { landmarks: lm, metrics });
+          p.landmarks = lm;
+          p.metrics = metrics;
+          redrawInlineSbsPane(side);
+        } catch {}
       }
 
       function renderInlineSbsFrames() {
-        const fA = inlineSbs.framesA[inlineSbs.idxA];
-        const fB = inlineSbs.framesB[inlineSbs.idxB];
-        const imgA = document.getElementById('inlineSbsImgA');
-        const imgB = document.getElementById('inlineSbsImgB');
-        if (fA && imgA) {
-          imgA.src = fA.dataUrl;
-          document.getElementById('inlineSbsLabelA').textContent = `${inlineSbs.idxA + 1}/${inlineSbs.framesA.length} · ${fA.label || ''}`;
-        } else {
-          document.getElementById('inlineSbsLabelA').textContent = 'No frames';
-        }
-        if (fB && imgB) {
-          imgB.src = fB.dataUrl;
-          document.getElementById('inlineSbsLabelB').textContent = `${inlineSbs.idxB + 1}/${inlineSbs.framesB.length} · ${fB.label || ''}`;
-        } else {
-          document.getElementById('inlineSbsLabelB').textContent = 'No frames';
-        }
-        const maxLen = Math.max(inlineSbs.framesA.length, inlineSbs.framesB.length, 1);
+        ['A', 'B'].forEach(side => {
+          const p = inlineSbs[side];
+          const f = p.frames[p.idx];
+          const img = document.getElementById(`inlineSbsImg${side}`);
+          const lbl = document.getElementById(`inlineSbsLabel${side}`);
+          if (f && img) {
+            img.src = f.dataUrl;
+            if (lbl) lbl.textContent = `${p.idx + 1}/${p.frames.length} · ${f.label || ''}`;
+          } else if (lbl) {
+            lbl.textContent = 'No frames';
+          }
+          applyInlineSbsZoom(side);
+          if (p.skeletonEnabled && f?.dataUrl) evalInlineSbsPose(side, f.dataUrl);
+          else redrawInlineSbsPane(side);
+        });
+        const maxLen = Math.max(inlineSbs.A.frames.length, inlineSbs.B.frames.length, 1);
         const scr = document.getElementById('inlineSbsScrubber');
         if (scr) {
           scr.max = String(maxLen - 1);
-          scr.value = String(Math.min(maxLen - 1, Math.max(inlineSbs.idxA, inlineSbs.idxB)));
-        }
-        if (inlineSbs.skeletonEnabled) {
-          if (fA?.dataUrl) evalInlineSbsPose('A', fA.dataUrl);
-          if (fB?.dataUrl) evalInlineSbsPose('B', fB.dataUrl);
-        } else {
-          redrawInlineSbsPane('A');
-          redrawInlineSbsPane('B');
+          scr.value = String(Math.min(maxLen - 1, Math.max(inlineSbs.A.idx, inlineSbs.B.idx)));
         }
       }
 
@@ -10601,15 +10682,12 @@ create policy "Allow anon read/write for personal lab"
         const frames = sess ? getSessionFramesList(sess) : [];
         const label = sess ? `${sess.playerName} · ${sess.sessionTag || sess.fileStamp || ''}` : '';
         const keyIdx = frames.findIndex(f => /RELEASE|IMPACT/i.test(f.label || ''));
-        if (side === 'A') {
-          inlineSbs.framesA = frames;
-          inlineSbs.titleA = label;
-          inlineSbs.idxA = keyIdx >= 0 ? keyIdx : 0;
-        } else {
-          inlineSbs.framesB = frames;
-          inlineSbs.titleB = label;
-          inlineSbs.idxB = keyIdx >= 0 ? keyIdx : 0;
-        }
+        const p = inlineSbs[side];
+        p.frames = frames;
+        p.title = label;
+        p.idx = keyIdx >= 0 ? keyIdx : 0;
+        p.landmarks = null;
+        p.metrics = null;
         renderInlineSbsFrames();
       }
 
@@ -10726,28 +10804,180 @@ create policy "Allow anon read/write for personal lab"
       });
       inlineSbsSelectA?.addEventListener('change', () => { stopInlineSbsPlayback(); loadInlineSbsSide('A', inlineSbsSelectA.value); });
       inlineSbsSelectB?.addEventListener('change', () => { stopInlineSbsPlayback(); loadInlineSbsSide('B', inlineSbsSelectB.value); });
-      document.getElementById('inlineSbsImgA')?.addEventListener('load', () => {
-        if (inlineSbs.skeletonEnabled && inlineSbs.framesA[inlineSbs.idxA]?.dataUrl) evalInlineSbsPose('A', inlineSbs.framesA[inlineSbs.idxA].dataUrl);
-        else redrawInlineSbsPane('A');
+      // Wire per-pane controls (Zoom, Box Zoom, Click-to-Center Grid, Skeleton, Nudge) for Left (A) & Right (B)
+      ['A', 'B'].forEach(side => {
+        const p = inlineSbs[side];
+        const stage = document.getElementById(`inlineSbsStage${side}`);
+        const img = document.getElementById(`inlineSbsImg${side}`);
+        const canvas = document.getElementById(`inlineSbsCanvas${side}`);
+        const zoomBox = document.getElementById(`inlineSbsZoomBox${side}`);
+        const zoomSel = document.getElementById(`inlineSbsZoom${side}`);
+        const boxZoomBtn = document.getElementById(`inlineSbsBoxZoom${side}`);
+        const gridBtn = document.getElementById(`inlineSbsGrid${side}`);
+        const skelBtn = document.getElementById(`inlineSbsSkel${side}`);
+
+        img?.addEventListener('load', () => {
+          applyInlineSbsZoom(side);
+          if (p.skeletonEnabled && p.frames[p.idx]?.dataUrl) evalInlineSbsPose(side, p.frames[p.idx].dataUrl);
+          else redrawInlineSbsPane(side);
+        });
+
+        document.getElementById(`inlineSbsPrev${side}`)?.addEventListener('click', () => {
+          stopInlineSbsPlayback();
+          p.idx = Math.max(0, p.idx - 1);
+          renderInlineSbsFrames();
+        });
+        document.getElementById(`inlineSbsNext${side}`)?.addEventListener('click', () => {
+          stopInlineSbsPlayback();
+          p.idx = Math.min(Math.max(0, p.frames.length - 1), p.idx + 1);
+          renderInlineSbsFrames();
+        });
+
+        zoomSel?.addEventListener('change', () => {
+          p.zoomLevel = parseFloat(zoomSel.value) || 1;
+          if (p.zoomLevel <= 1) { p.zoomFocusX = 0.5; p.zoomFocusY = 0.5; }
+          applyInlineSbsZoom(side);
+          if (p.skeletonEnabled && p.frames[p.idx]?.dataUrl) evalInlineSbsPose(side, p.frames[p.idx].dataUrl);
+        });
+
+        boxZoomBtn?.addEventListener('click', () => {
+          p.boxZoomMode = !p.boxZoomMode;
+          p.dragStart = null;
+          zoomBox?.classList.remove('active');
+          boxZoomBtn.classList.toggle('btn-active', p.boxZoomMode);
+          stage?.classList.toggle('aim-mode', p.boxZoomMode);
+          if (p.boxZoomMode) {
+            stopInlineSbsPlayback();
+            if (img) img.style.transform = '';
+            if (canvas) canvas.style.transform = '';
+            showToast(`🔍 Drag a box on ${side === 'A' ? 'Left' : 'Right'} video to zoom in`);
+          } else {
+            applyInlineSbsZoom(side);
+          }
+        });
+
+        gridBtn?.addEventListener('click', () => {
+          p.gridEnabled = !p.gridEnabled;
+          gridBtn.classList.toggle('btn-active', p.gridEnabled);
+          redrawInlineSbsPane(side);
+          if (p.gridEnabled) showToast(`⊞ ${side === 'A' ? 'Left' : 'Right'} Grid ON — click frame to move plumb line center`);
+        });
+
+        skelBtn?.addEventListener('click', async () => {
+          p.skeletonEnabled = !p.skeletonEnabled;
+          skelBtn.classList.toggle('btn-active', p.skeletonEnabled);
+          if (p.skeletonEnabled) {
+            skelBtn.textContent = '⏳';
+            try {
+              await ensurePoseLandmarker();
+              skelBtn.textContent = '🦴';
+              if (p.frames[p.idx]?.dataUrl) await evalInlineSbsPose(side, p.frames[p.idx].dataUrl);
+            } catch (err) {
+              p.skeletonEnabled = false;
+              skelBtn.classList.remove('btn-active');
+              skelBtn.textContent = '🦴';
+              showToast(`Pose error: ${err.message}`);
+            }
+          } else {
+            p.landmarks = null;
+            p.metrics = null;
+            redrawInlineSbsPane(side);
+          }
+        });
+
+        stage?.addEventListener('pointerdown', (e) => {
+          // Box zoom drag start
+          if (p.boxZoomMode) {
+            e.preventDefault();
+            const rect = stage.getBoundingClientRect();
+            p.dragStart = {
+              x: Math.max(0, Math.min(rect.width, e.clientX - rect.left)),
+              y: Math.max(0, Math.min(rect.height, e.clientY - rect.top))
+            };
+            try { stage.setPointerCapture(e.pointerId); } catch {}
+            if (zoomBox) {
+              zoomBox.style.left = `${p.dragStart.x}px`;
+              zoomBox.style.top = `${p.dragStart.y}px`;
+              zoomBox.style.width = '0px';
+              zoomBox.style.height = '0px';
+              zoomBox.classList.add('active');
+            }
+            return;
+          }
+          // Click to move grid/plumb-line center on this pane (zoom-aware!)
+          if (p.gridEnabled) {
+            e.preventDefault();
+            const rect = stage.getBoundingClientRect();
+            const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, rect.width, rect.height);
+            const z = Math.max(1, p.zoomLevel || 1);
+            const originPxX = ox + p.zoomFocusX * rw;
+            const originPxY = oy + p.zoomFocusY * rh;
+            const unzoomX = originPxX + ((e.clientX - rect.left) - originPxX) / z;
+            const unzoomY = originPxY + ((e.clientY - rect.top) - originPxY) / z;
+            p.gridCenterX = Math.max(0.02, Math.min(0.98, (unzoomX - ox) / (rw || rect.width)));
+            p.gridCenterY = Math.max(0.02, Math.min(0.98, (unzoomY - oy) / (rh || rect.height)));
+            redrawInlineSbsPane(side);
+          }
+        });
+
+        stage?.addEventListener('pointermove', (e) => {
+          if (!p.boxZoomMode || !p.dragStart || !zoomBox) return;
+          e.preventDefault();
+          const rect = stage.getBoundingClientRect();
+          const curX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+          const curY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+          zoomBox.style.left = `${Math.min(p.dragStart.x, curX)}px`;
+          zoomBox.style.top = `${Math.min(p.dragStart.y, curY)}px`;
+          zoomBox.style.width = `${Math.abs(curX - p.dragStart.x)}px`;
+          zoomBox.style.height = `${Math.abs(curY - p.dragStart.y)}px`;
+        });
+
+        stage?.addEventListener('pointerup', (e) => {
+          if (!p.boxZoomMode || !p.dragStart) return;
+          e.preventDefault();
+          const rect = stage.getBoundingClientRect();
+          const endX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+          const endY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+          const left = Math.min(p.dragStart.x, endX);
+          const top = Math.min(p.dragStart.y, endY);
+          const bw = Math.abs(endX - p.dragStart.x);
+          const bh = Math.abs(endY - p.dragStart.y);
+          p.boxZoomMode = false;
+          p.dragStart = null;
+          zoomBox?.classList.remove('active');
+          boxZoomBtn?.classList.remove('btn-active');
+          stage.classList.remove('aim-mode');
+          if (bw < 16 || bh < 16) {
+            applyInlineSbsZoom(side);
+            return;
+          }
+          const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, rect.width, rect.height);
+          const vW = rw || rect.width;
+          const vH = rh || rect.height;
+          p.zoomFocusX = Math.max(0.05, Math.min(0.95, (left + bw / 2 - ox) / vW));
+          p.zoomFocusY = Math.max(0.05, Math.min(0.95, (top + bh / 2 - oy) / vH));
+          p.zoomLevel = Math.max(1.2, Math.min(4.0, Number(Math.min(vW / bw, vH / bh).toFixed(1))));
+          setInlineSbsZoomSelect(side, p.zoomLevel);
+          applyInlineSbsZoom(side);
+          if (p.skeletonEnabled && p.frames[p.idx]?.dataUrl) evalInlineSbsPose(side, p.frames[p.idx].dataUrl);
+        });
+
+        stage?.addEventListener('pointercancel', () => {
+          p.dragStart = null;
+          zoomBox?.classList.remove('active');
+        });
       });
-      document.getElementById('inlineSbsImgB')?.addEventListener('load', () => {
-        if (inlineSbs.skeletonEnabled && inlineSbs.framesB[inlineSbs.idxB]?.dataUrl) evalInlineSbsPose('B', inlineSbs.framesB[inlineSbs.idxB].dataUrl);
-        else redrawInlineSbsPane('B');
-      });
-      document.getElementById('inlineSbsPrevA')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxA = Math.max(0, inlineSbs.idxA - 1); renderInlineSbsFrames(); });
-      document.getElementById('inlineSbsNextA')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxA = Math.min(Math.max(0, inlineSbs.framesA.length - 1), inlineSbs.idxA + 1); renderInlineSbsFrames(); });
-      document.getElementById('inlineSbsPrevB')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxB = Math.max(0, inlineSbs.idxB - 1); renderInlineSbsFrames(); });
-      document.getElementById('inlineSbsNextB')?.addEventListener('click', () => { stopInlineSbsPlayback(); inlineSbs.idxB = Math.min(Math.max(0, inlineSbs.framesB.length - 1), inlineSbs.idxB + 1); renderInlineSbsFrames(); });
+
       document.getElementById('inlineSbsBackBoth')?.addEventListener('click', () => {
         stopInlineSbsPlayback();
-        inlineSbs.idxA = Math.max(0, inlineSbs.idxA - 1);
-        inlineSbs.idxB = Math.max(0, inlineSbs.idxB - 1);
+        inlineSbs.A.idx = Math.max(0, inlineSbs.A.idx - 1);
+        inlineSbs.B.idx = Math.max(0, inlineSbs.B.idx - 1);
         renderInlineSbsFrames();
       });
       document.getElementById('inlineSbsFwdBoth')?.addEventListener('click', () => {
         stopInlineSbsPlayback();
-        inlineSbs.idxA = Math.min(Math.max(0, inlineSbs.framesA.length - 1), inlineSbs.idxA + 1);
-        inlineSbs.idxB = Math.min(Math.max(0, inlineSbs.framesB.length - 1), inlineSbs.idxB + 1);
+        inlineSbs.A.idx = Math.min(Math.max(0, inlineSbs.A.frames.length - 1), inlineSbs.A.idx + 1);
+        inlineSbs.B.idx = Math.min(Math.max(0, inlineSbs.B.frames.length - 1), inlineSbs.B.idx + 1);
         renderInlineSbsFrames();
       });
       document.getElementById('inlineSbsScrubber')?.addEventListener('input', (e) => {
@@ -10755,8 +10985,8 @@ create policy "Allow anon read/write for personal lab"
         const val = parseInt(e.target.value, 10) || 0;
         const maxVal = Math.max(1, parseInt(e.target.max, 10) || 1);
         const ratio = val / maxVal;
-        inlineSbs.idxA = Math.round(ratio * Math.max(0, inlineSbs.framesA.length - 1));
-        inlineSbs.idxB = Math.round(ratio * Math.max(0, inlineSbs.framesB.length - 1));
+        inlineSbs.A.idx = Math.round(ratio * Math.max(0, inlineSbs.A.frames.length - 1));
+        inlineSbs.B.idx = Math.round(ratio * Math.max(0, inlineSbs.B.frames.length - 1));
         renderInlineSbsFrames();
       });
       document.getElementById('inlineSbsPlayBtn')?.addEventListener('click', () => {
@@ -10765,40 +10995,10 @@ create policy "Allow anon read/write for personal lab"
         inlineSbs.isPlaying = true;
         document.getElementById('inlineSbsPlayBtn').textContent = '⏸ Pause';
         inlineSbs.timerId = setInterval(() => {
-          inlineSbs.idxA = (inlineSbs.idxA + 1) % Math.max(1, inlineSbs.framesA.length);
-          inlineSbs.idxB = (inlineSbs.idxB + 1) % Math.max(1, inlineSbs.framesB.length);
+          inlineSbs.A.idx = (inlineSbs.A.idx + 1) % Math.max(1, inlineSbs.A.frames.length);
+          inlineSbs.B.idx = (inlineSbs.B.idx + 1) % Math.max(1, inlineSbs.B.frames.length);
           renderInlineSbsFrames();
         }, Math.round(1000 / fps));
-      });
-      document.getElementById('inlineSbsGridBtn')?.addEventListener('click', (e) => {
-        inlineSbs.gridEnabled = !inlineSbs.gridEnabled;
-        e.currentTarget.classList.toggle('btn-active', inlineSbs.gridEnabled);
-        redrawInlineSbsPane('A');
-        redrawInlineSbsPane('B');
-      });
-      document.getElementById('inlineSbsSkelBtn')?.addEventListener('click', async (e) => {
-        const btn = e.currentTarget;
-        inlineSbs.skeletonEnabled = !inlineSbs.skeletonEnabled;
-        btn.classList.toggle('btn-active', inlineSbs.skeletonEnabled);
-        if (inlineSbs.skeletonEnabled) {
-          btn.textContent = '⏳ Loading...';
-          try {
-            await ensurePoseLandmarker();
-            btn.textContent = '🦴 Skeleton ON';
-            renderInlineSbsFrames();
-          } catch (err) {
-            inlineSbs.skeletonEnabled = false;
-            btn.classList.remove('btn-active');
-            btn.textContent = '🦴 Skeleton';
-            showToast(`Pose error: ${err.message}`);
-          }
-        } else {
-          btn.textContent = '🦴 Skeleton';
-          inlineSbs.landmarksA = null; inlineSbs.metricsA = null;
-          inlineSbs.landmarksB = null; inlineSbs.metricsB = null;
-          redrawInlineSbsPane('A');
-          redrawInlineSbsPane('B');
-        }
       });
       document.getElementById('inlineSbsExportBtn')?.addEventListener('click', () => {
         const imgA = document.getElementById('inlineSbsImgA');
@@ -10811,24 +11011,43 @@ create policy "Allow anon read/write for personal lab"
         const ctx = c.getContext('2d');
         ctx.fillStyle = '#0e1118';
         ctx.fillRect(0, 0, c.width, c.height);
-        const drawPane = (img, startX, title, lm, metrics) => {
-          const { ox, oy, rw, rh } = getImgDisplayRectInStage(img, paneW, paneH);
-          ctx.drawImage(img, startX + ox, oy, rw, rh);
-          if (inlineSbs.gridEnabled) drawAlignmentGridOnCtx(ctx, startX + ox, oy, rw, rh);
-          if (inlineSbs.skeletonEnabled && lm) drawSkeletonOnCtx(ctx, lm, metrics, startX + ox, oy, rw, rh);
+        const drawPane = (img, startX, p) => {
+          const iw = img.naturalWidth, ih = img.naturalHeight;
+          const z = Math.max(1, p.zoomLevel || 1);
+          const cropW = iw / z, cropH = ih / z;
+          const sx = Math.max(0, Math.min(iw - cropW, p.zoomFocusX * iw - cropW / 2));
+          const sy = Math.max(0, Math.min(ih - cropH, p.zoomFocusY * ih - cropH / 2));
+          const ia = cropW / cropH, ba = paneW / paneH;
+          let rw = paneW, rh = paneH, ox = 0, oy = 0;
+          if (ia > ba) { rh = paneW / ia; oy = (paneH - rh) / 2; }
+          else { rw = paneH * ia; ox = (paneW - rw) / 2; }
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(startX + ox, oy, rw, rh);
+          ctx.clip();
+          ctx.drawImage(img, sx, sy, cropW, cropH, startX + ox, oy, rw, rh);
+          const mapOffX = startX + ox - (sx / cropW) * rw;
+          const mapOffY = oy - (sy / cropH) * rh;
+          const mapFullW = (iw / cropW) * rw;
+          const mapFullH = (ih / cropH) * rh;
+          if (p.gridEnabled) drawAlignmentGridOnCtx(ctx, mapOffX, mapOffY, mapFullW, mapFullH, p.gridCenterX, p.gridCenterY);
+          if (p.skeletonEnabled && p.landmarks) drawSkeletonOnCtx(ctx, p.landmarks, p.metrics, mapOffX, mapOffY, mapFullW, mapFullH);
+          ctx.restore();
+
           ctx.fillStyle = '#151822';
           ctx.fillRect(startX, paneH, paneW, capH);
           ctx.fillStyle = '#c7b088';
           ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
-          ctx.fillText(title, startX + 10, paneH + 18);
-          if (inlineSbs.skeletonEnabled && metrics) {
+          ctx.fillText(p.title, startX + 10, paneH + 18);
+          if (p.skeletonEnabled && p.metrics) {
             ctx.fillStyle = '#b3e5fc';
             ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
-            ctx.fillText(formatPoseMetricsCompact(metrics), startX + 10, paneH + 35);
+            ctx.fillText(formatPoseMetricsCompact(p.metrics), startX + 10, paneH + 35);
           }
         };
-        drawPane(imgA, 0, inlineSbs.titleA, inlineSbs.landmarksA, inlineSbs.metricsA);
-        drawPane(imgB, paneW + gap, inlineSbs.titleB, inlineSbs.landmarksB, inlineSbs.metricsB);
+        drawPane(imgA, 0, inlineSbs.A);
+        drawPane(imgB, paneW + gap, inlineSbs.B);
         const a = document.createElement('a');
         a.href = c.toDataURL('image/png');
         a.download = `cricket-split-compare-${new Date().toISOString().slice(0, 10)}.png`;
