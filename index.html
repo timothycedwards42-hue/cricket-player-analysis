@@ -2475,6 +2475,33 @@
       height: 20px;
     }
 
+    .video-stage:fullscreen,
+    .video-stage:-webkit-full-screen {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      padding: 10px;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .video-stage:fullscreen .video-container,
+    .video-stage:-webkit-full-screen .video-container {
+      flex: 1;
+      min-height: 0;
+      aspect-ratio: auto;
+      border-radius: 6px;
+    }
+
+    .video-stage:fullscreen .filmstrip-section,
+    .video-stage:-webkit-full-screen .filmstrip-section,
+    .video-stage:fullscreen .clip-tabs-bar,
+    .video-stage:-webkit-full-screen .clip-tabs-bar {
+      display: none;
+    }
+
     .video-container:fullscreen,
     .camera-preview-wrap:fullscreen {
       aspect-ratio: auto;
@@ -2746,12 +2773,13 @@
             <div class="phase-pin-row" id="framingRow">
               <div class="btn-group">
                 <span class="phase-pin-label">🔍 Framing:</span>
-                <select id="zoomSelect" aria-label="Center crop zoom for wide-angle footage" title="Crop zoom (great for wide-angle smart glasses footage)" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+                <select id="zoomSelect" aria-label="Center crop zoom for wide-angle footage" title="Crop zoom level (select 1× to reset)" style="width:auto; padding:3px 6px; font-size:0.74rem;">
                   <option value="1" selected>1× Zoom</option>
                   <option value="2">2× Zoom</option>
                   <option value="3">3× Zoom</option>
                 </select>
-                <button type="button" class="btn-sm" id="aimZoomBtn" title="Click on the batter or stumps in the video to set the zoom target">🎯 Aim</button>
+                <button type="button" class="btn-sm" id="boxZoomBtn" title="Drag a box on the video to custom-zoom into that exact area">🔍 Box Zoom</button>
+                <button type="button" class="btn-sm" id="aimZoomBtn" title="Tap a point on the video to set the zoom center without changing zoom level">🎯 Aim</button>
                 <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
                   <option value="12">12 frames</option>
                   <option value="16">16 frames</option>
@@ -3472,6 +3500,7 @@
         zoomFocusX: 0.5,
         zoomFocusY: 0.5,
         aimZoomMode: false,
+        boxZoomMode: false,
         loadedStoredFrames: [],
         loadedStoredLabel: '',
         compareIds: [],
@@ -3599,6 +3628,7 @@
       const autoExtractBtn = document.getElementById('autoExtractBtn');
       const sampleCountSelect = document.getElementById('sampleCountSelect');
       const zoomSelect = document.getElementById('zoomSelect');
+      const boxZoomBtn = document.getElementById('boxZoomBtn');
       const aimZoomBtn = document.getElementById('aimZoomBtn');
       const filmstrip = document.getElementById('filmstrip');
       const frameCount = document.getElementById('frameCount');
@@ -3895,7 +3925,16 @@
         // Mobile view tabs & Fullscreen toggles
         mobileTabVideo.addEventListener('click', () => setMobileView('video'));
         mobileTabReport.addEventListener('click', () => setMobileView('report'));
-        videoFullscreenBtn.addEventListener('click', () => toggleElementFullscreen(videoContainer, videoPlayer));
+        videoFullscreenBtn.addEventListener('click', () => toggleElementFullscreen(videoStage, videoPlayer));
+        document.addEventListener('fullscreenchange', () => {
+          const isFs = document.fullscreenElement === videoStage;
+          videoFullscreenBtn.textContent = isFs ? '✕ Exit' : '⛶';
+          videoFullscreenBtn.title = isFs ? 'Exit fullscreen' : 'Fullscreen video player with controls';
+          setTimeout(() => {
+            resizeTelestrator();
+            applyVideoPreviewZoom();
+          }, 80);
+        });
         camFullscreenBtn.addEventListener('click', () => toggleElementFullscreen(cameraPreviewWrap, cameraPreview));
 
         // Role toggle & Test Player shortcut
@@ -4201,32 +4240,90 @@
           }
         });
         let aimDragStart = null;
-        aimZoomBtn.addEventListener('click', () => {
-          state.aimZoomMode = !state.aimZoomMode;
+        const exitFramingModes = () => {
+          state.aimZoomMode = false;
+          state.boxZoomMode = false;
           aimDragStart = null;
           if (zoomSelectBox) zoomSelectBox.classList.remove('active');
-          aimZoomBtn.classList.toggle('btn-active', state.aimZoomMode);
-          videoContainer.classList.toggle('aim-mode', state.aimZoomMode);
-          if (state.aimZoomMode) {
-            // Pause video & temporarily un-zoom so user can drag a box (or tap) on the exact region
+          aimZoomBtn.classList.remove('btn-active');
+          boxZoomBtn.classList.remove('btn-active');
+          videoContainer.classList.remove('aim-mode');
+        };
+        const disableOverlayDrawTools = () => {
+          if (state.drawingEnabled || state.angleModeEnabled) {
+            state.drawingEnabled = false;
+            state.angleModeEnabled = false;
+            state.angleDraftPoints = [];
+            drawToggleBtn.classList.remove('btn-active');
+            angleToggleBtn.classList.remove('btn-active');
+            telestrator.classList.remove('drawing-enabled');
+          }
+        };
+
+        // Dedicated Box Zoom button (drag mouse/finger rectangle to custom-zoom)
+        boxZoomBtn.addEventListener('click', () => {
+          const next = !state.boxZoomMode;
+          exitFramingModes();
+          state.boxZoomMode = next;
+          boxZoomBtn.classList.toggle('btn-active', next);
+          videoContainer.classList.toggle('aim-mode', next);
+          if (next) {
             videoPlayer.pause();
-            if (state.drawingEnabled || state.angleModeEnabled) {
-              state.drawingEnabled = false;
-              state.angleModeEnabled = false;
-              state.angleDraftPoints = [];
-              drawToggleBtn.classList.remove('btn-active');
-              angleToggleBtn.classList.remove('btn-active');
-              telestrator.classList.remove('drawing-enabled');
-            }
+            disableOverlayDrawTools();
             videoPlayer.style.transform = '';
             zoomTargetDot.classList.remove('active');
-            showToast('🎯 Drag a box (or tap) on the video to zoom into that area');
+            showToast('🔍 Drag a box over the video to zoom into that exact area');
           } else {
             applyVideoPreviewZoom();
           }
         });
+
+        // Dedicated Aim button (sets focal center point ONLY — never changes zoom level)
+        aimZoomBtn.addEventListener('click', () => {
+          const next = !state.aimZoomMode;
+          exitFramingModes();
+          state.aimZoomMode = next;
+          aimZoomBtn.classList.toggle('btn-active', next);
+          videoContainer.classList.toggle('aim-mode', next);
+          if (next) {
+            videoPlayer.pause();
+            disableOverlayDrawTools();
+            videoPlayer.style.transform = '';
+            const rect = videoContainer.getBoundingClientRect();
+            const { ox, oy, rw, rh } = getVideoDisplayRect(rect.width || 1, rect.height || 1);
+            zoomTargetDot.style.left = `${((ox + state.zoomFocusX * rw) / (rect.width || 1)) * 100}%`;
+            zoomTargetDot.style.top = `${((oy + state.zoomFocusY * rh) / (rect.height || 1)) * 100}%`;
+            zoomTargetDot.classList.add('active');
+            showToast('🎯 Tap where you want zoom centered (does not change zoom level)');
+          } else {
+            applyVideoPreviewZoom();
+          }
+        });
+
         videoContainer.addEventListener('pointerdown', (e) => {
-          if (!state.aimZoomMode || !getActiveClip()) return;
+          const clip = getActiveClip();
+          if (!clip) return;
+          if (state.aimZoomMode) {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = videoContainer.getBoundingClientRect();
+            const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            const clickY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+            const { ox, oy, rw, rh } = getVideoDisplayRect(rect.width, rect.height);
+            state.zoomFocusX = Math.max(0.05, Math.min(0.95, (clickX - ox) / (rw || rect.width)));
+            state.zoomFocusY = Math.max(0.05, Math.min(0.95, (clickY - oy) / (rh || rect.height)));
+            exitFramingModes();
+            videoPlayer.pause();
+            applyVideoPreviewZoom();
+            if (state.zoomLevel > 1) {
+              showToast(`🎯 Aim center updated at ${state.zoomLevel}×`);
+              if (videoPlayer.duration) extractKeyframesOffscreen(clip, state.sampleCount).catch(() => {});
+            } else {
+              showToast('🎯 Aim point set — now choose 2× or 3× Zoom when ready');
+            }
+            return;
+          }
+          if (!state.boxZoomMode) return;
           e.preventDefault();
           e.stopPropagation();
           const rect = videoContainer.getBoundingClientRect();
@@ -4244,7 +4341,7 @@
           }
         });
         videoContainer.addEventListener('pointermove', (e) => {
-          if (!state.aimZoomMode || !aimDragStart || !zoomSelectBox) return;
+          if (!state.boxZoomMode || !aimDragStart || !zoomSelectBox) return;
           e.preventDefault();
           const rect = videoContainer.getBoundingClientRect();
           const curX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
@@ -4258,9 +4355,9 @@
           zoomSelectBox.style.width = `${bw}px`;
           zoomSelectBox.style.height = `${bh}px`;
         });
-        const finishAimZoomSelection = (e) => {
+        const finishBoxZoomSelection = (e) => {
           const clip = getActiveClip();
-          if (!state.aimZoomMode || !aimDragStart || !clip) return;
+          if (!state.boxZoomMode || !aimDragStart || !clip) return;
           e.preventDefault();
           e.stopPropagation();
           const rect = videoContainer.getBoundingClientRect();
@@ -4270,43 +4367,33 @@
           const top = Math.min(aimDragStart.y, endY);
           const bw = Math.abs(endX - aimDragStart.x);
           const bh = Math.abs(endY - aimDragStart.y);
-          aimDragStart = null;
-          if (zoomSelectBox) zoomSelectBox.classList.remove('active');
+          exitFramingModes();
+
+          if (bw < 16 || bh < 16) {
+            applyVideoPreviewZoom();
+            showToast('Drag a larger box to zoom in (or use 1×/2×/3× Zoom)');
+            return;
+          }
 
           const { ox, oy, rw, rh } = getVideoDisplayRect(rect.width, rect.height);
           const vW = rw || rect.width;
           const vH = rh || rect.height;
+          const centerX = left + bw / 2;
+          const centerY = top + bh / 2;
+          state.zoomFocusX = Math.max(0.05, Math.min(0.95, (centerX - ox) / vW));
+          state.zoomFocusY = Math.max(0.05, Math.min(0.95, (centerY - oy) / vH));
+          const rawZoom = Math.min(vW / bw, vH / bh);
+          state.zoomLevel = Math.max(1.2, Math.min(4.0, Number(rawZoom.toFixed(1))));
+          setZoomSelectValue(state.zoomLevel);
 
-          if (bw >= 16 && bh >= 16) {
-            // Dragged a selection box -> center on box & compute exact zoom factor (1.2× to 4.0×)
-            const centerX = left + bw / 2;
-            const centerY = top + bh / 2;
-            state.zoomFocusX = Math.max(0.05, Math.min(0.95, (centerX - ox) / vW));
-            state.zoomFocusY = Math.max(0.05, Math.min(0.95, (centerY - oy) / vH));
-            const rawZoom = Math.min(vW / bw, vH / bh);
-            state.zoomLevel = Math.max(1.2, Math.min(4.0, Number(rawZoom.toFixed(1))));
-            setZoomSelectValue(state.zoomLevel);
-          } else {
-            // Quick single tap -> center on tapped point at 2× (or current zoom if > 1)
-            state.zoomFocusX = Math.max(0.05, Math.min(0.95, (endX - ox) / vW));
-            state.zoomFocusY = Math.max(0.05, Math.min(0.95, (endY - oy) / vH));
-            if (state.zoomLevel <= 1) {
-              state.zoomLevel = 2;
-              setZoomSelectValue(2);
-            }
-          }
-
-          state.aimZoomMode = false;
-          aimZoomBtn.classList.remove('btn-active');
-          videoContainer.classList.remove('aim-mode');
           videoPlayer.pause();
           applyVideoPreviewZoom();
-          showToast(`🔍 Zoomed to ${state.zoomLevel}× — updating frames in background`);
+          showToast(`🔍 Box zoomed to ${state.zoomLevel}× — updating frames in background`);
           if (videoPlayer.duration) {
             extractKeyframesOffscreen(clip, state.sampleCount).catch(() => {});
           }
         };
-        videoContainer.addEventListener('pointerup', finishAimZoomSelection);
+        videoContainer.addEventListener('pointerup', finishBoxZoomSelection);
         videoContainer.addEventListener('pointercancel', () => {
           aimDragStart = null;
           if (zoomSelectBox) zoomSelectBox.classList.remove('active');
