@@ -2712,7 +2712,6 @@
               </div>
 
               <div class="btn-group">
-                <button type="button" class="btn-sm" id="captureFrameBtn" title="Bookmark current frame for AI analysis">📸 Pin</button>
                 <button type="button" class="btn-sm" id="skeletonToggleBtn" title="Toggle live AI body skeleton &amp; real joint-angle measurement (MediaPipe)">🦴 Skeleton</button>
                 <button type="button" class="btn-sm" id="angleToggleBtn" title="Tap 3 points (e.g. Hip → Knee → Ankle) to measure exact joint angle">📐 Angle</button>
                 <button type="button" class="btn-sm" id="drawToggleBtn" title="Toggle telestrator line drawing overlay">✏️ Draw</button>
@@ -4107,7 +4106,7 @@
         speedSelect.addEventListener('change', () => {
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
         });
-        captureFrameBtn.addEventListener('click', captureCurrentFrame);
+        if (captureFrameBtn) captureFrameBtn.addEventListener('click', captureCurrentFrame);
         const applyVideoPreviewZoom = () => {
           videoPlayer.style.transformOrigin = `${(state.zoomFocusX * 100).toFixed(1)}% ${(state.zoomFocusY * 100).toFixed(1)}%`;
           videoPlayer.style.transform = state.zoomLevel > 1 ? `scale(${state.zoomLevel})` : '';
@@ -4122,36 +4121,63 @@
         zoomSelect.addEventListener('change', () => {
           state.zoomLevel = parseFloat(zoomSelect.value) || 1;
           applyVideoPreviewZoom();
-          if (videoPlayer.duration && getActiveClip()) autoExtractKeyframes(state.sampleCount);
+          const clip = getActiveClip();
+          if (videoPlayer.duration && clip) {
+            extractKeyframesOffscreen(clip, state.sampleCount).catch(() => {});
+          }
         });
         aimZoomBtn.addEventListener('click', () => {
           state.aimZoomMode = !state.aimZoomMode;
           aimZoomBtn.classList.toggle('btn-active', state.aimZoomMode);
           videoContainer.classList.toggle('aim-mode', state.aimZoomMode);
           if (state.aimZoomMode) {
-            // Temporarily un-zoom preview while aiming so user can click exact target easily
+            // Pause video & temporarily un-zoom so user can clearly see and tap the exact target point
+            videoPlayer.pause();
+            if (state.drawingEnabled || state.angleModeEnabled) {
+              state.drawingEnabled = false;
+              state.angleModeEnabled = false;
+              state.angleDraftPoints = [];
+              drawToggleBtn.classList.remove('btn-active');
+              angleToggleBtn.classList.remove('btn-active');
+              telestrator.classList.remove('drawing-enabled');
+            }
             videoPlayer.style.transform = '';
             zoomTargetDot.style.left = `${(state.zoomFocusX * 100).toFixed(1)}%`;
             zoomTargetDot.style.top = `${(state.zoomFocusY * 100).toFixed(1)}%`;
             zoomTargetDot.classList.add('active');
+            showToast('🎯 Tap the player or stumps on the paused frame to set zoom target');
           } else {
             applyVideoPreviewZoom();
           }
         });
         videoContainer.addEventListener('click', (e) => {
-          if (!state.aimZoomMode || !getActiveClip()) return;
+          const clip = getActiveClip();
+          if (!state.aimZoomMode || !clip) return;
+          e.preventDefault();
+          e.stopPropagation();
           const rect = videoContainer.getBoundingClientRect();
-          state.zoomFocusX = Math.max(0.05, Math.min(0.95, (e.clientX - rect.left) / rect.width));
-          state.zoomFocusY = Math.max(0.05, Math.min(0.95, (e.clientY - rect.top) / rect.height));
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
+          const { ox, oy, rw, rh } = getVideoDisplayRect(rect.width, rect.height);
+          state.zoomFocusX = Math.max(0.05, Math.min(0.95, (clickX - ox) / (rw || rect.width)));
+          state.zoomFocusY = Math.max(0.05, Math.min(0.95, (clickY - oy) / (rh || rect.height)));
           if (state.zoomLevel === 1) {
             state.zoomLevel = 2;
             zoomSelect.value = '2';
           }
+          // Briefly show dot where user tapped, then zoom paused frame in place without scrubbing playback
+          zoomTargetDot.style.left = `${(clickX / rect.width) * 100}%`;
+          zoomTargetDot.style.top = `${(clickY / rect.height) * 100}%`;
+          zoomTargetDot.classList.add('active');
           state.aimZoomMode = false;
           aimZoomBtn.classList.remove('btn-active');
           videoContainer.classList.remove('aim-mode');
+          videoPlayer.pause();
           applyVideoPreviewZoom();
-          if (videoPlayer.duration) autoExtractKeyframes(state.sampleCount);
+          showToast(`🎯 Zoom target set (${state.zoomLevel}×) — updating frames in background`);
+          if (videoPlayer.duration) {
+            extractKeyframesOffscreen(clip, state.sampleCount).catch(() => {});
+          }
         });
         sampleCountSelect.addEventListener('change', () => {
           state.sampleCount = parseInt(sampleCountSelect.value, 10) || 12;
@@ -4561,26 +4587,43 @@
       function renderPhasePinButtons() {
         if (!phasePinButtons) return;
         phasePinButtons.textContent = '';
+        const clip = getActiveClip();
         const items = PHASE_PINS[state.role] || PHASE_PINS.batting;
         items.forEach(item => {
+          const existing = clip?.frames?.find(f => f.label === item.label) || null;
           const b = document.createElement('button');
           b.type = 'button';
-          b.className = 'btn-sm';
-          b.textContent = item.btn;
-          b.title = item.title;
+          b.className = `btn-sm${existing ? ' btn-active' : ''}`;
+          b.textContent = existing ? `✓ ${item.btn.replace('📌 ', '')} (${existing.time.toFixed(2)}s)` : item.btn;
+          b.title = existing
+            ? `${item.label} is already pinned @ ${existing.time.toFixed(2)}s — click to remove pin`
+            : item.title;
           b.addEventListener('click', () => {
-            const clip = getActiveClip();
-            if (!clip || !videoPlayer.duration) {
+            const activeClip = getActiveClip();
+            if (!activeClip || !videoPlayer.duration) {
               showToast('Upload or record a video first');
+              return;
+            }
+            const already = activeClip.frames.find(f => f.label === item.label);
+            if (already) {
+              // Strictly 1 pin per moment: clicking again unpins it so user can re-pin cleanly if desired
+              activeClip.frames = activeClip.frames.filter(f => f.label !== item.label);
+              if (item.label === 'EXACT RELEASE') {
+                activeClip.releaseTime = null;
+                updateSpeedUI();
+              }
+              renderFilmstrip();
+              renderClipTabs();
+              showToast(`Removed ${item.label} pin`);
               return;
             }
             const t = videoPlayer.currentTime;
             if (item.label === 'EXACT RELEASE') {
-              clip.releaseTime = t;
+              activeClip.releaseTime = t;
               updateSpeedUI();
             }
             if (typeof window._pinSpecialFrame === 'function') {
-              window._pinSpecialFrame(clip, item.label, t);
+              window._pinSpecialFrame(activeClip, item.label, t);
             }
             showToast(`✓ Pinned ${item.label} @ ${t.toFixed(2)}s`);
           });
@@ -5718,6 +5761,7 @@
               const end = Math.max(start + 0.05, Math.min(clip.trimEnd ?? dur, dur));
               const span = Math.max(0.05, end - start);
 
+              const pinned = (clip.frames || []).filter(f => !/^F\d+$/.test(f.label || ''));
               const extracted = [];
               for (let i = 0; i < count; i++) {
                 const ratio = count === 1 ? 0.5 : i / (count - 1);
@@ -5729,7 +5773,11 @@
                   label: `F${i + 1}`
                 });
               }
-              clip.frames = extracted;
+              clip.frames = [...extracted, ...pinned].sort((a, b) => a.time - b.time);
+              if (clip.id === state.activeClipId) {
+                renderFilmstrip();
+                renderClipTabs();
+              }
               resolve();
             } catch (err) {
               reject(err);
@@ -5754,6 +5802,7 @@
         const clip = getActiveClip();
         const frames = clip ? clip.frames : [];
         frameCount.textContent = String(frames.length);
+        renderPhasePinButtons();
         frames.forEach((f, idx) => {
           const card = document.createElement('div');
           card.className = 'frame-thumb';
