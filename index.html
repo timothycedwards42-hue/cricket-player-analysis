@@ -604,6 +604,28 @@
     .video-container canvas#telestrator.drawing-enabled {
       pointer-events: auto;
       cursor: crosshair;
+      touch-action: none;
+    }
+
+    .video-container.aim-mode {
+      cursor: crosshair;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .zoom-select-box {
+      position: absolute;
+      display: none;
+      border: 2px dashed var(--accent-bright);
+      background: rgba(76, 175, 80, 0.14);
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+      z-index: 8;
+      border-radius: 3px;
+    }
+
+    .zoom-select-box.active {
+      display: block;
     }
 
     .pose-hud {
@@ -2683,6 +2705,7 @@
             <video id="videoPlayer" playsinline preload="metadata"></video>
             <canvas id="telestrator"></canvas>
             <div class="pose-hud" id="poseHud" aria-live="polite"></div>
+            <div class="zoom-select-box" id="zoomSelectBox"></div>
             <div class="zoom-target-dot" id="zoomTargetDot" title="Zoom focal point"></div>
           </div>
 
@@ -4128,8 +4151,34 @@
           videoPlayer.playbackRate = parseFloat(speedSelect.value);
         });
         if (captureFrameBtn) captureFrameBtn.addEventListener('click', captureCurrentFrame);
+        const zoomSelectBox = document.getElementById('zoomSelectBox');
+        const setZoomSelectValue = (val) => {
+          const rounded = Number(val.toFixed(1));
+          const strVal = String(rounded);
+          let opt = Array.from(zoomSelect.options).find(o => Number(o.value) === rounded);
+          if (!opt) {
+            // Reuse or create a single custom option
+            opt = Array.from(zoomSelect.options).find(o => o.dataset.customZoom === 'true');
+            if (!opt) {
+              opt = document.createElement('option');
+              opt.dataset.customZoom = 'true';
+              zoomSelect.appendChild(opt);
+            }
+            opt.value = strVal;
+            opt.textContent = `${strVal}× Box`;
+          }
+          zoomSelect.value = opt.value;
+        };
         const applyVideoPreviewZoom = () => {
-          videoPlayer.style.transformOrigin = `${(state.zoomFocusX * 100).toFixed(1)}% ${(state.zoomFocusY * 100).toFixed(1)}%`;
+          const rect = videoContainer.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0 && videoPlayer.videoWidth > 0) {
+            const { ox, oy, rw, rh } = getVideoDisplayRect(rect.width, rect.height);
+            const originX = ((ox + state.zoomFocusX * rw) / rect.width) * 100;
+            const originY = ((oy + state.zoomFocusY * rh) / rect.height) * 100;
+            videoPlayer.style.transformOrigin = `${originX.toFixed(1)}% ${originY.toFixed(1)}%`;
+          } else {
+            videoPlayer.style.transformOrigin = `${(state.zoomFocusX * 100).toFixed(1)}% ${(state.zoomFocusY * 100).toFixed(1)}%`;
+          }
           videoPlayer.style.transform = state.zoomLevel > 1 ? `scale(${state.zoomLevel})` : '';
           if (state.aimZoomMode) {
             zoomTargetDot.style.left = `${(state.zoomFocusX * 100).toFixed(1)}%`;
@@ -4141,18 +4190,25 @@
         };
         zoomSelect.addEventListener('change', () => {
           state.zoomLevel = parseFloat(zoomSelect.value) || 1;
+          if (state.zoomLevel <= 1) {
+            state.zoomFocusX = 0.5;
+            state.zoomFocusY = 0.5;
+          }
           applyVideoPreviewZoom();
           const clip = getActiveClip();
           if (videoPlayer.duration && clip) {
             extractKeyframesOffscreen(clip, state.sampleCount).catch(() => {});
           }
         });
+        let aimDragStart = null;
         aimZoomBtn.addEventListener('click', () => {
           state.aimZoomMode = !state.aimZoomMode;
+          aimDragStart = null;
+          if (zoomSelectBox) zoomSelectBox.classList.remove('active');
           aimZoomBtn.classList.toggle('btn-active', state.aimZoomMode);
           videoContainer.classList.toggle('aim-mode', state.aimZoomMode);
           if (state.aimZoomMode) {
-            // Pause video & temporarily un-zoom so user can clearly see and tap the exact target point
+            // Pause video & temporarily un-zoom so user can drag a box (or tap) on the exact region
             videoPlayer.pause();
             if (state.drawingEnabled || state.angleModeEnabled) {
               state.drawingEnabled = false;
@@ -4163,42 +4219,97 @@
               telestrator.classList.remove('drawing-enabled');
             }
             videoPlayer.style.transform = '';
-            zoomTargetDot.style.left = `${(state.zoomFocusX * 100).toFixed(1)}%`;
-            zoomTargetDot.style.top = `${(state.zoomFocusY * 100).toFixed(1)}%`;
-            zoomTargetDot.classList.add('active');
-            showToast('🎯 Tap the player or stumps on the paused frame to set zoom target');
+            zoomTargetDot.classList.remove('active');
+            showToast('🎯 Drag a box (or tap) on the video to zoom into that area');
           } else {
             applyVideoPreviewZoom();
           }
         });
-        videoContainer.addEventListener('click', (e) => {
-          const clip = getActiveClip();
-          if (!state.aimZoomMode || !clip) return;
+        videoContainer.addEventListener('pointerdown', (e) => {
+          if (!state.aimZoomMode || !getActiveClip()) return;
           e.preventDefault();
           e.stopPropagation();
           const rect = videoContainer.getBoundingClientRect();
-          const clickX = e.clientX - rect.left;
-          const clickY = e.clientY - rect.top;
-          const { ox, oy, rw, rh } = getVideoDisplayRect(rect.width, rect.height);
-          state.zoomFocusX = Math.max(0.05, Math.min(0.95, (clickX - ox) / (rw || rect.width)));
-          state.zoomFocusY = Math.max(0.05, Math.min(0.95, (clickY - oy) / (rh || rect.height)));
-          if (state.zoomLevel === 1) {
-            state.zoomLevel = 2;
-            zoomSelect.value = '2';
+          aimDragStart = {
+            x: Math.max(0, Math.min(rect.width, e.clientX - rect.left)),
+            y: Math.max(0, Math.min(rect.height, e.clientY - rect.top))
+          };
+          try { videoContainer.setPointerCapture(e.pointerId); } catch {}
+          if (zoomSelectBox) {
+            zoomSelectBox.style.left = `${aimDragStart.x}px`;
+            zoomSelectBox.style.top = `${aimDragStart.y}px`;
+            zoomSelectBox.style.width = '0px';
+            zoomSelectBox.style.height = '0px';
+            zoomSelectBox.classList.add('active');
           }
-          // Briefly show dot where user tapped, then zoom paused frame in place without scrubbing playback
-          zoomTargetDot.style.left = `${(clickX / rect.width) * 100}%`;
-          zoomTargetDot.style.top = `${(clickY / rect.height) * 100}%`;
-          zoomTargetDot.classList.add('active');
+        });
+        videoContainer.addEventListener('pointermove', (e) => {
+          if (!state.aimZoomMode || !aimDragStart || !zoomSelectBox) return;
+          e.preventDefault();
+          const rect = videoContainer.getBoundingClientRect();
+          const curX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+          const curY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+          const left = Math.min(aimDragStart.x, curX);
+          const top = Math.min(aimDragStart.y, curY);
+          const bw = Math.abs(curX - aimDragStart.x);
+          const bh = Math.abs(curY - aimDragStart.y);
+          zoomSelectBox.style.left = `${left}px`;
+          zoomSelectBox.style.top = `${top}px`;
+          zoomSelectBox.style.width = `${bw}px`;
+          zoomSelectBox.style.height = `${bh}px`;
+        });
+        const finishAimZoomSelection = (e) => {
+          const clip = getActiveClip();
+          if (!state.aimZoomMode || !aimDragStart || !clip) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const rect = videoContainer.getBoundingClientRect();
+          const endX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+          const endY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+          const left = Math.min(aimDragStart.x, endX);
+          const top = Math.min(aimDragStart.y, endY);
+          const bw = Math.abs(endX - aimDragStart.x);
+          const bh = Math.abs(endY - aimDragStart.y);
+          aimDragStart = null;
+          if (zoomSelectBox) zoomSelectBox.classList.remove('active');
+
+          const { ox, oy, rw, rh } = getVideoDisplayRect(rect.width, rect.height);
+          const vW = rw || rect.width;
+          const vH = rh || rect.height;
+
+          if (bw >= 16 && bh >= 16) {
+            // Dragged a selection box -> center on box & compute exact zoom factor (1.2× to 4.0×)
+            const centerX = left + bw / 2;
+            const centerY = top + bh / 2;
+            state.zoomFocusX = Math.max(0.05, Math.min(0.95, (centerX - ox) / vW));
+            state.zoomFocusY = Math.max(0.05, Math.min(0.95, (centerY - oy) / vH));
+            const rawZoom = Math.min(vW / bw, vH / bh);
+            state.zoomLevel = Math.max(1.2, Math.min(4.0, Number(rawZoom.toFixed(1))));
+            setZoomSelectValue(state.zoomLevel);
+          } else {
+            // Quick single tap -> center on tapped point at 2× (or current zoom if > 1)
+            state.zoomFocusX = Math.max(0.05, Math.min(0.95, (endX - ox) / vW));
+            state.zoomFocusY = Math.max(0.05, Math.min(0.95, (endY - oy) / vH));
+            if (state.zoomLevel <= 1) {
+              state.zoomLevel = 2;
+              setZoomSelectValue(2);
+            }
+          }
+
           state.aimZoomMode = false;
           aimZoomBtn.classList.remove('btn-active');
           videoContainer.classList.remove('aim-mode');
           videoPlayer.pause();
           applyVideoPreviewZoom();
-          showToast(`🎯 Zoom target set (${state.zoomLevel}×) — updating frames in background`);
+          showToast(`🔍 Zoomed to ${state.zoomLevel}× — updating frames in background`);
           if (videoPlayer.duration) {
             extractKeyframesOffscreen(clip, state.sampleCount).catch(() => {});
           }
+        };
+        videoContainer.addEventListener('pointerup', finishAimZoomSelection);
+        videoContainer.addEventListener('pointercancel', () => {
+          aimDragStart = null;
+          if (zoomSelectBox) zoomSelectBox.classList.remove('active');
         });
         sampleCountSelect.addEventListener('change', () => {
           state.sampleCount = parseInt(sampleCountSelect.value, 10) || 12;
