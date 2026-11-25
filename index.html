@@ -2122,6 +2122,70 @@
       display: flex;
     }
 
+    .loaded-reports-bar {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 6px 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    .loaded-reports-bar.active {
+      display: flex;
+    }
+
+    .loaded-report-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+
+    .loaded-report-pill:hover {
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    .loaded-report-pill.active {
+      background: var(--accent-glow);
+      border-color: var(--accent-bright);
+      color: #d8f8da;
+    }
+
+    .loaded-report-pill-close {
+      display: inline-grid;
+      place-items: center;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: inherit;
+      font-size: 0.68rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .loaded-report-pill-close:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
     .saved-frame-preview-box {
       display: none;
       position: relative;
@@ -3068,6 +3132,9 @@
       </div>
 
       <div class="panel-body" style="flex:1;">
+        <!-- Loaded Multi-Report Switcher Bar (toggle between multiple opened analyses) -->
+        <div class="loaded-reports-bar" id="loadedReportsBar" role="tablist" aria-label="Loaded analysis reports"></div>
+
         <!-- Empty State -->
         <div class="report-empty" id="reportEmpty">
           <div class="report-empty-icon">🎯</div>
@@ -3516,6 +3583,7 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <input type="text" id="compareInstructionsInput" placeholder="Optional comparison instructions (e.g. Check if front-leg brace &amp; head alignment improved)" style="flex:1; min-width:200px;">
+          <button type="button" id="loadSelectedReportsBtn" disabled title="Load all ticked files into tabs on the Report page to toggle between them">📂 Open in Report</button>
           <button type="button" id="openSideBySideBtn" disabled title="Visually compare both stored frame sequences side by side">🎞️ Side-by-Side</button>
           <button type="button" class="btn-primary" id="runCompareBtn" disabled>⚖️ Run AI Comparison</button>
         </div>
@@ -3782,6 +3850,8 @@
         boxZoomMode: false,
         loadedStoredFrames: [],
         loadedStoredLabel: '',
+        loadedSessions: [], // array of session objects loaded into the Report switcher tabs
+        activeLoadedSessionId: null,
         compareIds: [],
         focusAreas: [],
         isSpeaking: false,
@@ -9413,8 +9483,101 @@ create policy "Allow anon read/write for personal lab"
         }
       }
 
-      function loadSavedSession(session) {
+      const loadedReportsBar = document.getElementById('loadedReportsBar');
+      const loadSelectedReportsBtn = document.getElementById('loadSelectedReportsBtn');
+
+      function renderLoadedReportsBar() {
+        if (!loadedReportsBar) return;
+        loadedReportsBar.textContent = '';
+        if (state.loadedSessions.length <= 1) {
+          loadedReportsBar.classList.remove('active');
+          return;
+        }
+        loadedReportsBar.classList.add('active');
+
+        const activeIdx = state.loadedSessions.findIndex(s => s.id === state.activeLoadedSessionId);
+        const prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.className = 'btn-sm btn-ghost';
+        prevBtn.textContent = '◀';
+        prevBtn.title = 'Previous loaded report';
+        prevBtn.style.flexShrink = '0';
+        prevBtn.addEventListener('click', () => {
+          const nextIdx = (activeIdx - 1 + state.loadedSessions.length) % state.loadedSessions.length;
+          loadSavedSession(state.loadedSessions[nextIdx], false);
+        });
+        loadedReportsBar.appendChild(prevBtn);
+
+        state.loadedSessions.forEach((sess) => {
+          const pill = document.createElement('div');
+          pill.className = `loaded-report-pill${sess.id === state.activeLoadedSessionId ? ' active' : ''}`;
+          pill.setAttribute('role', 'tab');
+          pill.setAttribute('aria-selected', sess.id === state.activeLoadedSessionId ? 'true' : 'false');
+          const icon = sess.role === 'bowling' ? '⚡' : sess.role === 'lbw' ? '☝️' : '🏏';
+          const stamp = sess.fileStamp || formatFileTimestamp(new Date(sess.savedAt));
+          const labelSpan = document.createElement('span');
+          labelSpan.textContent = `${icon} ${sess.playerName} · ${sess.sessionTag || stamp}`;
+          pill.title = `${sess.playerName} (${sess.role}) · ${stamp}${sess.sessionTag ? ` · ${sess.sessionTag}` : ''}`;
+
+          const closeBtn = document.createElement('button');
+          closeBtn.type = 'button';
+          closeBtn.className = 'loaded-report-pill-close';
+          closeBtn.textContent = '×';
+          closeBtn.title = 'Remove from Report tabs';
+          closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = state.loadedSessions.findIndex(x => x.id === sess.id);
+            if (idx === -1) return;
+            state.loadedSessions.splice(idx, 1);
+            if (state.activeLoadedSessionId === sess.id) {
+              if (state.loadedSessions.length > 0) {
+                const nextSess = state.loadedSessions[Math.min(idx, state.loadedSessions.length - 1)];
+                loadSavedSession(nextSess, false);
+              } else {
+                state.activeLoadedSessionId = null;
+                renderLoadedReportsBar();
+              }
+            } else {
+              renderLoadedReportsBar();
+            }
+          });
+
+          pill.addEventListener('click', () => loadSavedSession(sess, false));
+          pill.append(labelSpan, closeBtn);
+          loadedReportsBar.appendChild(pill);
+        });
+
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.className = 'btn-sm btn-ghost';
+        nextBtn.textContent = '▶';
+        nextBtn.title = 'Next loaded report';
+        nextBtn.style.flexShrink = '0';
+        nextBtn.addEventListener('click', () => {
+          const nextIdx = (activeIdx + 1) % state.loadedSessions.length;
+          loadSavedSession(state.loadedSessions[nextIdx], false);
+        });
+
+        const addMoreBtn = document.createElement('button');
+        addMoreBtn.type = 'button';
+        addMoreBtn.className = 'btn-sm btn-ghost';
+        addMoreBtn.textContent = '+ Folders';
+        addMoreBtn.title = 'Open Folders to load more analyses into tabs';
+        addMoreBtn.style.flexShrink = '0';
+        addMoreBtn.addEventListener('click', () => openHistoryDialog(false));
+
+        loadedReportsBar.append(nextBtn, addMoreBtn);
+      }
+
+      function loadSavedSession(session, closeDialog = true) {
         if (!session) return;
+        // Track in multi-report tray so user can toggle between multiple loaded analyses
+        if (!state.loadedSessions.some(s => s.id === session.id)) {
+          state.loadedSessions.push(session);
+        }
+        state.activeLoadedSessionId = session.id;
+        renderLoadedReportsBar();
+
         const isFramesOnly = session.hasAnalysis === false || !session.report || Boolean(session.report._framesOnly);
 
         state.clips.forEach(c => URL.revokeObjectURL(c.url));
@@ -9701,13 +9864,12 @@ create policy "Allow anon read/write for personal lab"
               const cmpChk = document.createElement('input');
               cmpChk.type = 'checkbox';
               cmpChk.checked = state.compareIds.includes(s.id);
-              cmpChk.title = 'Select for Before vs. After comparison (pick 2 files)';
+              cmpChk.title = 'Tick files to Open in Report tabs (2+) or Compare / Side-by-Side (pick 2)';
               cmpChk.style.cssText = 'width:16px; height:16px; flex-shrink:0; accent-color:var(--info); cursor:pointer;';
               cmpChk.addEventListener('change', () => {
                 if (cmpChk.checked) {
                   if (!state.compareIds.includes(s.id)) {
                     state.compareIds.push(s.id);
-                    if (state.compareIds.length > 2) state.compareIds.shift();
                   }
                 } else {
                   state.compareIds = state.compareIds.filter(id => id !== s.id);
@@ -10192,6 +10354,24 @@ create policy "Allow anon read/write for personal lab"
         showToast('📸 Exported Side-by-Side Comparison PNG');
       });
 
+      loadSelectedReportsBtn?.addEventListener('click', () => {
+        const selected = state.compareIds
+          .map(id => cachedSessions.find(s => s.id === id))
+          .filter(Boolean)
+          .sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
+        if (selected.length === 0) return;
+        selected.forEach(sess => {
+          if (!state.loadedSessions.some(x => x.id === sess.id)) {
+            state.loadedSessions.push(sess);
+          }
+        });
+        state.compareIds = [];
+        updateCompareBarUI();
+        loadSavedSession(selected[selected.length - 1], true);
+        if (historyDialog.open) historyDialog.close();
+        showToast(`📂 Loaded ${selected.length} report${selected.length === 1 ? '' : 's'} — use tabs at top of Report to toggle`);
+      });
+
       openSideBySideBtn?.addEventListener('click', () => {
         if (state.compareIds.length !== 2) return;
         const selected = state.compareIds
@@ -10209,6 +10389,10 @@ create policy "Allow anon read/write for personal lab"
           compareBar.classList.remove('active');
           runCompareBtn.disabled = true;
           if (openSideBySideBtn) openSideBySideBtn.disabled = true;
+          if (loadSelectedReportsBtn) {
+            loadSelectedReportsBtn.disabled = true;
+            loadSelectedReportsBtn.textContent = '📂 Open in Report';
+          }
           return;
         }
         compareBar.classList.add('active');
@@ -10217,16 +10401,25 @@ create policy "Allow anon read/write for personal lab"
           .filter(Boolean)
           .sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
 
+        if (loadSelectedReportsBtn) {
+          loadSelectedReportsBtn.disabled = selected.length === 0;
+          loadSelectedReportsBtn.textContent = `📂 Open ${selected.length} in Report`;
+        }
+
         if (selected.length === 1) {
           const s1 = selected[0];
-          compareBarTitle.textContent = `⚖️ Selected 1/2 (${s1.playerName} · ${s1.fileStamp || ''}) — tick 1 more file to compare`;
+          compareBarTitle.textContent = `☑️ Selected 1 (${s1.playerName} · ${s1.fileStamp || ''}) — tick more to open together or pick 2 to compare`;
           runCompareBtn.disabled = true;
           if (openSideBySideBtn) openSideBySideBtn.disabled = true;
         } else if (selected.length === 2) {
           const [a, b] = selected;
-          compareBarTitle.textContent = `⚖️ Compare: ${a.playerName} (${a.fileStamp || 'Earlier'})  →  ${b.playerName} (${b.fileStamp || 'Later'})`;
+          compareBarTitle.textContent = `⚖️ Selected 2: ${a.playerName} (${a.fileStamp || 'Earlier'})  →  ${b.playerName} (${b.fileStamp || 'Later'})`;
           runCompareBtn.disabled = false;
           if (openSideBySideBtn) openSideBySideBtn.disabled = false;
+        } else {
+          compareBarTitle.textContent = `📂 Selected ${selected.length} files — tap "Open ${selected.length} in Report" to toggle between all of them (pick 2 for Compare)`;
+          runCompareBtn.disabled = true;
+          if (openSideBySideBtn) openSideBySideBtn.disabled = true;
         }
       }
 
