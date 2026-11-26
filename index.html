@@ -567,7 +567,7 @@
 
     .scrubber-pin-markers {
       position: relative;
-      height: 14px;
+      height: 16px;
       width: 100%;
       pointer-events: none;
     }
@@ -584,6 +584,41 @@
       font-weight: 800;
       white-space: nowrap;
       box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+
+    .scrubber-pin-dot.pin-start {
+      background: var(--accent-bright);
+      color: #091a0a;
+      z-index: 3;
+    }
+
+    .scrubber-pin-dot.pin-end {
+      background: var(--info);
+      color: #061822;
+      z-index: 3;
+    }
+
+    .scrubber-pin-dot.pin-saved-start {
+      background: rgba(76, 175, 80, 0.88);
+      color: #071908;
+      font-size: 0.58rem;
+      padding: 1px 4px;
+    }
+
+    .scrubber-pin-dot.pin-saved-end {
+      background: rgba(79, 195, 247, 0.88);
+      color: #061822;
+      font-size: 0.58rem;
+      padding: 1px 4px;
+    }
+
+    .trim-bar-saved-clip {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, rgba(76, 175, 80, 0.85), rgba(79, 195, 247, 0.85));
+      border-radius: 999px;
+      pointer-events: none;
     }
 
     .video-stage.clip-zoomed .scrubber-row input[type="range"] {
@@ -5711,18 +5746,69 @@
       function renderScrubberPinMarkers() {
         if (!scrubberPinMarkers) return;
         scrubberPinMarkers.textContent = '';
+        const dur = videoPlayer.duration || 0;
         const draft = state.draftClip;
-        if (!draft || !draft.pins.length) return;
-        const minT = draft.zoomRangeStart ?? 0;
-        const maxT = draft.zoomRangeEnd ?? (videoPlayer.duration || 1);
-        const span = Math.max(0.05, maxT - minT);
-        draft.pins.forEach(p => {
-          const pct = Math.max(2, Math.min(98, ((p.time - minT) / span) * 100));
-          const dot = document.createElement('span');
-          dot.className = 'scrubber-pin-dot';
-          dot.style.left = `${pct}%`;
-          dot.textContent = p.label.replace('EXACT ', '').slice(0, 7);
-          scrubberPinMarkers.appendChild(dot);
+
+        if (draft && dur > 0) {
+          const minT = draft.zoomRangeStart ?? 0;
+          const maxT = draft.zoomRangeEnd ?? dur;
+          const span = Math.max(0.05, maxT - minT);
+          const toPct = (t) => Math.max(2, Math.min(98, ((t - minT) / span) * 100));
+
+          // Start & End markers while actively clipping
+          const startDot = document.createElement('span');
+          startDot.className = 'scrubber-pin-dot pin-start';
+          startDot.style.left = `${toPct(draft.start)}%`;
+          startDot.textContent = '[ START';
+          scrubberPinMarkers.appendChild(startDot);
+
+          const endDot = document.createElement('span');
+          endDot.className = 'scrubber-pin-dot pin-end';
+          endDot.style.left = `${toPct(draft.end)}%`;
+          endDot.textContent = 'END ]';
+          scrubberPinMarkers.appendChild(endDot);
+
+          // Phase pins (BFC, FFC, Release, Trigger, Stride, Impact)
+          (draft.pins || []).forEach(p => {
+            const dot = document.createElement('span');
+            dot.className = 'scrubber-pin-dot';
+            dot.style.left = `${toPct(p.time)}%`;
+            dot.textContent = p.label.replace('EXACT ', '').slice(0, 7);
+            scrubberPinMarkers.appendChild(dot);
+          });
+          return;
+        }
+
+        // Whole Video Mode: show Start/End markers for all clips already cut from this source video
+        const src = getActiveSource();
+        if (!src || !dur) return;
+        const sourceClips = state.clips
+          .map((c, idx) => ({ clip: c, num: idx + 1 }))
+          .filter(item => item.clip.sourceId === src.id);
+
+        sourceClips.forEach(({ clip, num }) => {
+          const sPct = Math.max(2, Math.min(98, ((clip.trimStart || 0) / dur) * 100));
+          const ePct = Math.max(2, Math.min(98, ((clip.trimEnd ?? dur) / dur) * 100));
+          if (ePct - sPct < 6) {
+            // Very short clip relative to full video: show a single compact badge at midpoint
+            const midDot = document.createElement('span');
+            midDot.className = 'scrubber-pin-dot pin-saved-start';
+            midDot.style.left = `${(sPct + ePct) / 2}%`;
+            midDot.textContent = `[C${num}]`;
+            scrubberPinMarkers.appendChild(midDot);
+          } else {
+            const sDot = document.createElement('span');
+            sDot.className = 'scrubber-pin-dot pin-saved-start';
+            sDot.style.left = `${sPct}%`;
+            sDot.textContent = `[C${num}`;
+            scrubberPinMarkers.appendChild(sDot);
+
+            const eDot = document.createElement('span');
+            eDot.className = 'scrubber-pin-dot pin-saved-end';
+            eDot.style.left = `${ePct}%`;
+            eDot.textContent = `C${num}]`;
+            scrubberPinMarkers.appendChild(eDot);
+          }
         });
       }
 
@@ -6518,12 +6604,35 @@
       function updateTrimUI() {
         const dur = videoPlayer.duration || 0;
         const draft = state.draftClip;
+
+        // Clear any previously drawn saved-clip highlight segments on the track
+        if (trimBarTrack) {
+          trimBarTrack.querySelectorAll('.trim-bar-saved-clip').forEach(el => el.remove());
+        }
+
         if (!draft || !dur) {
+          const src = getActiveSource();
+          const sourceClips = (src && dur) ? state.clips.filter(c => c.sourceId === src.id) : [];
           if (trimBarRange) {
-            trimBarRange.style.left = '0%';
-            trimBarRange.style.width = '100%';
+            if (sourceClips.length > 0) {
+              // Hide full-width bar so each already-clipped segment stands out clearly
+              trimBarRange.style.width = '0%';
+              sourceClips.forEach(c => {
+                const seg = document.createElement('div');
+                seg.className = 'trim-bar-saved-clip';
+                const lp = Math.max(0, ((c.trimStart || 0) / dur) * 100);
+                const wp = Math.max(1.5, (((c.trimEnd ?? dur) - (c.trimStart || 0)) / dur) * 100);
+                seg.style.left = `${lp}%`;
+                seg.style.width = `${Math.min(100 - lp, wp)}%`;
+                trimBarTrack.appendChild(seg);
+              });
+            } else {
+              trimBarRange.style.left = '0%';
+              trimBarRange.style.width = '100%';
+            }
           }
           if (trimReadout) trimReadout.textContent = dur ? `Full video (${dur.toFixed(2)}s)` : '0.00s';
+          renderScrubberPinMarkers();
           return;
         }
         const start = Math.max(0, Math.min(draft.start, dur));
@@ -6541,6 +6650,7 @@
         if (zoomClipLabel) {
           zoomClipLabel.textContent = `🔍 Clip Zoom: ${start.toFixed(2)}s – ${end.toFixed(2)}s (${(end - start).toFixed(2)}s) — Pin moments & Save`;
         }
+        renderScrubberPinMarkers();
       }
 
       // --- STEP 2: CLIP STAGING AREA (PER-CLIP PREVIEWS, TAGGING, AI & STORAGE) ---
@@ -6606,6 +6716,7 @@
         }
         renderMiniStagingBar();
         renderStagingArea();
+        updateTrimUI();
         showToast('Removed clip from staging');
       }
 
