@@ -3472,15 +3472,6 @@
         </div>
       </div>
 
-      <!-- Loaded Stored Frames Banner (when re-analyzing frames opened from Folders) -->
-      <div id="loadedFramesBanner" style="display:none; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; background:var(--info-soft); border:1px solid rgba(79,195,247,0.45); border-radius:var(--radius-sm); padding:10px 14px; font-size:0.8rem; color:#d4f0fd;">
-        <span id="loadedFramesBannerText">🎞️ Stored frames loaded — adjust settings below and run AI analysis.</span>
-        <div class="btn-group">
-          <button type="button" class="btn-sm btn-primary" id="runStoredFramesNowBtn">✨ Re-Analyze Stored Frames</button>
-          <button type="button" class="btn-sm btn-ghost" id="clearLoadedFramesBtn">Clear</button>
-        </div>
-      </div>
-
       <!-- Analysis & Player Profile Settings (applies when running AI on any clip) -->
       <details class="collapsible-card" id="stagingSettingsDetails">
         <summary>
@@ -3582,6 +3573,7 @@
             <h2 id="reportTitle">📊 Coaching &amp; Tactical Matchup Report</h2>
           </div>
         <div class="btn-group">
+          <button type="button" class="btn-sm" id="sendReportToStagingBtn" disabled title="Send this loaded clip/report to Step 2 Staging to edit notes, join with other clips, or re-run AI">📥 Send to Staging</button>
           <button type="button" class="btn-sm" id="toggleInlineSbsBtn" title="Compare any 2 saved videos side-by-side right inside the Report area (same player or different players)">🎞️ Split View</button>
           <button type="button" class="btn-sm" id="speakReportBtn" disabled title="Read verdict &amp; key cues aloud">🔊 Audio</button>
           <button type="button" class="btn-sm" id="emailReportBtn" disabled title="Email coaching &amp; training plan">✉️ Email</button>
@@ -3731,7 +3723,7 @@
               <strong style="font-size:0.84rem;">🎞️ Stored Video Reference Frames (<span id="savedFramesCount">0</span>)</strong>
               <div class="btn-group">
                 <button type="button" class="btn-sm" id="playSavedFramesQuickBtn" title="Play through all stored frames">▶ Play Frames</button>
-                <button type="button" class="btn-sm btn-primary" id="analyzeStoredFramesBtn" style="display:none;">✨ Analyze These Frames with AI</button>
+                <button type="button" class="btn-sm btn-primary" id="analyzeStoredFramesBtn" style="display:none;" title="Send these frames to Step 2 Staging to edit notes, join with other clips, or run AI">📥 Send to Staging</button>
               </div>
             </div>
             <div class="saved-frame-preview-box" id="savedFramePreviewBox">
@@ -5406,50 +5398,36 @@
           renderStagingArea();
           showToast(`✓ Saved ${saved} clip${saved === 1 ? '' : 's'} to storage`);
         });
-        runStoredFramesNowBtn?.addEventListener('click', () => {
-          if (state.loadedStoredFrames.length > 0) runAnalysis(state.loadedStoredFrames);
-        });
-        const reanalyzeDialog = document.getElementById('reanalyzeDialog');
-        const reanalyzeNotesInput = document.getElementById('reanalyzeNotesInput');
-        const reanalyzeIncludeAnglesChk = document.getElementById('reanalyzeIncludeAnglesChk');
-        let pendingReanalyzeFrames = [];
-
-        analyzeStoredFramesBtn.addEventListener('click', () => {
-          const frames = state.loadedStoredFrames.length > 0
-            ? state.loadedStoredFrames
-            : (state.currentReport?._referenceFrames || []);
-          if (frames.length === 0) return;
-          pendingReanalyzeFrames = frames;
-          reanalyzeNotesInput.value = notesInput.value || '';
-          reanalyzeIncludeAnglesChk.checked = Boolean(savedFramePlayer.skeletonEnabled || state.skeletonEnabled);
-          document.getElementById('reanalyzeSubtitle').textContent = `Re-analyzing ${frames.length} stored frames. Enter any new coaching questions or instructions below (leave blank for a fresh full review).`;
-          reanalyzeDialog.showModal();
-          reanalyzeNotesInput.focus();
-        });
-        document.getElementById('closeReanalyzeDialogBtn')?.addEventListener('click', () => reanalyzeDialog.close());
-        document.getElementById('cancelReanalyzeBtn')?.addEventListener('click', () => reanalyzeDialog.close());
-        reanalyzeDialog?.addEventListener('click', (e) => { if (e.target === reanalyzeDialog) reanalyzeDialog.close(); });
-        document.getElementById('confirmReanalyzeBtn')?.addEventListener('click', async () => {
-          notesInput.value = reanalyzeNotesInput.value.trim();
-          const wantAngles = reanalyzeIncludeAnglesChk.checked;
-          const framesToRun = pendingReanalyzeFrames.slice();
-          reanalyzeDialog.close();
-          if (wantAngles && framesToRun.length > 0) {
-            setLoading(true, 'Measuring real joint angles on stored frames...', 'Running MediaPipe Pose before sending to Gemini.');
-            const targets = sampleEvenly(framesToRun, 8);
-            for (const f of targets) {
-              const entry = await ensurePoseForDataUrl(f.dataUrl);
-              if (entry?.metrics) {
-                f.poseSummary = formatPoseMetricsCompact(entry.metrics);
-              }
-            }
+        const sendCurrentReportToStaging = () => {
+          const activeSess =
+            state.loadedSessions.find(s => s.id === state.activeLoadedSessionId) ||
+            cachedSessions.find(s => s.id === state.activeLoadedSessionId) ||
+            null;
+          if (activeSess) {
+            sendSessionsToStaging([activeSess]);
+            return;
           }
-          runAnalysis(framesToRun);
-        });
-        clearLoadedFramesBtn.addEventListener('click', () => {
-          setLoadedStoredFrames([], '');
-          showToast('Cleared stored frames');
-        });
+          const frames = state.currentReport?._referenceFrames || state.loadedStoredFrames || [];
+          if (frames.length === 0) {
+            showToast('No video frames attached to this report');
+            return;
+          }
+          const m = state.currentReport?._meta || {};
+          sendSessionsToStaging([{
+            id: `temp_${Date.now()}`,
+            savedAt: m.savedAt || new Date().toISOString(),
+            fileStamp: m.fileStamp || formatFileTimestamp(),
+            playerName: m.playerName || playerNameInput.value.trim(),
+            sessionTag: m.sessionTag || '',
+            role: m.role || state.role,
+            hasAnalysis: Boolean(state.currentReport && !state.currentReport._framesOnlyView),
+            report: state.currentReport,
+            thumbnail: frames[0]?.dataUrl || null,
+            clipsMeta: [{ name: m.sessionTag || 'Report Clip', angle: frames[0]?.angle || 'Auto-detect', duration: 0, frames }]
+          }]);
+        };
+        analyzeStoredFramesBtn?.addEventListener('click', sendCurrentReportToStaging);
+        document.getElementById('sendReportToStagingBtn')?.addEventListener('click', sendCurrentReportToStaging);
         document.getElementById('emptyBatterDemoBtn')?.addEventListener('click', () => loadDemo('batting'));
         document.getElementById('emptyBowlerDemoBtn')?.addEventListener('click', () => loadDemo('bowling'));
         speakReportBtn.addEventListener('click', toggleSpeakReport);
@@ -9683,9 +9661,11 @@ For each improvement's diagram (top-down net/pitch view):
         savedFramePreviewBox.classList.remove('active');
         if (analyzeStoredFramesBtn) {
           analyzeStoredFramesBtn.style.display = savedFramePlayer.frames.length > 0 ? 'inline-flex' : 'none';
-          analyzeStoredFramesBtn.textContent = isFramesOnlyView
-            ? '✨ Analyze These Frames with AI'
-            : '🔄 Re-Analyze These Frames';
+          analyzeStoredFramesBtn.textContent = '📥 Send to Staging';
+        }
+        const sendReportBtn = document.getElementById('sendReportToStagingBtn');
+        if (sendReportBtn) {
+          sendReportBtn.disabled = savedFramePlayer.frames.length === 0;
         }
         if (savedFramePlayer.frames.length === 0) {
           savedFramesCard.classList.remove('active');
