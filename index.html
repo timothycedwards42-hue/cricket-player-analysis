@@ -237,6 +237,20 @@
       color: #c8f7ca;
     }
 
+    .btn-clip-start-active {
+      background: rgba(76, 175, 80, 0.28);
+      border-color: var(--accent-bright);
+      color: #e8fae9;
+      box-shadow: 0 0 10px rgba(76, 175, 80, 0.35);
+    }
+
+    .btn-clip-end-active {
+      background: rgba(79, 195, 247, 0.26);
+      border-color: var(--info);
+      color: #e1f5fe;
+      box-shadow: 0 0 10px rgba(79, 195, 247, 0.35);
+    }
+
     .status-pill {
       display: inline-flex;
       align-items: center;
@@ -3478,46 +3492,37 @@
                   </div>
                 </div>
 
-                <!-- WHOLE VIDEO MODE: Start a Clip -->
+                <!-- PERMANENT CLIP START / DURATION / CLIP END BAR (Never disappears — buttons highlight when set!) -->
                 <div class="clip-action-bar" id="wholeVideoCutBar">
                   <div class="btn-group">
-                    <button type="button" class="btn-primary clip-primary-cta" id="startClipHereBtn" title="Mark Clip Start at the current frame and zoom the scrubber into the clip">✂️ Clip Start</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="1.5" title="Start clip here with +1.5s length">+1.5s</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="2.0" title="Start clip here with +2.0s length">+2.0s</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="2.5" title="Start clip here with +2.5s length">+2.5s</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="3.0" title="Start clip here with +3.0s length">+3.0s</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="4.0" title="Start clip here with +4.0s length">+4.0s</button>
+                    <button type="button" class="btn-sm" id="setStartBtn" title="Set Clip Start at current playhead (and zoom scrubber)">[ Clip Start</button>
+                    <button type="button" class="btn-sm draft-len-btn" data-cut="1.5" title="Set approximate Clip End to +1.5s from Clip Start">+1.5s</button>
+                    <button type="button" class="btn-sm draft-len-btn" data-cut="2.0" title="Set approximate Clip End to +2.0s from Clip Start">+2.0s</button>
+                    <button type="button" class="btn-sm draft-len-btn" data-cut="2.5" title="Set approximate Clip End to +2.5s from Clip Start">+2.5s</button>
+                    <button type="button" class="btn-sm draft-len-btn" data-cut="3.0" title="Set approximate Clip End to +3.0s from Clip Start">+3.0s</button>
+                    <button type="button" class="btn-sm draft-len-btn" data-cut="4.0" title="Set approximate Clip End to +4.0s from Clip Start">+4.0s</button>
+                    <button type="button" class="btn-sm" id="setEndBtn" title="Set Clip End at current playhead">Clip End ]</button>
                   </div>
-                  <button type="button" class="btn-sm" id="quickCutFullBtn" title="Stage the entire video as one clip">➕ Stage Full Video</button>
+                  <div class="btn-group">
+                    <span class="trim-readout" id="trimReadout" style="display:none;">0.00s – 0.00s</span>
+                    <button type="button" class="btn-sm" id="quickCutFullBtn" title="Stage the entire video as one clip">➕ Stage Full Video</button>
+                  </div>
                 </div>
 
-                <!-- ZOOMED CLIP MODE: Fine-tune Clip Start / Clip End, Quick Lengths, Pin Key Moments, Save to Staging -->
-                <div id="zoomedClipControls" style="display:none; flex-direction:column; gap:8px; padding-top:8px; border-top:1px solid var(--border);">
-                  <div class="transport-row">
+                <!-- ZOOMED CLIP EXTRA CONTROLS: Pin Key Moments, Frame Count & Save to Staging -->
+                <div id="zoomedClipControls" style="display:none; flex-direction:column; gap:8px; padding-top:8px; border-top:1px dashed var(--border);">
+                  <div class="phase-pin-row" id="phasePinRow" style="border-top:none; padding-top:0;">
                     <div class="btn-group">
-                      <button type="button" class="btn-sm" id="setStartBtn" title="Move Clip Start to current playhead">[ Clip Start</button>
-                      <button type="button" class="btn-sm draft-len-btn" data-cut="1.5" title="Set approximate Clip End to Clip Start + 1.5s">+1.5s</button>
-                      <button type="button" class="btn-sm draft-len-btn" data-cut="2.0" title="Set approximate Clip End to Clip Start + 2.0s">+2.0s</button>
-                      <button type="button" class="btn-sm draft-len-btn" data-cut="2.5" title="Set approximate Clip End to Clip Start + 2.5s">+2.5s</button>
-                      <button type="button" class="btn-sm draft-len-btn" data-cut="3.0" title="Set approximate Clip End to Clip Start + 3.0s">+3.0s</button>
-                      <button type="button" class="btn-sm draft-len-btn" data-cut="4.0" title="Set approximate Clip End to Clip Start + 4.0s">+4.0s</button>
-                      <button type="button" class="btn-sm" id="setEndBtn" title="Move Clip End to current playhead">Clip End ]</button>
+                      <span class="phase-pin-label">📌 Pin Key Moments:</span>
+                      <div class="btn-group" id="phasePinButtons"></div>
                     </div>
-                    <div class="btn-group">
-                      <span class="trim-readout" id="trimReadout">0.00s – 0.00s</span>
-                      <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
-                        <option value="12">12 frames</option>
-                        <option value="16">16 frames</option>
-                        <option value="20" selected>20 frames</option>
-                        <option value="24">24 frames</option>
-                        <option value="30">30 frames</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="phase-pin-row" id="phasePinRow">
-                    <span class="phase-pin-label">📌 Pin Key Moments:</span>
-                    <div class="btn-group" id="phasePinButtons"></div>
+                    <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+                      <option value="12">12 frames</option>
+                      <option value="16">16 frames</option>
+                      <option value="20" selected>20 frames</option>
+                      <option value="24">24 frames</option>
+                      <option value="30">30 frames</option>
+                    </select>
                   </div>
 
                   <div class="clip-action-bar" style="border-top:1px dashed var(--border);">
@@ -5412,66 +5417,74 @@
         });
 
         // --- STEP 1: CLIP CUTTING & SCRUBBER ZOOM CONTROLS ---
-        startClipHereBtn?.addEventListener('click', () => {
+        // Permanent [ Clip Start ] button: starts clip if none active, or updates Clip Start if already clipping
+        setStartBtn?.addEventListener('click', () => {
           const dur = videoPlayer.duration || 0;
           if (!getActiveSource() || !dur) return;
-          const start = Math.max(0, Math.min(videoPlayer.currentTime, dur - 0.15));
-          const end = Math.min(dur, start + 3.0);
-          startDraftClip(start, end);
+          const t = Math.max(0, Math.min(videoPlayer.currentTime, dur - 0.15));
+          if (!state.draftClip) {
+            startDraftClip(t, Math.min(dur, t + 3.0), null, [], false);
+          } else {
+            const draft = state.draftClip;
+            draft.start = Math.min(t, Math.max(0, draft.end - 0.1));
+            draft.zoomRangeStart = Math.max(0, Math.min(draft.zoomRangeStart, draft.start - 0.5));
+            syncCutterScrubberBounds();
+            updateTrimUI();
+            showToast(`✓ Clip Start updated to ${draft.start.toFixed(2)}s`);
+          }
         });
 
-        document.querySelectorAll('.auto-cut-btn').forEach(btn => {
+        // Permanent quick duration buttons (+1.5s .. +4.0s): work both before & after Clip Start
+        document.querySelectorAll('.draft-len-btn').forEach(btn => {
           btn.addEventListener('click', () => {
             const dur = videoPlayer.duration || 0;
             if (!getActiveSource() || !dur) return;
             const len = parseFloat(btn.dataset.cut) || 2.5;
-            const start = Math.max(0, Math.min(videoPlayer.currentTime, dur - 0.15));
-            const end = Math.min(dur, start + len);
-            startDraftClip(start, end);
-          });
-        });
-
-        // Quick duration presets while inside Zoomed Clip Mode (sets approximate Clip End from Clip Start)
-        document.querySelectorAll('.draft-len-btn').forEach(btn => {
-          btn.addEventListener('click', () => {
+            if (!state.draftClip) {
+              const start = Math.max(0, Math.min(videoPlayer.currentTime, dur - 0.15));
+              const end = Math.min(dur, start + len);
+              startDraftClip(start, end, null, [], true);
+              videoPlayer.pause();
+              videoPlayer.currentTime = end;
+              syncCutterScrubberBounds();
+              updateTimeReadout();
+              return;
+            }
             const draft = state.draftClip;
-            const dur = videoPlayer.duration || 0;
-            if (!draft || !dur) return;
-            const len = parseFloat(btn.dataset.cut) || 2.5;
             draft.end = Math.min(dur, draft.start + len);
+            draft.endSet = true;
             draft.zoomRangeEnd = Math.min(dur, draft.end + 0.5);
             videoPlayer.pause();
             videoPlayer.currentTime = draft.end;
             syncCutterScrubberBounds();
             updateTrimUI();
             updateTimeReadout();
-            showToast(`Clip End set to +${len.toFixed(1)}s (${draft.end.toFixed(2)}s) — fine-tune & tap Clip End ]`);
+            showToast(`✓ Clip End set to +${len.toFixed(1)}s (${draft.end.toFixed(2)}s)`);
           });
         });
 
         quickCutFullBtn?.addEventListener('click', () => stageFullSourceVideo());
 
-        setStartBtn?.addEventListener('click', () => {
-          const draft = state.draftClip;
-          const dur = videoPlayer.duration || 0;
-          if (!draft || !dur) return;
-          const t = videoPlayer.currentTime;
-          draft.start = Math.min(t, Math.max(0, draft.end - 0.1));
-          draft.zoomRangeStart = Math.max(0, Math.min(draft.zoomRangeStart, draft.start - 0.5));
-          syncCutterScrubberBounds();
-          updateTrimUI();
-          showToast(`Clip start set to ${draft.start.toFixed(2)}s`);
-        });
+        // Permanent [ Clip End ] button: highlights once activated so user sees both Start & End are ready
         setEndBtn?.addEventListener('click', () => {
-          const draft = state.draftClip;
           const dur = videoPlayer.duration || 0;
-          if (!draft || !dur) return;
-          const t = videoPlayer.currentTime;
+          if (!getActiveSource() || !dur) return;
+          const t = Math.max(0.1, Math.min(videoPlayer.currentTime, dur));
+          if (!state.draftClip) {
+            startDraftClip(Math.max(0, t - 3.0), t, null, [], true);
+            videoPlayer.pause();
+            videoPlayer.currentTime = t;
+            syncCutterScrubberBounds();
+            updateTimeReadout();
+            return;
+          }
+          const draft = state.draftClip;
           draft.end = Math.max(t, Math.min(dur, draft.start + 0.1));
+          draft.endSet = true;
           draft.zoomRangeEnd = Math.min(dur, Math.max(draft.zoomRangeEnd, draft.end + 0.5));
           syncCutterScrubberBounds();
           updateTrimUI();
-          showToast(`Clip end set to ${draft.end.toFixed(2)}s`);
+          showToast(`✓ Clip End set to ${draft.end.toFixed(2)}s — ready to save!`);
         });
         loopWindowBtn?.addEventListener('click', () => {
           state.loopWindow = !state.loopWindow;
@@ -6346,7 +6359,35 @@
         renderScrubberPinMarkers();
       }
 
-      function startDraftClip(start, end, editingClipId = null, existingPins = []) {
+      function syncClipButtonsHighlight() {
+        const draft = state.draftClip;
+        if (setStartBtn) {
+          if (draft) {
+            setStartBtn.classList.add('btn-clip-start-active');
+            setStartBtn.textContent = `✓ Clip Start (${draft.start.toFixed(1)}s)`;
+          } else {
+            setStartBtn.classList.remove('btn-clip-start-active');
+            setStartBtn.textContent = '[ Clip Start';
+          }
+        }
+        if (setEndBtn) {
+          if (draft && draft.endSet) {
+            setEndBtn.classList.add('btn-clip-end-active');
+            setEndBtn.textContent = `✓ Clip End (${draft.end.toFixed(1)}s)`;
+          } else {
+            setEndBtn.classList.remove('btn-clip-end-active');
+            setEndBtn.textContent = 'Clip End ]';
+          }
+        }
+        if (quickCutFullBtn) {
+          quickCutFullBtn.style.display = draft ? 'none' : 'inline-flex';
+        }
+        if (trimReadout) {
+          trimReadout.style.display = draft ? 'inline' : 'none';
+        }
+      }
+
+      function startDraftClip(start, end, editingClipId = null, existingPins = [], endSet = Boolean(editingClipId)) {
         const src = getActiveSource();
         const dur = videoPlayer.duration || src?.duration || 0;
         if (!src || !dur) return;
@@ -6359,6 +6400,7 @@
           sourceId: src.id,
           start: clampedStart,
           end: clampedEnd,
+          endSet: Boolean(endSet),
           zoomRangeStart,
           zoomRangeEnd,
           pins: existingPins.map(p => ({ ...p })),
@@ -6368,13 +6410,12 @@
         if (loopWindowBtn) loopWindowBtn.classList.add('btn-active');
 
         videoStage.classList.add('clip-zoomed');
-        if (wholeVideoCutBar) wholeVideoCutBar.style.display = 'none';
         if (zoomedClipControls) zoomedClipControls.style.display = 'flex';
         if (saveClipToStagingBtn) {
           saveClipToStagingBtn.textContent = editingClipId ? '✅ Update Staged Clip' : '✅ Save Clip to Staging';
         }
 
-        // Jump jump-buttons labels to fine ±0.5s in zoomed mode
+        // Switch jump buttons to fine ±0.5s in zoomed mode
         const jb = document.getElementById('jumpBack5Btn');
         const jf = document.getElementById('jumpFwd5Btn');
         if (jb) jb.textContent = '-0.5s';
@@ -6384,7 +6425,9 @@
         syncCutterScrubberBounds();
         updateTrimUI();
         renderPhasePinButtons();
-        showToast(`🔍 Scrubber zoomed to ${clampedStart.toFixed(2)}s – ${clampedEnd.toFixed(2)}s — pin moments & save clip`);
+        showToast(endSet
+          ? `✓ Clip Start & End ready (${clampedStart.toFixed(1)}s – ${clampedEnd.toFixed(1)}s)`
+          : `✓ Clip Start set @ ${clampedStart.toFixed(2)}s — tap +2s/+3s or scrub & tap Clip End ]`);
       }
 
       function clearDraftClip(showFeedback = false) {
@@ -6392,7 +6435,6 @@
         state.loopWindow = false;
         if (loopWindowBtn) loopWindowBtn.classList.remove('btn-active');
         videoStage.classList.remove('clip-zoomed');
-        if (wholeVideoCutBar) wholeVideoCutBar.style.display = 'flex';
         if (zoomedClipControls) zoomedClipControls.style.display = 'none';
 
         const jb = document.getElementById('jumpBack5Btn');
@@ -6632,6 +6674,7 @@
             }
           }
           if (trimReadout) trimReadout.textContent = dur ? `Full video (${dur.toFixed(2)}s)` : '0.00s';
+          syncClipButtonsHighlight();
           renderScrubberPinMarkers();
           return;
         }
@@ -6650,6 +6693,7 @@
         if (zoomClipLabel) {
           zoomClipLabel.textContent = `🔍 Clip Zoom: ${start.toFixed(2)}s – ${end.toFixed(2)}s (${(end - start).toFixed(2)}s) — Pin moments & Save`;
         }
+        syncClipButtonsHighlight();
         renderScrubberPinMarkers();
       }
 
