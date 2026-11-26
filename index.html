@@ -9759,6 +9759,71 @@ create policy "Allow anon read/write for personal lab"
         return true;
       }
 
+      async function deletePlayerInStorage(playerName) {
+        const cleanName = (playerName || '').trim();
+        if (!cleanName) return false;
+        const lower = cleanName.toLowerCase();
+
+        // 1. Delete all local IndexedDB records for this player (sessions, frames, training plans)
+        const matching = cachedSessions.filter(
+          s => s.role !== 'custom_drills' && (s.playerName || 'Unassigned Player').trim().toLowerCase() === lower
+        );
+        for (const s of matching) {
+          await deleteSessionById(s.id);
+          if (supabaseClient) {
+            await deleteSessionFromSupabase(s.id);
+          }
+        }
+
+        // 2. Delete all remaining rows for this player directly in Supabase (including any unsynced/orphaned rows)
+        let cloudErr = null;
+        if (supabaseClient) {
+          try {
+            const { error } = await supabaseClient
+              .from(SUPABASE_TABLE)
+              .delete()
+              .ilike('player_name', cleanName);
+            if (error) {
+              const res2 = await supabaseClient
+                .from(SUPABASE_TABLE)
+                .delete()
+                .eq('player_name', cleanName);
+              if (res2.error) cloudErr = res2.error.message;
+            }
+          } catch (err) {
+            cloudErr = err.message;
+          }
+        }
+
+        // 3. Clean up in-memory state, dropdowns, and loaded reports
+        if (Array.isArray(dbPlayerNames)) {
+          dbPlayerNames = dbPlayerNames.filter(n => n.trim().toLowerCase() !== lower);
+        }
+        state.loadedSessions = state.loadedSessions.filter(
+          s => (s.playerName || '').trim().toLowerCase() !== lower
+        );
+        renderLoadedReportsBar();
+
+        if ((playerNameInput.value || '').trim().toLowerCase() === lower) {
+          playerNameInput.value = '';
+          if (playerQuickSelect) playerQuickSelect.value = '';
+          localStorage.removeItem('cpa_last_player_name');
+          updateActivePlayerBadge();
+        }
+
+        await refreshSavedCount();
+        renderSavedSessionsList();
+
+        if (cloudErr) {
+          showToast(`Deleted locally, but Supabase delete warning: ${cloudErr}`);
+        } else {
+          showToast(supabaseClient
+            ? `✓ Deleted "${cleanName}" from local storage & Supabase`
+            : `✓ Deleted "${cleanName}" from local storage`);
+        }
+        return true;
+      }
+
       function renderSavedSessionsList() {
         const q = (historySearchInput.value || '').trim().toLowerCase();
         const filtered = cachedSessions.filter(s => {
@@ -9833,6 +9898,22 @@ create policy "Allow anon read/write for personal lab"
             renamePlayerBtn.disabled = true;
             await renamePlayerInStorage(pName, trimmed);
           });
+          const deletePlayerBtn = document.createElement('button');
+          deletePlayerBtn.type = 'button';
+          deletePlayerBtn.className = 'btn-sm btn-ghost';
+          deletePlayerBtn.style.color = 'var(--danger)';
+          deletePlayerBtn.textContent = '🗑️';
+          deletePlayerBtn.title = `Delete player "${pName}" and all their files from local storage & Supabase`;
+          deletePlayerBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const ok = confirm(
+              `Delete player "${pName}" permanently?\n\nThis will remove all ${totalForPlayer} saved file${totalForPlayer === 1 ? '' : 's'} and their training plan from both this device and Supabase.`
+            );
+            if (!ok) return;
+            deletePlayerBtn.disabled = true;
+            await deletePlayerInStorage(pName);
+          });
           const planBtn = document.createElement('button');
           planBtn.type = 'button';
           planBtn.className = 'btn-sm';
@@ -9845,7 +9926,7 @@ create policy "Allow anon read/write for personal lab"
           const pBadge = document.createElement('span');
           pBadge.className = 'badge badge-pitch';
           pBadge.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
-          pRightWrap.append(renamePlayerBtn, planBtn, pBadge);
+          pRightWrap.append(renamePlayerBtn, deletePlayerBtn, planBtn, pBadge);
           pSum.append(pLeft, pRightWrap);
           playerDetails.appendChild(pSum);
 
