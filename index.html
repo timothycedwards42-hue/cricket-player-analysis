@@ -9243,25 +9243,45 @@ create policy "Allow anon read/write for personal lab"
         }
         supabaseStatusText.textContent = 'Syncing folders with Supabase...';
         try {
-          // Always push any unsynced local sessions (e.g. saved offline or before cloud sync)
+          const SYNC_LIMIT = 500;
+          const { data, error } = await supabaseClient
+            .from(SUPABASE_TABLE)
+            .select('*')
+            .order('saved_at', { ascending: false })
+            .limit(SYNC_LIMIT);
+          if (error) throw error;
+
+          const cloudRows = Array.isArray(data) ? data : [];
+          const cloudIds = new Set(cloudRows.map(r => r.id));
           const locals = await getAllSessions();
+
+          // 1. Prune local sessions that were previously synced to Supabase but have since been deleted on another device
+          let prunedCount = 0;
+          if (cloudRows.length < SYNC_LIMIT) {
+            for (const loc of locals) {
+              if (loc.synced && !cloudIds.has(loc.id)) {
+                await deleteSessionById(loc.id);
+                prunedCount++;
+              }
+            }
+          }
+
+          // 2. Push any unsynced local sessions (never resurrect previously-synced records that were deleted in cloud)
           let pushedCount = 0;
           let pushErrors = [];
           for (const loc of locals) {
-            if (!isTestPlayerName(loc.playerName) && (pushAll || !loc.synced)) {
+            if (isTestPlayerName(loc.playerName)) continue;
+            const wasDeletedInCloud = Boolean(loc.synced && cloudRows.length < SYNC_LIMIT && !cloudIds.has(loc.id));
+            if (wasDeletedInCloud) continue;
+            if (!loc.synced || (pushAll && cloudIds.has(loc.id))) {
               const res = await pushSessionToSupabase(loc);
               if (res.ok) pushedCount++;
               else pushErrors.push(`${loc.playerName}: ${res.error}`);
             }
           }
-          const { data, error } = await supabaseClient
-            .from(SUPABASE_TABLE)
-            .select('*')
-            .order('saved_at', { ascending: false })
-            .limit(250);
-          if (error) throw error;
 
-          for (const row of (data || [])) {
+          // 3. Merge cloud rows into local IndexedDB
+          for (const row of cloudRows) {
             const existing = cachedSessions.find(s => s.id === row.id);
             const isCustomDrills = row.discipline === 'custom_drills' || Boolean(row.report && row.report._customDrillsLib);
             const isTrainingPlan = !isCustomDrills && (row.discipline === 'training_plan' || Boolean(row.report && row.report._trainingPlan));
@@ -9291,9 +9311,13 @@ create policy "Allow anon read/write for personal lab"
           dbPlayerNames = [];
           await refreshSavedCount();
           if (historyDialog.open) renderSavedSessionsList();
+          const detailParts = [];
+          if (pushedCount) detailParts.push(`uploaded ${pushedCount}`);
+          if (prunedCount) detailParts.push(`removed ${prunedCount} deleted`);
+          const detailSuffix = detailParts.length ? ` (${detailParts.join(', ')})` : '';
           supabaseStatusText.textContent = pushErrors.length > 0
             ? `Synced with ${pushErrors.length} warning(s): ${pushErrors[0]}`
-            : `✓ Synced ${cachedSessions.length} total item(s)${pushedCount ? ` (uploaded ${pushedCount})` : ''} with Supabase.`;
+            : `✓ Synced ${cachedSessions.length} total item(s)${detailSuffix} with Supabase.`;
         } catch (err) {
           supabaseStatusText.textContent = `Supabase sync error: ${err.message} (make sure you ran the Table SQL).`;
         }
