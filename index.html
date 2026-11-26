@@ -3386,7 +3386,7 @@
                 <div class="clip-tabs-bar" id="sourceTabsBar" aria-label="Loaded source videos"></div>
                 <div class="btn-group">
                   <button type="button" class="btn-sm" id="goToStagingQuickBtn" title="Go to Staged Clips">🗂️ Staged (<span id="cutterStagedCount">0</span>)</button>
-                  <button type="button" class="btn-sm btn-primary" id="videoFullscreenBtn" title="Full-screen mobile-friendly clip cutter with floating tools">⛶ Fullscreen Cut</button>
+                  <button type="button" class="btn-sm btn-primary" id="videoFullscreenBtn" title="Maximize video to full screen while cutting clips">⛶ Maximize</button>
                 </div>
               </div>
 
@@ -3439,29 +3439,37 @@
                     </select>
                     <button type="button" class="btn-sm" id="boxZoomBtn" title="Drag a box on the video to custom-zoom into that area">🔍 Box</button>
                     <button type="button" class="btn-sm" id="aimZoomBtn" title="Tap a point on the video to set zoom center">🎯 Aim</button>
+                    <button type="button" class="btn-sm" id="inlineMaximizeBtn" title="Maximize / Restore video while clipping">⛶</button>
                   </div>
                 </div>
 
                 <!-- WHOLE VIDEO MODE: Start a Clip -->
                 <div class="clip-action-bar" id="wholeVideoCutBar">
                   <div class="btn-group">
-                    <button type="button" class="btn-primary clip-primary-cta" id="startClipHereBtn" title="Start a clip from the current frame and zoom the scrubber into it">✂️ Start Clip Here</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="2.0" title="Cut a 2.0s clip from here and zoom scrubber">+2.0s</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="3.0" title="Cut a 3.0s clip from here and zoom scrubber">+3.0s</button>
-                    <button type="button" class="btn-sm auto-cut-btn" data-cut="4.0" title="Cut a 4.0s clip from here and zoom scrubber">+4.0s</button>
+                    <button type="button" class="btn-primary clip-primary-cta" id="startClipHereBtn" title="Mark Clip Start at the current frame and zoom the scrubber into the clip">✂️ Clip Start</button>
+                    <button type="button" class="btn-sm auto-cut-btn" data-cut="1.5" title="Start clip here with +1.5s length">+1.5s</button>
+                    <button type="button" class="btn-sm auto-cut-btn" data-cut="2.0" title="Start clip here with +2.0s length">+2.0s</button>
+                    <button type="button" class="btn-sm auto-cut-btn" data-cut="2.5" title="Start clip here with +2.5s length">+2.5s</button>
+                    <button type="button" class="btn-sm auto-cut-btn" data-cut="3.0" title="Start clip here with +3.0s length">+3.0s</button>
+                    <button type="button" class="btn-sm auto-cut-btn" data-cut="4.0" title="Start clip here with +4.0s length">+4.0s</button>
                   </div>
                   <button type="button" class="btn-sm" id="quickCutFullBtn" title="Stage the entire video as one clip">➕ Stage Full Video</button>
                 </div>
 
-                <!-- ZOOMED CLIP MODE: Fine-tune In/Out, Pin Key Moments, Save to Staging -->
+                <!-- ZOOMED CLIP MODE: Fine-tune Clip Start / Clip End, Quick Lengths, Pin Key Moments, Save to Staging -->
                 <div id="zoomedClipControls" style="display:none; flex-direction:column; gap:8px; padding-top:8px; border-top:1px solid var(--border);">
                   <div class="transport-row">
                     <div class="btn-group">
-                      <button type="button" class="btn-sm" id="setStartBtn" title="Move clip start (In) to current playhead">[ Set In</button>
-                      <button type="button" class="btn-sm" id="setEndBtn" title="Move clip end (Out) to current playhead">Set Out ]</button>
-                      <span class="trim-readout" id="trimReadout">0.00s – 0.00s</span>
+                      <button type="button" class="btn-sm" id="setStartBtn" title="Move Clip Start to current playhead">[ Clip Start</button>
+                      <button type="button" class="btn-sm draft-len-btn" data-cut="1.5" title="Set approximate Clip End to Clip Start + 1.5s">+1.5s</button>
+                      <button type="button" class="btn-sm draft-len-btn" data-cut="2.0" title="Set approximate Clip End to Clip Start + 2.0s">+2.0s</button>
+                      <button type="button" class="btn-sm draft-len-btn" data-cut="2.5" title="Set approximate Clip End to Clip Start + 2.5s">+2.5s</button>
+                      <button type="button" class="btn-sm draft-len-btn" data-cut="3.0" title="Set approximate Clip End to Clip Start + 3.0s">+3.0s</button>
+                      <button type="button" class="btn-sm draft-len-btn" data-cut="4.0" title="Set approximate Clip End to Clip Start + 4.0s">+4.0s</button>
+                      <button type="button" class="btn-sm" id="setEndBtn" title="Move Clip End to current playhead">Clip End ]</button>
                     </div>
                     <div class="btn-group">
+                      <span class="trim-readout" id="trimReadout">0.00s – 0.00s</span>
                       <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
                         <option value="12">12 frames</option>
                         <option value="16">16 frames</option>
@@ -4826,8 +4834,13 @@
         videoStage.classList.toggle('cutter-fullscreen', state.cutterFullscreen);
         document.body.style.overflow = state.cutterFullscreen ? 'hidden' : '';
         if (videoFullscreenBtn) {
-          videoFullscreenBtn.textContent = state.cutterFullscreen ? '✕ Exit Fullscreen' : '⛶ Fullscreen Cut';
+          videoFullscreenBtn.textContent = state.cutterFullscreen ? '✕ Restore' : '⛶ Maximize';
           videoFullscreenBtn.classList.toggle('btn-primary', !state.cutterFullscreen);
+        }
+        const inlineMaxBtn = document.getElementById('inlineMaximizeBtn');
+        if (inlineMaxBtn) {
+          inlineMaxBtn.textContent = state.cutterFullscreen ? '✕' : '⛶';
+          inlineMaxBtn.classList.toggle('btn-active', state.cutterFullscreen);
         }
         setTimeout(() => applyVideoPreviewZoom(), 60);
       }
@@ -4944,6 +4957,7 @@
         nextToStagingBtn?.addEventListener('click', () => setStep('staging'));
 
         videoFullscreenBtn.addEventListener('click', () => setCutterFullscreen(!state.cutterFullscreen));
+        document.getElementById('inlineMaximizeBtn')?.addEventListener('click', () => setCutterFullscreen(!state.cutterFullscreen));
         window.addEventListener('keydown', (e) => {
           if (e.key === 'Escape' && state.cutterFullscreen) {
             setCutterFullscreen(false);
@@ -5379,6 +5393,24 @@
             const start = Math.max(0, Math.min(videoPlayer.currentTime, dur - 0.15));
             const end = Math.min(dur, start + len);
             startDraftClip(start, end);
+          });
+        });
+
+        // Quick duration presets while inside Zoomed Clip Mode (sets approximate Clip End from Clip Start)
+        document.querySelectorAll('.draft-len-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const draft = state.draftClip;
+            const dur = videoPlayer.duration || 0;
+            if (!draft || !dur) return;
+            const len = parseFloat(btn.dataset.cut) || 2.5;
+            draft.end = Math.min(dur, draft.start + len);
+            draft.zoomRangeEnd = Math.min(dur, draft.end + 0.5);
+            videoPlayer.pause();
+            videoPlayer.currentTime = draft.end;
+            syncCutterScrubberBounds();
+            updateTrimUI();
+            updateTimeReadout();
+            showToast(`Clip End set to +${len.toFixed(1)}s (${draft.end.toFixed(2)}s) — fine-tune & tap Clip End ]`);
           });
         });
 
