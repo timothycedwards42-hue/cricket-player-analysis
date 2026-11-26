@@ -1027,6 +1027,46 @@
       display: flex;
     }
 
+    /* --- STAGED CLIP POP-OUT DETAIL DIALOG --- */
+    #stagedPreviewDialog {
+      width: min(1080px, 96vw);
+      max-width: 1080px;
+      max-height: 94dvh;
+    }
+
+    .staged-popout-stage {
+      position: relative;
+      background: #000;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: min(62dvh, 620px);
+      overflow: hidden;
+    }
+
+    .staged-popout-stage img,
+    .staged-popout-stage video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .staged-popout-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 6px 2px;
+    }
+
+    .staged-popout-strip .staged-mini-thumb {
+      flex: 0 0 76px;
+      height: 50px;
+    }
+
     .inline-sbs-card {
       display: none;
       flex-direction: column;
@@ -4317,6 +4357,46 @@
     </div>
   </dialog>
 
+  <!-- STAGED CLIP POP-OUT DETAIL PREVIEW DIALOG -->
+  <dialog id="stagedPreviewDialog" aria-labelledby="stagedPreviewTitle">
+    <div class="dialog-header">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0;">
+        <h3 id="stagedPreviewTitle" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🔍 Clip Detail Preview</h3>
+        <span class="badge badge-pitch" id="stagedPreviewDateBadge" style="display:none;">📅</span>
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn-sm" id="stagedPopoutVideoToggleBtn" style="display:none;">▶ Loop Video</button>
+        <button type="button" class="btn-sm btn-ghost" id="closeStagedPreviewBtn" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="dialog-body" style="gap:10px;">
+      <div class="staged-popout-stage" id="stagedPopoutStage">
+        <img id="stagedPopoutImg" alt="Expanded clip frame">
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px;">
+        <div class="scrubber-row">
+          <input type="range" id="stagedPopoutScrubber" min="0" max="0" step="1" value="0" aria-label="Expanded clip frame scrubber">
+          <span class="staged-frame-readout" id="stagedPopoutFrameLabel">0 / 0</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div class="btn-group">
+            <button type="button" class="btn-sm" id="stagedPopoutPrevBtn" title="Previous frame (←)">◀ Prev</button>
+            <button type="button" class="btn-sm btn-primary" id="stagedPopoutPlayBtn" title="Play/Pause frames (Space)">▶ Play Frames</button>
+            <button type="button" class="btn-sm" id="stagedPopoutNextBtn" title="Next frame (→)">Next ▶</button>
+            <select id="stagedPopoutFpsSelect" aria-label="Frame playback speed" style="width:auto; padding:3px 6px; font-size:0.74rem;">
+              <option value="1">1 fps</option>
+              <option value="2">2 fps</option>
+              <option value="4" selected>4 fps</option>
+              <option value="8">8 fps</option>
+            </select>
+          </div>
+          <span class="help-text" id="stagedPopoutMetaText">Use ← / → arrows to step frames, Space to play</span>
+        </div>
+      </div>
+      <div class="staged-popout-strip" id="stagedPopoutStrip"></div>
+    </div>
+  </dialog>
+
   <!-- RE-ANALYZE STORED FRAMES INSTRUCTIONS DIALOG -->
   <dialog id="reanalyzeDialog" aria-labelledby="reanalyzeDialogTitle" style="width:min(540px, 95vw);">
     <div class="dialog-header">
@@ -5963,21 +6043,92 @@
         }
       }
 
+      // --- ORIGINAL VIDEO FILMED DATE PARSER (MP4 / MOV mvhd atom + lastModified fallback) ---
+      async function extractOriginalVideoDate(file) {
+        const fallbackMs = (file && typeof file.lastModified === 'number' && file.lastModified > 946684800000)
+          ? file.lastModified
+          : Date.now();
+        if (!file || typeof file.slice !== 'function') {
+          return new Date(fallbackMs);
+        }
+        const scanBufferForMvhd = (buf) => {
+          const bytes = new Uint8Array(buf);
+          const view = new DataView(buf);
+          const MAC_EPOCH_OFFSET_SEC = 2082844800; // 1904-01-01 to 1970-01-01
+          for (let i = 0; i < bytes.length - 24; i++) {
+            // 'mvhd' = 0x6D 0x76 0x68 0x64
+            if (bytes[i] === 0x6d && bytes[i + 1] === 0x76 && bytes[i + 2] === 0x68 && bytes[i + 3] === 0x64) {
+              const version = bytes[i + 4];
+              let createdSec = 0;
+              if (version === 0 && i + 12 <= bytes.length) {
+                createdSec = view.getUint32(i + 8, false);
+              } else if (version === 1 && i + 16 <= bytes.length) {
+                const hi = view.getUint32(i + 8, false);
+                const lo = view.getUint32(i + 12, false);
+                createdSec = hi * 4294967296 + lo;
+              }
+              if (createdSec > MAC_EPOCH_OFFSET_SEC) {
+                const unixMs = (createdSec - MAC_EPOCH_OFFSET_SEC) * 1000;
+                const minValid = 946684800000; // 2000-01-01
+                const maxValid = Date.now() + 86400000 * 2;
+                if (unixMs >= minValid && unixMs <= maxValid) {
+                  return new Date(unixMs);
+                }
+              }
+            }
+          }
+          return null;
+        };
+
+        try {
+          // Check head (faststart MP4/MOV) and tail (iPhone/QuickTime MOV puts moov at end)
+          const headChunk = await file.slice(0, Math.min(file.size, 262144)).arrayBuffer();
+          const fromHead = scanBufferForMvhd(headChunk);
+          if (fromHead) return fromHead;
+
+          if (file.size > 262144) {
+            const tailSize = Math.min(file.size, 524288);
+            const tailChunk = await file.slice(file.size - tailSize, file.size).arrayBuffer();
+            const fromTail = scanBufferForMvhd(tailChunk);
+            if (fromTail) return fromTail;
+          }
+        } catch {}
+
+        return new Date(fallbackMs);
+      }
+
       // --- STEP 1: SOURCE VIDEOS (RAW VIDEOS TO CUT CLIPS FROM) ---
       function addVideoFiles(files) {
         clearError();
         let firstNewId = null;
         files.forEach((file) => {
           const id = state.nextSourceId++;
+          const initDate = new Date((file && file.lastModified > 946684800000) ? file.lastModified : Date.now());
           const src = {
             id,
             file,
             url: URL.createObjectURL(file),
             name: file.name,
-            duration: 0
+            duration: 0,
+            recordedAt: initDate.toISOString(),
+            recordedStamp: formatFileTimestamp(initDate)
           };
           state.sourceVideos.push(src);
           if (firstNewId === null) firstNewId = id;
+
+          // Parse true MP4/MOV camera creation date asynchronously and update source + any clips cut from it
+          extractOriginalVideoDate(file).then((trueDate) => {
+            if (!trueDate) return;
+            src.recordedAt = trueDate.toISOString();
+            src.recordedStamp = formatFileTimestamp(trueDate);
+            state.clips.forEach(c => {
+              if (c.sourceId === src.id && !c.fromStorage) {
+                c.recordedAt = src.recordedAt;
+                c.recordedStamp = src.recordedStamp;
+              }
+            });
+            if (state.step === 'staging') renderStagingArea();
+          }).catch(() => {});
         });
 
         dropZone.style.display = 'none';
@@ -6170,7 +6321,10 @@
                 url: src.url,
                 name: src.name,
                 tag: '',
+                note: '',
                 angle: 'Auto-detect',
+                recordedAt: src.recordedAt || new Date().toISOString(),
+                recordedStamp: src.recordedStamp || formatFileTimestamp(),
                 duration: src.duration || videoPlayer.duration,
                 trimStart: start,
                 trimEnd: end,
@@ -6254,7 +6408,10 @@
             url: src.url,
             name: src.name,
             tag: '',
+            note: '',
             angle: 'Auto-detect',
+            recordedAt: src.recordedAt || new Date().toISOString(),
+            recordedStamp: src.recordedStamp || formatFileTimestamp(),
             duration: dur,
             trimStart: 0,
             trimEnd: dur,
@@ -6628,8 +6785,8 @@
             return true;
           }
 
-          const nowIso = new Date().toISOString();
-          const fileStamp = formatFileTimestamp(new Date(nowIso));
+          const clipDateIso = clip.recordedAt || new Date().toISOString();
+          const fileStamp = clip.recordedStamp || formatFileTimestamp(new Date(clipDateIso));
           const speedInfo = computeClipSpeed(clip);
           const firstFrame = clip.thumbnail || clip.frames?.[0]?.dataUrl || null;
           const clipsMeta = [{
@@ -6640,7 +6797,7 @@
           }];
           const record = {
             id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-            savedAt: nowIso,
+            savedAt: clipDateIso,
             fileStamp,
             playerName,
             sessionTag: clipTag,
@@ -6662,7 +6819,7 @@
             await pushSessionToSupabase(record);
           }
           clip.storedSessionId = record.id;
-          clip.storedSavedAt = nowIso;
+          clip.storedSavedAt = clipDateIso;
           clip.storedFileStamp = fileStamp;
           if (!silent) {
             renderStagingArea();
@@ -6730,6 +6887,194 @@
         }
       }
 
+      // --- STAGED CLIP POP-OUT DETAIL VIEWER ---
+      const stagedPopoutState = {
+        clip: null,
+        index: 0,
+        playTimer: null,
+        videoEl: null
+      };
+
+      function stopStagedPopoutPlayback() {
+        if (stagedPopoutState.playTimer) {
+          clearInterval(stagedPopoutState.playTimer);
+          stagedPopoutState.playTimer = null;
+        }
+        const playBtn = document.getElementById('stagedPopoutPlayBtn');
+        if (playBtn) playBtn.textContent = '▶ Play Frames';
+      }
+
+      function stopStagedPopoutVideo() {
+        if (stagedPopoutState.videoEl) {
+          try {
+            stagedPopoutState.videoEl.pause();
+            stagedPopoutState.videoEl.remove();
+          } catch {}
+          stagedPopoutState.videoEl = null;
+        }
+        const img = document.getElementById('stagedPopoutImg');
+        if (img) img.style.display = 'block';
+        const toggleBtn = document.getElementById('stagedPopoutVideoToggleBtn');
+        if (toggleBtn) toggleBtn.textContent = '▶ Loop Video';
+      }
+
+      function openStagedClipPopout(clip, clipIdx = 0) {
+        const dlg = document.getElementById('stagedPreviewDialog');
+        if (!dlg || !clip) return;
+        stopStagedPopoutPlayback();
+        stopStagedPopoutVideo();
+        stagedPopoutState.clip = clip;
+        const frames = Array.isArray(clip.frames) ? clip.frames : [];
+        stagedPopoutState.index = Math.min(Math.max(0, clip._previewIdx ?? 0), Math.max(0, frames.length - 1));
+
+        const titleEl = document.getElementById('stagedPreviewTitle');
+        const dateBadge = document.getElementById('stagedPreviewDateBadge');
+        const videoToggleBtn = document.getElementById('stagedPopoutVideoToggleBtn');
+        const img = document.getElementById('stagedPopoutImg');
+        const scrubber = document.getElementById('stagedPopoutScrubber');
+        const labelEl = document.getElementById('stagedPopoutFrameLabel');
+        const stripEl = document.getElementById('stagedPopoutStrip');
+        const metaEl = document.getElementById('stagedPopoutMetaText');
+
+        const filmedStamp = clip.recordedStamp || clip.storedFileStamp || '';
+        if (titleEl) titleEl.textContent = `🔍 ${clip.tag ? clip.tag : `Clip #${clipIdx + 1}`}`;
+        if (dateBadge) {
+          dateBadge.style.display = filmedStamp ? 'inline-flex' : 'none';
+          dateBadge.textContent = `📅 Filmed: ${filmedStamp}`;
+        }
+        if (videoToggleBtn) {
+          videoToggleBtn.style.display = clip.url ? 'inline-flex' : 'none';
+          videoToggleBtn.textContent = '▶ Loop Video';
+        }
+        if (metaEl) {
+          metaEl.textContent = clip.note ? `📝 ${clip.note}` : 'Use ← / → arrows to step frames, Space to play';
+        }
+
+        scrubber.min = '0';
+        scrubber.max = String(Math.max(0, frames.length - 1));
+        stripEl.textContent = '';
+        const thumbBtns = [];
+
+        const showAt = (idx, scrollStrip = false) => {
+          if (!frames.length) return;
+          stopStagedPopoutVideo();
+          const clamped = ((idx % frames.length) + frames.length) % frames.length;
+          stagedPopoutState.index = clamped;
+          clip._previewIdx = clamped;
+          const f = frames[clamped];
+          if (f && img) img.src = f.dataUrl;
+          scrubber.value = String(clamped);
+          if (labelEl && f) {
+            labelEl.textContent = `${f.label || `F${clamped + 1}`} · ${clamped + 1}/${frames.length} (${Number(f.time || 0).toFixed(2)}s)`;
+          }
+          thumbBtns.forEach((b, bi) => b.classList.toggle('active', bi === clamped));
+          if (scrollStrip && thumbBtns[clamped]) {
+            thumbBtns[clamped].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }
+        };
+
+        frames.forEach((f, fIdx) => {
+          const tb = document.createElement('button');
+          tb.type = 'button';
+          const isPinned = f.label && !/^F\d+$/.test(f.label);
+          tb.className = `staged-mini-thumb${isPinned ? ' pinned' : ''}`;
+          tb.title = `${f.label || `F${fIdx + 1}`} @ ${Number(f.time || 0).toFixed(2)}s`;
+          const tImg = document.createElement('img');
+          tImg.src = f.dataUrl;
+          tImg.alt = f.label || `F${fIdx + 1}`;
+          const tLbl = document.createElement('span');
+          tLbl.className = 'staged-mini-thumb-lbl';
+          tLbl.textContent = isPinned ? f.label.replace('EXACT ', '').slice(0, 8) : `F${fIdx + 1}`;
+          tb.append(tImg, tLbl);
+          tb.addEventListener('click', () => {
+            stopStagedPopoutPlayback();
+            showAt(fIdx, false);
+          });
+          thumbBtns.push(tb);
+          stripEl.appendChild(tb);
+        });
+
+        scrubber.oninput = () => {
+          stopStagedPopoutPlayback();
+          showAt(parseInt(scrubber.value, 10) || 0, true);
+        };
+        document.getElementById('stagedPopoutPrevBtn').onclick = () => {
+          stopStagedPopoutPlayback();
+          showAt(stagedPopoutState.index - 1, true);
+        };
+        document.getElementById('stagedPopoutNextBtn').onclick = () => {
+          stopStagedPopoutPlayback();
+          showAt(stagedPopoutState.index + 1, true);
+        };
+        const startPlay = () => {
+          stopStagedPopoutPlayback();
+          stopStagedPopoutVideo();
+          const fps = parseFloat(document.getElementById('stagedPopoutFpsSelect').value) || 4;
+          document.getElementById('stagedPopoutPlayBtn').textContent = '⏸ Pause';
+          stagedPopoutState.playTimer = setInterval(() => {
+            showAt(stagedPopoutState.index + 1, true);
+          }, Math.max(80, Math.round(1000 / fps)));
+        };
+        document.getElementById('stagedPopoutPlayBtn').onclick = () => {
+          if (stagedPopoutState.playTimer) stopStagedPopoutPlayback();
+          else startPlay();
+        };
+        document.getElementById('stagedPopoutFpsSelect').onchange = () => {
+          if (stagedPopoutState.playTimer) startPlay();
+        };
+        videoToggleBtn.onclick = () => {
+          if (stagedPopoutState.videoEl) {
+            stopStagedPopoutVideo();
+            return;
+          }
+          if (!clip.url) return;
+          stopStagedPopoutPlayback();
+          const stage = document.getElementById('stagedPopoutStage');
+          const v = document.createElement('video');
+          v.src = clip.url;
+          v.playsInline = true;
+          v.setAttribute('playsinline', '');
+          v.setAttribute('webkit-playsinline', '');
+          v.muted = true;
+          v.playbackRate = 0.5;
+          if (clip.zoomLevel > 1) {
+            v.style.transformOrigin = `${((clip.zoomFocusX ?? 0.5) * 100).toFixed(1)}% ${((clip.zoomFocusY ?? 0.5) * 100).toFixed(1)}%`;
+            v.style.transform = `scale(${clip.zoomLevel})`;
+          }
+          v.addEventListener('loadedmetadata', () => {
+            v.currentTime = clip.trimStart || 0;
+            v.play().catch(() => {});
+          }, { once: true });
+          v.addEventListener('timeupdate', () => {
+            if (clip.trimEnd && v.currentTime >= clip.trimEnd) {
+              v.currentTime = clip.trimStart || 0;
+            }
+          });
+          img.style.display = 'none';
+          stage.appendChild(v);
+          stagedPopoutState.videoEl = v;
+          videoToggleBtn.textContent = '⏹ Back to Frames';
+        };
+
+        const closeModal = () => {
+          stopStagedPopoutPlayback();
+          stopStagedPopoutVideo();
+          if (dlg.open) dlg.close();
+          renderStagingArea();
+        };
+        document.getElementById('closeStagedPreviewBtn').onclick = closeModal;
+        dlg.onclick = (e) => { if (e.target === dlg) closeModal(); };
+        dlg.onkeydown = (e) => {
+          if (e.key === 'ArrowLeft') { e.preventDefault(); stopStagedPopoutPlayback(); showAt(stagedPopoutState.index - 1, true); }
+          else if (e.key === 'ArrowRight') { e.preventDefault(); stopStagedPopoutPlayback(); showAt(stagedPopoutState.index + 1, true); }
+          else if (e.code === 'Space') { e.preventDefault(); document.getElementById('stagedPopoutPlayBtn').click(); }
+          else if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+        };
+
+        showAt(stagedPopoutState.index, false);
+        dlg.showModal();
+      }
+
       function renderStagingArea() {
         stopAllStagingPreviews();
         updateStagedCounts();
@@ -6777,6 +7122,8 @@
           const thumbImg = document.createElement('img');
           thumbImg.src = frames[activeFrameIdx]?.dataUrl || clip.thumbnail || '';
           thumbImg.alt = clip.tag || `Clip ${idx + 1}`;
+          thumbImg.title = 'Click to pop out full-size clip preview';
+          thumbImg.addEventListener('click', () => openStagedClipPopout(clip, idx));
           preview.appendChild(thumbImg);
 
           const playOverlay = document.createElement('div');
@@ -6784,14 +7131,31 @@
           playOverlay.style.background = 'transparent';
           playOverlay.style.alignItems = 'flex-end';
           playOverlay.style.justifyContent = 'flex-end';
+          playOverlay.style.gap = '6px';
           playOverlay.style.padding = '8px';
-          const playPill = document.createElement('span');
+          playOverlay.style.pointerEvents = 'none';
+
+          const expandPill = document.createElement('button');
+          expandPill.type = 'button';
+          expandPill.className = 'staged-clip-play-pill';
+          expandPill.style.pointerEvents = 'auto';
+          expandPill.textContent = '🔍 Pop Out';
+          expandPill.title = 'Pop out large detail view with frame scrubber';
+          expandPill.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openStagedClipPopout(clip, idx);
+          });
+          playOverlay.appendChild(expandPill);
+
+          const playPill = document.createElement('button');
+          playPill.type = 'button';
           playPill.className = 'staged-clip-play-pill';
+          playPill.style.pointerEvents = 'auto';
           playPill.textContent = '▶ Play Video';
           if (clip.url) {
             playOverlay.appendChild(playPill);
-            preview.appendChild(playOverlay);
           }
+          preview.appendChild(playOverlay);
 
           const topBadges = document.createElement('div');
           topBadges.className = 'staged-clip-preview-badges';
@@ -7005,7 +7369,8 @@
           angleSel.addEventListener('change', () => { clip.angle = angleSel.value; });
 
           const infoSpan = document.createElement('span');
-          infoSpan.textContent = `${frames.length} frames${clip.zoomLevel > 1 ? ` · ${clip.zoomLevel}× zoom` : ''}`;
+          const filmedLabel = clip.recordedStamp || clip.storedFileStamp || '';
+          infoSpan.textContent = `${filmedLabel ? `📅 ${filmedLabel} · ` : ''}${frames.length}f${clip.zoomLevel > 1 ? ` · ${clip.zoomLevel}×` : ''}`;
           metaRow.append(angleSel, infoSpan);
 
           // Pinned Key Moments + Saved/Analyzed Status Badges
@@ -7730,7 +8095,8 @@
 
             targetClips.forEach((clip, cIdx) => {
               const framesToSend = budgetedPerClip[cIdx] || clip.frames || [];
-              const datePart = clip.storedFileStamp ? ` | Recorded: ${clip.storedFileStamp}` : '';
+              const filmedStamp = clip.recordedStamp || clip.storedFileStamp || '';
+              const datePart = filmedStamp ? ` | Filmed: ${filmedStamp}` : '';
               const winDesc = clip.trimCustom
                 ? `${(clip.trimStart || 0).toFixed(2)}s–${(clip.trimEnd || 0).toFixed(2)}s`
                 : clip.fromStorage
@@ -7793,8 +8159,13 @@
             : usingStoredFrames
               ? (state.loadedStoredLabel || '')
               : targetClips.map(c => (c.tag || '').trim()).filter(Boolean).join(' + ');
-          const nowIso = new Date().toISOString();
-          const autoFileStamp = formatFileTimestamp(new Date(nowIso));
+          const singleClipRecordedAt = (!usingStoredFrames && targetClips.length === 1)
+            ? (targetClips[0].recordedAt || targetClips[0].storedSavedAt || null)
+            : null;
+          const nowIso = singleClipRecordedAt || new Date().toISOString();
+          const autoFileStamp = (!usingStoredFrames && targetClips.length === 1 && (targetClips[0].recordedStamp || targetClips[0].storedFileStamp))
+            ? (targetClips[0].recordedStamp || targetClips[0].storedFileStamp)
+            : formatFileTimestamp(new Date(nowIso));
           const isTestMode = isTestPlayerName(playerName);
 
           const parsed = JSON.parse(rawText);
