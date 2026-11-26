@@ -3245,7 +3245,7 @@
               </div>
 
               <div class="video-container" id="videoContainer">
-                <video id="videoPlayer" playsinline preload="metadata"></video>
+                <video id="videoPlayer" playsinline webkit-playsinline preload="auto"></video>
                 <div class="zoom-select-box" id="zoomSelectBox"></div>
                 <div class="zoom-target-dot" id="zoomTargetDot" title="Zoom focal point"></div>
               </div>
@@ -6054,8 +6054,8 @@
           clipObj.releaseTime = relPin ? relPin.time : null;
           clipObj.frames = draft.pins.map(p => ({ ...p }));
 
-          // Extract keyframes + thumbnail (reuse active videoPlayer when same source for fast, reliable mobile decoding)
-          if (videoPlayer.src && src.url === videoPlayer.src && videoPlayer.readyState >= 2) {
+          // Extract keyframes + thumbnail (reuse active videoPlayer when same source for fast, reliable iOS Safari/Chrome decoding)
+          if (videoPlayer.src && src.url === videoPlayer.src && videoPlayer.readyState >= 1) {
             await extractKeyframesFromElement(videoPlayer, clipObj, sampleCount);
           } else {
             await extractKeyframesOffscreen(clipObj, sampleCount);
@@ -6125,7 +6125,7 @@
             selected: false
           };
 
-          if (videoPlayer.readyState >= 2) {
+          if (videoPlayer.readyState >= 1) {
             await extractKeyframesFromElement(videoPlayer, clipObj, sampleCount);
           } else {
             await extractKeyframesOffscreen(clipObj, sampleCount);
@@ -6446,6 +6446,8 @@
             previewVideo = document.createElement('video');
             previewVideo.src = clip.url;
             previewVideo.playsInline = true;
+            previewVideo.setAttribute('playsinline', '');
+            previewVideo.setAttribute('webkit-playsinline', '');
             previewVideo.muted = true;
             previewVideo.playbackRate = 0.5;
             if (clip.zoomLevel > 1) {
@@ -7117,8 +7119,12 @@
       function seekVideo(vEl, time) {
         return new Promise((resolve) => {
           const target = Math.max(0, Math.min(vEl.duration || time, time));
+          const settleFrame = () => {
+            // Wait 1 animation frame so iOS WebKit / Chrome on iOS finishes painting the decoded frame before canvas drawImage
+            requestAnimationFrame(() => resolve());
+          };
           if (vEl.readyState >= 2 && Math.abs((vEl.currentTime || 0) - target) < 0.005) {
-            resolve();
+            settleFrame();
             return;
           }
           let done = false;
@@ -7127,7 +7133,7 @@
             done = true;
             vEl.removeEventListener('seeked', finish);
             clearTimeout(timer);
-            resolve();
+            settleFrame();
           };
           const timer = setTimeout(finish, 2000);
           vEl.addEventListener('seeked', finish, { once: true });
