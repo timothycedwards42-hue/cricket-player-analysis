@@ -5152,7 +5152,7 @@
         });
         videoPlayer.addEventListener('timeupdate', () => {
           const draft = state.draftClip;
-          if (draft && state.loopWindow && draft.end && videoPlayer.currentTime >= draft.end) {
+          if (!videoPlayer.paused && draft && state.loopWindow && draft.end && videoPlayer.currentTime >= draft.end) {
             videoPlayer.currentTime = draft.start || 0;
           }
           videoScrubber.value = Math.max(
