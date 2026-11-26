@@ -6054,8 +6054,12 @@
           clipObj.releaseTime = relPin ? relPin.time : null;
           clipObj.frames = draft.pins.map(p => ({ ...p }));
 
-          // Extract keyframes + thumbnail offscreen for this clip window
-          await extractKeyframesOffscreen(clipObj, sampleCount);
+          // Extract keyframes + thumbnail (reuse active videoPlayer when same source for fast, reliable mobile decoding)
+          if (videoPlayer.src && src.url === videoPlayer.src && videoPlayer.readyState >= 2) {
+            await extractKeyframesFromElement(videoPlayer, clipObj, sampleCount);
+          } else {
+            await extractKeyframesOffscreen(clipObj, sampleCount);
+          }
           const midFrame = clipObj.frames[Math.floor(clipObj.frames.length / 2)] || clipObj.frames[0];
           clipObj.thumbnail = midFrame?.dataUrl || null;
 
@@ -6086,8 +6090,63 @@
         const src = getActiveSource();
         const dur = videoPlayer.duration || src?.duration || 0;
         if (!src || !dur) return;
-        startDraftClip(0, dur);
-        await saveDraftClipToStaging();
+
+        videoPlayer.pause();
+        const origLabel = quickCutFullBtn ? quickCutFullBtn.textContent : '➕ Stage Full Video';
+        if (quickCutFullBtn) {
+          quickCutFullBtn.disabled = true;
+          quickCutFullBtn.textContent = '⏳ Staging Full Video...';
+        }
+        try {
+          const sampleCount = state.sampleCount || 20;
+          const clipObj = {
+            id: state.nextClipId++,
+            sourceId: src.id,
+            file: src.file,
+            url: src.url,
+            name: src.name,
+            tag: '',
+            angle: 'Auto-detect',
+            duration: dur,
+            trimStart: 0,
+            trimEnd: dur,
+            trimCustom: false,
+            zoomLevel: state.zoomLevel || 1,
+            zoomFocusX: state.zoomFocusX ?? 0.5,
+            zoomFocusY: state.zoomFocusY ?? 0.5,
+            sampleCount,
+            frames: [],
+            pins: [],
+            thumbnail: null,
+            releaseTime: null,
+            arrivalTime: null,
+            storedSessionId: null,
+            analyzedSessionId: null,
+            selected: false
+          };
+
+          if (videoPlayer.readyState >= 2) {
+            await extractKeyframesFromElement(videoPlayer, clipObj, sampleCount);
+          } else {
+            await extractKeyframesOffscreen(clipObj, sampleCount);
+          }
+          const midFrame = clipObj.frames[Math.floor(clipObj.frames.length / 2)] || clipObj.frames[0];
+          clipObj.thumbnail = midFrame?.dataUrl || null;
+
+          state.clips.push(clipObj);
+          clearDraftClip(false);
+          renderMiniStagingBar();
+          renderStagingArea();
+          showToast(`✓ Staged Full Video (0.0s–${dur.toFixed(1)}s) as Clip #${state.clips.length}!`);
+        } catch (err) {
+          console.error(err);
+          showToast(`Could not stage full video: ${err.message}`);
+        } finally {
+          if (quickCutFullBtn) {
+            quickCutFullBtn.disabled = false;
+            quickCutFullBtn.textContent = origLabel;
+          }
+        }
       }
 
       function updateTimeReadout() {
@@ -6968,6 +7027,52 @@
         return canvas.toDataURL('image/jpeg', 0.84);
       }
 
+      async function extractKeyframesFromElement(vEl, clip, count = state.sampleCount) {
+        const dur = vEl.duration || clip.duration || 0;
+        if (!dur || !isFinite(dur)) return;
+        vEl.pause();
+        const prevTime = vEl.currentTime || 0;
+        clip.duration = dur;
+        if (clip.trimEnd === null || clip.trimEnd === undefined) {
+          clip.trimStart = 0;
+          clip.trimEnd = dur;
+        }
+        const start = Math.max(0, Math.min(clip.trimStart || 0, dur - 0.05));
+        const end = Math.max(start + 0.05, Math.min(clip.trimEnd ?? dur, dur));
+        const span = Math.max(0.05, end - start);
+        const cropOpts = {
+          zoomLevel: clip.zoomLevel ?? state.zoomLevel ?? 1,
+          zoomFocusX: clip.zoomFocusX ?? state.zoomFocusX ?? 0.5,
+          zoomFocusY: clip.zoomFocusY ?? state.zoomFocusY ?? 0.5
+        };
+
+        const pinned = (clip.pins && clip.pins.length > 0)
+          ? clip.pins
+          : (clip.frames || []).filter(f => !/^F\d+$/.test(f.label || ''));
+        const extracted = [];
+        for (let i = 0; i < count; i++) {
+          const ratio = count === 1 ? 0.5 : i / (count - 1);
+          const t = Math.min(dur - 0.02, Math.max(0.001, start + span * ratio));
+          await seekVideo(vEl, t);
+          extracted.push({
+            time: t,
+            dataUrl: grabVideoFrameDataUrl(vEl, cropOpts),
+            label: `F${i + 1}`
+          });
+        }
+        const refreshedPinned = [];
+        for (const p of pinned) {
+          const pt = Math.min(dur - 0.02, Math.max(0.001, p.time || 0));
+          await seekVideo(vEl, pt);
+          refreshedPinned.push({
+            ...p,
+            dataUrl: grabVideoFrameDataUrl(vEl, cropOpts)
+          });
+        }
+        clip.frames = [...extracted, ...refreshedPinned].sort((a, b) => a.time - b.time);
+        await seekVideo(vEl, prevTime);
+      }
+
       async function extractKeyframesOffscreen(clip, count = state.sampleCount) {
         return new Promise((resolve, reject) => {
           const v = document.createElement('video');
@@ -6975,65 +7080,58 @@
           v.playsInline = true;
           v.preload = 'auto';
           v.src = clip.url;
-          const cropOpts = {
-            zoomLevel: clip.zoomLevel ?? state.zoomLevel ?? 1,
-            zoomFocusX: clip.zoomFocusX ?? state.zoomFocusX ?? 0.5,
-            zoomFocusY: clip.zoomFocusY ?? state.zoomFocusY ?? 0.5
-          };
+          let settled = false;
+          const timeoutId = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              reject(new Error(`Timed out decoding clip "${clip.name}"`));
+            }
+          }, 15000);
 
-          v.addEventListener('error', () => reject(new Error(`Could not decode clip "${clip.name}"`)), { once: true });
+          v.addEventListener('error', () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            reject(new Error(`Could not decode clip "${clip.name}"`));
+          }, { once: true });
           v.addEventListener('loadedmetadata', async () => {
             try {
-              const dur = v.duration || 0;
-              clip.duration = dur;
-              if (clip.trimEnd === null || clip.trimEnd === undefined) {
-                clip.trimStart = 0;
-                clip.trimEnd = dur;
+              await extractKeyframesFromElement(v, clip, count);
+              if (!settled) {
+                settled = true;
+                clearTimeout(timeoutId);
+                resolve();
               }
-              const start = Math.max(0, Math.min(clip.trimStart || 0, dur - 0.05));
-              const end = Math.max(start + 0.05, Math.min(clip.trimEnd ?? dur, dur));
-              const span = Math.max(0.05, end - start);
-
-              const pinned = (clip.pins && clip.pins.length > 0)
-                ? clip.pins
-                : (clip.frames || []).filter(f => !/^F\d+$/.test(f.label || ''));
-              const extracted = [];
-              for (let i = 0; i < count; i++) {
-                const ratio = count === 1 ? 0.5 : i / (count - 1);
-                const t = Math.min(dur - 0.02, Math.max(0, start + span * ratio));
-                await seekVideo(v, t);
-                extracted.push({
-                  time: t,
-                  dataUrl: grabVideoFrameDataUrl(v, cropOpts),
-                  label: `F${i + 1}`
-                });
-              }
-              const refreshedPinned = [];
-              for (const p of pinned) {
-                const pt = Math.min(dur - 0.02, Math.max(0, p.time || 0));
-                await seekVideo(v, pt);
-                refreshedPinned.push({
-                  ...p,
-                  dataUrl: grabVideoFrameDataUrl(v, cropOpts)
-                });
-              }
-              clip.frames = [...extracted, ...refreshedPinned].sort((a, b) => a.time - b.time);
-              resolve();
             } catch (err) {
-              reject(err);
+              if (!settled) {
+                settled = true;
+                clearTimeout(timeoutId);
+                reject(err);
+              }
             }
           }, { once: true });
+          v.load();
         });
       }
 
       function seekVideo(vEl, time) {
         return new Promise((resolve) => {
-          const onSeeked = () => {
-            vEl.removeEventListener('seeked', onSeeked);
+          const target = Math.max(0, Math.min(vEl.duration || time, time));
+          if (vEl.readyState >= 2 && Math.abs((vEl.currentTime || 0) - target) < 0.005) {
+            resolve();
+            return;
+          }
+          let done = false;
+          const finish = () => {
+            if (done) return;
+            done = true;
+            vEl.removeEventListener('seeked', finish);
+            clearTimeout(timer);
             resolve();
           };
-          vEl.addEventListener('seeked', onSeeked, { once: true });
-          vEl.currentTime = time;
+          const timer = setTimeout(finish, 2000);
+          vEl.addEventListener('seeked', finish, { once: true });
+          vEl.currentTime = target;
         });
       }
 
