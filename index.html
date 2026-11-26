@@ -915,6 +915,118 @@
       gap: 10px;
     }
 
+    .staged-frame-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      background: #101218;
+      border-top: 1px solid var(--border);
+    }
+
+    .staged-frame-nav input[type="range"] {
+      flex: 1;
+      min-width: 0;
+      accent-color: var(--accent-bright);
+      cursor: pointer;
+    }
+
+    .staged-frame-readout {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--pitch);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .staged-mini-strip {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 6px 8px;
+      background: #0d0f14;
+      border-top: 1px solid var(--border);
+    }
+
+    .staged-mini-thumb {
+      position: relative;
+      flex: 0 0 54px;
+      height: 36px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1.5px solid transparent;
+      cursor: pointer;
+      background: #000;
+      padding: 0;
+    }
+
+    .staged-mini-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .staged-mini-thumb.active {
+      border-color: var(--accent-bright);
+      box-shadow: 0 0 0 1px var(--accent-bright);
+    }
+
+    .staged-mini-thumb.pinned {
+      border-color: var(--warning);
+    }
+
+    .staged-mini-thumb-lbl {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.72);
+      color: #fff;
+      font-size: 0.56rem;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.2;
+      padding: 1px 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .staged-clip-note {
+      width: 100%;
+      min-height: 48px;
+      resize: vertical;
+      padding: 7px 9px;
+      font-size: 0.78rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+    }
+
+    .staged-clip-note:focus {
+      outline: none;
+      border-color: var(--accent-bright);
+    }
+
+    .joined-clips-bar {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(2, 119, 189, 0.18), rgba(27, 28, 36, 0.96));
+      border: 1px solid rgba(79, 195, 247, 0.6);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    }
+
+    .joined-clips-bar.active {
+      display: flex;
+    }
+
     .inline-sbs-card {
       display: none;
       flex-direction: column;
@@ -3356,8 +3468,7 @@
         </div>
         <div class="btn-group">
           <button type="button" class="btn-sm" id="backToCaptureBtn">← Cut More Clips</button>
-          <button type="button" class="btn-sm btn-primary" id="analyzeSelectedClipsBtn" style="display:none;">✨ Analyze Selected Together</button>
-          <button type="button" class="btn-sm" id="storeAllClipsBtn" style="display:none;">💾 Store All Unsaved</button>
+          <button type="button" class="btn-sm" id="storeAllClipsBtn" style="display:none;">💾 Save All Unsaved</button>
         </div>
       </div>
 
@@ -3422,6 +3533,22 @@
       </details>
 
       <div class="error-banner" id="errorBanner" role="alert"></div>
+
+      <!-- Joined Multi-Clip Analysis Bar (shown when 2+ clips are checked) -->
+      <div class="joined-clips-bar" id="joinedClipsBar">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <strong style="font-size:0.9rem; color:#d4f0fd;" id="joinedClipsTitle">🔗 Joined Clips (2)</strong>
+          <button type="button" class="btn-sm btn-ghost" id="clearJoinedSelectionBtn">✕ Clear Selection</button>
+        </div>
+        <div class="field" style="gap:4px;">
+          <label for="joinedNotesInput" style="font-size:0.74rem; color:#b3e5fc;">Combined Coaching Notes for Joined Clips (Optional)</label>
+          <textarea id="joinedNotesInput" class="staged-clip-note" placeholder="Enter one set of coaching notes to apply across all joined clips (e.g., compare side-on and front-on alignment, or track consistency across 3 balls)..."></textarea>
+        </div>
+        <div class="btn-group" style="justify-content:flex-end;">
+          <button type="button" class="btn-sm" id="saveJoinedClipsBtn">💾 Save Joined to Storage</button>
+          <button type="button" class="btn-primary" id="analyzeSelectedClipsBtn">✨ Analyze Joined Clips Together</button>
+        </div>
+      </div>
 
       <!-- Empty State -->
       <div class="staged-clip-empty" id="stagingEmpty">
@@ -4386,6 +4513,11 @@
       const backToCaptureBtn = document.getElementById('backToCaptureBtn');
       const emptyGoToCaptureBtn = document.getElementById('emptyGoToCaptureBtn');
       const analyzeSelectedClipsBtn = document.getElementById('analyzeSelectedClipsBtn');
+      const joinedClipsBar = document.getElementById('joinedClipsBar');
+      const joinedClipsTitle = document.getElementById('joinedClipsTitle');
+      const joinedNotesInput = document.getElementById('joinedNotesInput');
+      const saveJoinedClipsBtn = document.getElementById('saveJoinedClipsBtn');
+      const clearJoinedSelectionBtn = document.getElementById('clearJoinedSelectionBtn');
       const storeAllClipsBtn = document.getElementById('storeAllClipsBtn');
       const runStoredFramesNowBtn = document.getElementById('runStoredFramesNowBtn');
 
@@ -5217,16 +5349,32 @@
           });
         });
 
-        // Step 2: Bulk Staging Actions & Stored Frames Re-Analysis
+        // Step 2: Bulk & Joined Staging Actions & Stored Frames Re-Analysis
         analyzeSelectedClipsBtn?.addEventListener('click', () => {
           const selected = state.clips.filter(c => c.selected);
-          if (selected.length > 0) runAnalysis(null, selected);
+          if (selected.length > 0) {
+            const combinedNote = (joinedNotesInput?.value || '').trim();
+            runAnalysis(null, selected, combinedNote || null);
+          }
+        });
+        saveJoinedClipsBtn?.addEventListener('click', async () => {
+          const selected = state.clips.filter(c => c.selected);
+          if (selected.length < 2) return;
+          saveJoinedClipsBtn.disabled = true;
+          saveJoinedClipsBtn.textContent = '⏳ Saving...';
+          await storeJoinedClipsToStorage(selected, (joinedNotesInput?.value || '').trim());
+          saveJoinedClipsBtn.disabled = false;
+          saveJoinedClipsBtn.textContent = '💾 Save Joined to Storage';
+        });
+        clearJoinedSelectionBtn?.addEventListener('click', () => {
+          state.clips.forEach(c => { c.selected = false; });
+          renderStagingArea();
         });
         storeAllClipsBtn?.addEventListener('click', async () => {
           const unsaved = state.clips.filter(c => !c.storedSessionId);
           if (unsaved.length === 0) return;
           storeAllClipsBtn.disabled = true;
-          storeAllClipsBtn.textContent = `⏳ Storing ${unsaved.length}...`;
+          storeAllClipsBtn.textContent = `⏳ Saving ${unsaved.length}...`;
           let saved = 0;
           for (const clip of unsaved) {
             const ok = await storeClipToStorage(clip, { silent: true });
@@ -5234,7 +5382,7 @@
           }
           storeAllClipsBtn.disabled = false;
           renderStagingArea();
-          showToast(`✓ Stored ${saved} clip${saved === 1 ? '' : 's'} to player folder`);
+          showToast(`✓ Saved ${saved} clip${saved === 1 ? '' : 's'} to storage`);
         });
         runStoredFramesNowBtn?.addEventListener('click', () => {
           if (state.loadedStoredFrames.length > 0) runAnalysis(state.loadedStoredFrames);
@@ -6345,6 +6493,7 @@
             measuredSpeed: speedInfo.valid ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph)` : null,
             thumbnail: firstFrame,
             clipsMeta,
+            note: (clip.note || '').trim(),
             includeVideo: false,
             videoBlobs: [],
             hasAnalysis: false,
@@ -6358,11 +6507,66 @@
           clip.storedSessionId = record.id;
           if (!silent) {
             renderStagingArea();
-            showToast(`✓ Stored "${clipTag || 'Clip'}" to ${playerName} / ${state.role}`);
+            showToast(`✓ Saved "${clipTag || 'Clip'}" to storage (${playerName} / ${state.role})`);
           }
           return true;
         } catch (err) {
-          if (!silent) showError(`Could not store clip: ${err.message}`);
+          if (!silent) showError(`Could not save clip to storage: ${err.message}`);
+          return false;
+        }
+      }
+
+      async function storeJoinedClipsToStorage(clips, combinedNote = '') {
+        clearError();
+        const playerName = (playerNameInput.value || '').trim();
+        if (!playerName || isTestPlayerName(playerName)) {
+          showError('Enter a real Player Name (not "Test - Not Saved") in Step 1 to save clips to storage.');
+          return false;
+        }
+        try {
+          for (const clip of clips) {
+            if (!clip.frames || clip.frames.length === 0) {
+              await extractKeyframesOffscreen(clip, clip.sampleCount || state.sampleCount);
+            }
+          }
+          const nowIso = new Date().toISOString();
+          const fileStamp = formatFileTimestamp(new Date(nowIso));
+          const combinedTag = clips.map((c, i) => (c.tag || '').trim() || `Clip ${i + 1}`).join(' + ');
+          const firstFrame = clips[0]?.thumbnail || clips[0]?.frames?.[0]?.dataUrl || null;
+          const clipsMeta = clips.map((c, i) => ({
+            name: (c.tag || '').trim() || `Clip ${i + 1} (${c.name})`,
+            angle: c.angle || 'Auto-detect',
+            duration: (c.trimEnd || c.duration || 0) - (c.trimStart || 0),
+            frames: c.frames
+          }));
+          const record = {
+            id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            savedAt: nowIso,
+            fileStamp,
+            playerName,
+            sessionTag: combinedTag,
+            role: state.role,
+            handedness: handednessSelect.value,
+            style: styleSelect.value,
+            thumbnail: firstFrame,
+            clipsMeta,
+            note: combinedNote || '',
+            includeVideo: false,
+            videoBlobs: [],
+            hasAnalysis: false,
+            report: null
+          };
+          await putSession(record);
+          await refreshSavedCount();
+          if (supabaseClient) {
+            await pushSessionToSupabase(record);
+          }
+          clips.forEach(c => { c.storedSessionId = record.id; });
+          renderStagingArea();
+          showToast(`✓ Saved ${clips.length} joined clips to storage (${playerName})`);
+          return true;
+        } catch (err) {
+          showError(`Could not save joined clips: ${err.message}`);
           return false;
         }
       }
@@ -6376,36 +6580,49 @@
         stagingEmpty.style.display = clips.length === 0 ? 'flex' : 'none';
         stagingGrid.style.display = clips.length === 0 ? 'none' : 'grid';
 
-        const selectedCount = clips.filter(c => c.selected).length;
+        const selectedClips = clips.filter(c => c.selected);
+        const selectedCount = selectedClips.length;
+        if (joinedClipsBar) {
+          joinedClipsBar.classList.toggle('active', selectedCount >= 2);
+          if (joinedClipsTitle && selectedCount >= 2) {
+            const labels = selectedClips.map(c => (c.tag || '').trim() || `Clip #${clips.indexOf(c) + 1}`).join(' + ');
+            joinedClipsTitle.textContent = `🔗 Joined Clips (${selectedCount}): ${labels}`;
+          }
+        }
         if (analyzeSelectedClipsBtn) {
-          analyzeSelectedClipsBtn.style.display = selectedCount >= 2 ? 'inline-flex' : 'none';
-          analyzeSelectedClipsBtn.textContent = `✨ Analyze Selected Together (${selectedCount})`;
+          analyzeSelectedClipsBtn.textContent = `✨ Analyze Joined Clips Together (${selectedCount})`;
         }
         const unsavedCount = clips.filter(c => !c.storedSessionId).length;
         if (storeAllClipsBtn) {
           storeAllClipsBtn.style.display = clips.length >= 2 && unsavedCount > 0 ? 'inline-flex' : 'none';
-          storeAllClipsBtn.textContent = `💾 Store All (${unsavedCount})`;
+          storeAllClipsBtn.textContent = `💾 Save All (${unsavedCount})`;
         }
 
         stagingGrid.textContent = '';
         clips.forEach((clip, idx) => {
           const card = document.createElement('article');
           card.className = `staged-clip-card${clip.selected ? ' selected' : ''}`;
+          const frames = Array.isArray(clip.frames) ? clip.frames : [];
+          let activeFrameIdx = Math.min(Math.max(0, clip._previewIdx ?? Math.floor(frames.length / 2)), Math.max(0, frames.length - 1));
 
-          // 1. Preview Area (Thumbnail + Tap-to-Loop Clip Preview)
+          // 1. Preview Area (Frame Display + Optional Loop Video Playback)
           const preview = document.createElement('div');
           preview.className = 'staged-clip-preview';
 
           const thumbImg = document.createElement('img');
-          thumbImg.src = clip.thumbnail || clip.frames?.[0]?.dataUrl || '';
+          thumbImg.src = frames[activeFrameIdx]?.dataUrl || clip.thumbnail || '';
           thumbImg.alt = clip.tag || `Clip ${idx + 1}`;
           preview.appendChild(thumbImg);
 
           const playOverlay = document.createElement('div');
           playOverlay.className = 'staged-clip-play-overlay';
+          playOverlay.style.background = 'transparent';
+          playOverlay.style.alignItems = 'flex-end';
+          playOverlay.style.justifyContent = 'flex-end';
+          playOverlay.style.padding = '8px';
           const playPill = document.createElement('span');
           playPill.className = 'staged-clip-play-pill';
-          playPill.textContent = '▶ Preview Clip';
+          playPill.textContent = '▶ Play Video';
           playOverlay.appendChild(playPill);
           preview.appendChild(playOverlay);
 
@@ -6427,7 +6644,7 @@
             renderStagingArea();
           });
           const numSpan = document.createElement('span');
-          numSpan.textContent = `Clip #${idx + 1}`;
+          numSpan.textContent = `Join #${idx + 1}`;
           selectLbl.append(chk, numSpan);
 
           const winChip = document.createElement('span');
@@ -6438,9 +6655,10 @@
           topBadges.append(selectLbl, winChip);
           preview.appendChild(topBadges);
 
-          // Tap preview to play looping clip video inline
+          // Tap Play Video pill to play looping clip video inline
           let previewVideo = null;
-          playOverlay.addEventListener('click', () => {
+          playPill.addEventListener('click', (e) => {
+            e.stopPropagation();
             if (!clip.url) return;
             stopAllStagingPreviews();
             previewVideo = document.createElement('video');
@@ -6460,8 +6678,8 @@
             speedBtn.type = 'button';
             speedBtn.className = 'btn-sm';
             speedBtn.textContent = '0.5×';
-            speedBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
+            speedBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
               const next = previewVideo.playbackRate === 0.5 ? 0.25 : previewVideo.playbackRate === 0.25 ? 1.0 : 0.5;
               previewVideo.playbackRate = next;
               speedBtn.textContent = `${next}×`;
@@ -6469,9 +6687,9 @@
             const stopBtn = document.createElement('button');
             stopBtn.type = 'button';
             stopBtn.className = 'btn-sm';
-            stopBtn.textContent = '⏹ Stop';
-            stopBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
+            stopBtn.textContent = '⏹ Frames';
+            stopBtn.addEventListener('click', (ev) => {
+              ev.stopPropagation();
               previewVideo.pause();
               previewVideo.remove();
               stopBar.remove();
@@ -6496,7 +6714,82 @@
             activeStagingPreviewVideos.push(previewVideo);
           });
 
-          // 2. Body: Per-Clip Tag, Angle, Pins, Status Badges, Actions
+          // 1b. Interactive Frame Browser (Scrubber + Prev/Next + Full Filmstrip of All Frames)
+          let frameNav = null;
+          let miniStrip = null;
+          if (frames.length > 0) {
+            frameNav = document.createElement('div');
+            frameNav.className = 'staged-frame-nav';
+
+            const prevFBtn = document.createElement('button');
+            prevFBtn.type = 'button';
+            prevFBtn.className = 'btn-sm';
+            prevFBtn.textContent = '◀';
+            prevFBtn.title = 'Previous frame';
+
+            const frameSlider = document.createElement('input');
+            frameSlider.type = 'range';
+            frameSlider.min = '0';
+            frameSlider.max = String(Math.max(0, frames.length - 1));
+            frameSlider.step = '1';
+            frameSlider.value = String(activeFrameIdx);
+            frameSlider.setAttribute('aria-label', `Scrub frames for Clip ${idx + 1}`);
+
+            const nextFBtn = document.createElement('button');
+            nextFBtn.type = 'button';
+            nextFBtn.className = 'btn-sm';
+            nextFBtn.textContent = '▶';
+            nextFBtn.title = 'Next frame';
+
+            const frameLbl = document.createElement('span');
+            frameLbl.className = 'staged-frame-readout';
+
+            miniStrip = document.createElement('div');
+            miniStrip.className = 'staged-mini-strip';
+            const thumbButtons = [];
+
+            const showFrameAt = (newIdx, scrollStrip = false) => {
+              activeFrameIdx = Math.max(0, Math.min(frames.length - 1, newIdx));
+              clip._previewIdx = activeFrameIdx;
+              const f = frames[activeFrameIdx];
+              if (f) {
+                thumbImg.src = f.dataUrl;
+                frameLbl.textContent = `${f.label || `F${activeFrameIdx + 1}`} · ${activeFrameIdx + 1}/${frames.length} (${Number(f.time || 0).toFixed(2)}s)`;
+              }
+              frameSlider.value = String(activeFrameIdx);
+              thumbButtons.forEach((tb, ti) => tb.classList.toggle('active', ti === activeFrameIdx));
+              if (scrollStrip && thumbButtons[activeFrameIdx]) {
+                thumbButtons[activeFrameIdx].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+              }
+            };
+
+            frames.forEach((f, fIdx) => {
+              const tb = document.createElement('button');
+              tb.type = 'button';
+              const isPinned = f.label && !/^F\d+$/.test(f.label);
+              tb.className = `staged-mini-thumb${isPinned ? ' pinned' : ''}${fIdx === activeFrameIdx ? ' active' : ''}`;
+              tb.title = `${f.label || `F${fIdx + 1}`} @ ${Number(f.time || 0).toFixed(2)}s`;
+              const tImg = document.createElement('img');
+              tImg.src = f.dataUrl;
+              tImg.alt = f.label || `F${fIdx + 1}`;
+              const tLbl = document.createElement('span');
+              tLbl.className = 'staged-mini-thumb-lbl';
+              tLbl.textContent = isPinned ? f.label.replace('EXACT ', '').slice(0, 6) : `${fIdx + 1}`;
+              tb.append(tImg, tLbl);
+              tb.addEventListener('click', () => showFrameAt(fIdx, false));
+              thumbButtons.push(tb);
+              miniStrip.appendChild(tb);
+            });
+
+            prevFBtn.addEventListener('click', () => showFrameAt(activeFrameIdx - 1, true));
+            nextFBtn.addEventListener('click', () => showFrameAt(activeFrameIdx + 1, true));
+            frameSlider.addEventListener('input', () => showFrameAt(parseInt(frameSlider.value, 10) || 0, true));
+
+            frameNav.append(prevFBtn, frameSlider, nextFBtn, frameLbl);
+            showFrameAt(activeFrameIdx, false);
+          }
+
+          // 2. Body: Per-Clip Tag, Coaching Notes, Angle, Pins, Status Badges, Actions
           const body = document.createElement('div');
           body.className = 'staged-clip-body';
 
@@ -6514,6 +6807,17 @@
           });
           tagRow.appendChild(tagInput);
 
+          // Per-Clip Coaching Notes
+          const clipNoteInput = document.createElement('textarea');
+          clipNoteInput.className = 'staged-clip-note';
+          clipNoteInput.rows = 2;
+          clipNoteInput.value = clip.note || '';
+          clipNoteInput.placeholder = `📝 Coaching notes for Clip #${idx + 1} (optional — sent to AI & saved with clip)...`;
+          clipNoteInput.setAttribute('aria-label', `Coaching notes for Clip ${idx + 1}`);
+          clipNoteInput.addEventListener('input', () => {
+            clip.note = clipNoteInput.value;
+          });
+
           // Meta row: Camera Angle + Frame count + Zoom
           const metaRow = document.createElement('div');
           metaRow.className = 'staged-clip-meta-row';
@@ -6530,10 +6834,10 @@
           angleSel.addEventListener('change', () => { clip.angle = angleSel.value; });
 
           const infoSpan = document.createElement('span');
-          infoSpan.textContent = `${clip.frames?.length || 0} frames${clip.zoomLevel > 1 ? ` · ${clip.zoomLevel}× zoom` : ''}`;
+          infoSpan.textContent = `${frames.length} frames${clip.zoomLevel > 1 ? ` · ${clip.zoomLevel}× zoom` : ''}`;
           metaRow.append(angleSel, infoSpan);
 
-          // Pinned Key Moments + Stored/Analyzed Status Badges
+          // Pinned Key Moments + Saved/Analyzed Status Badges
           const pinsWrap = document.createElement('div');
           pinsWrap.className = 'staged-clip-pins';
           (clip.pins || []).forEach(p => {
@@ -6545,7 +6849,7 @@
           if (clip.storedSessionId) {
             const storedBadge = document.createElement('span');
             storedBadge.className = 'badge badge-green';
-            storedBadge.textContent = '💾 Stored';
+            storedBadge.textContent = '💾 Saved';
             pinsWrap.appendChild(storedBadge);
           }
           if (clip.analyzedSessionId) {
@@ -6555,7 +6859,7 @@
             pinsWrap.appendChild(analyzedBadge);
           }
 
-          // Primary Per-Clip Actions: Analyze with AI & Store to Storage
+          // Primary Per-Clip Actions: Analyze with AI & Save to Storage
           const actions = document.createElement('div');
           actions.className = 'staged-clip-actions';
 
@@ -6567,10 +6871,10 @@
 
           const storeClipBtn = document.createElement('button');
           storeClipBtn.type = 'button';
-          storeClipBtn.textContent = clip.storedSessionId ? '✓ Stored (Save Again)' : '💾 Store to Storage';
+          storeClipBtn.textContent = clip.storedSessionId ? '✓ Saved (Save Again)' : '💾 Save to Storage';
           storeClipBtn.addEventListener('click', async () => {
             storeClipBtn.disabled = true;
-            storeClipBtn.textContent = '⏳ Storing...';
+            storeClipBtn.textContent = '⏳ Saving...';
             await storeClipToStorage(clip);
             storeClipBtn.disabled = false;
           });
@@ -6595,11 +6899,14 @@
 
           secRow.append(recutBtn, delBtn);
 
-          body.append(tagRow, metaRow);
+          body.append(tagRow, clipNoteInput, metaRow);
           if (pinsWrap.childNodes.length > 0) body.appendChild(pinsWrap);
           body.append(actions, secRow);
 
-          card.append(preview, body);
+          card.appendChild(preview);
+          if (frameNav) card.appendChild(frameNav);
+          if (miniStrip) card.appendChild(miniStrip);
+          card.appendChild(body);
           stagingGrid.appendChild(card);
         });
       }
@@ -7151,7 +7458,7 @@
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
       }
 
-      async function runAnalysis(storedFramesOverride = null, clipsOverride = null) {
+      async function runAnalysis(storedFramesOverride = null, clipsOverride = null, notesOverride = null) {
         clearError();
         const targetClips = Array.isArray(clipsOverride) && clipsOverride.length > 0
           ? clipsOverride
@@ -7187,7 +7494,7 @@
 
         try {
           const isMultiClip = !usingStoredFrames && targetClips.length > 1;
-          const parts = [{ text: buildPrompt(targetClips) }];
+          const parts = [{ text: buildPrompt(targetClips, notesOverride) }];
 
           if (usingStoredFrames) {
             const storedAngleLines = [];
@@ -7351,7 +7658,7 @@
         });
       }
 
-      function buildPrompt(targetClips = state.clips) {
+      function buildPrompt(targetClips = state.clips, notesOverride = null) {
         const isBatting = state.role === 'batting';
         const attackPerspective = isBatting
           ? 'HOW TO BOWL TO THIS BATTER (dismissal plans, lines/lengths to target, field placements, variations, and zones to avoid bowling)'
@@ -7366,17 +7673,34 @@
         }).join('; ');
 
         const multiAngleNote = targetClips.length > 1
-          ? `You are being given ${targetClips.length} SEPARATE CAMERA ANGLES of the SAME delivery/player (${clipSummary}). Cross-reference and synthesize all angles together into ONE unified report, noting which angle confirmed key findings.`
+          ? `You are being given ${targetClips.length} SEPARATE CLIPS / CAMERA ANGLES (${clipSummary}). Cross-reference and synthesize all clips together into ONE unified report, noting which clip confirmed key findings.`
           : `Analyze the uploaded ${state.role.toUpperCase()} video/frames carefully.`;
 
         const focusInstruction = state.focusAreas.length > 0
           ? `\nPriority Focus Areas requested: ${state.focusAreas.join(', ')}.\nSpecifically inspect the mechanics driving these priority areas, address them directly in Weaknesses, Improvements/Drills, and Avenues of Attack, while STILL reporting any other major observations clearly visible in the clip(s).`
           : '';
 
-        const speedInfo = state.clips.map(c => computeClipSpeed(c)).find(s => s.valid);
+        const speedInfo = targetClips.map(c => computeClipSpeed(c)).find(s => s.valid);
         const speedContextLine = speedInfo
           ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph) — measured over ${speedInfo.flightM.toFixed(2)}m in ${speedInfo.dt.toFixed(3)}s on a ${speedInfo.pitchM}m pitch`
           : `Not manually timed (Pitch Length: ${pitchLengthSelect.value}m)`;
+
+        // Resolve coaching notes: joined-clips combined note takes priority, otherwise per-clip note(s) + global notes
+        const noteChunks = [];
+        if (notesOverride && notesOverride.trim()) {
+          noteChunks.push(notesOverride.trim());
+        } else {
+          targetClips.forEach((c, idx) => {
+            if (c.note && c.note.trim()) {
+              const prefix = targetClips.length > 1 ? `${c.tag || `Clip ${idx + 1}`}: ` : '';
+              noteChunks.push(`${prefix}${c.note.trim()}`);
+            }
+          });
+        }
+        if (notesInput.value.trim()) {
+          noteChunks.push(notesInput.value.trim());
+        }
+        const effectiveCoachNotes = noteChunks.length > 0 ? noteChunks.join(' | ') : 'None provided';
 
         const styleVal = state.role === 'batting' ? 'General Batting' : (styleSelect.value || '');
         return `You are an elite international cricket biomechanics coach and tactical analyst.
@@ -7390,7 +7714,7 @@ ${styleVal && state.role !== 'batting' ? `- Style / Bowler Angle: ${styleVal}\n`
 - Uploaded Clips: ${clipSummary || '1 clip'} (auto-detect camera angle(s) directly from the frames)
 - Match Format: ${formatSelect.value}
 - Selected Focus Areas: ${state.focusAreas.length ? state.focusAreas.join(', ') : 'General review'}
-- Coach Notes: ${notesInput.value.trim() || 'None provided'}
+- Coach Notes: ${effectiveCoachNotes}
 
 Be honest, specific, and grounded strictly in what is visible in the video/frames (mention camera limitations if a specific body part or ball impact is partially occluded).
 Return ONLY valid JSON matching this exact schema:
