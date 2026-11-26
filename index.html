@@ -2543,6 +2543,40 @@
     }
 
     /* --- SAVED SESSIONS FOLDER TREE & VIDEO REFERENCE --- */
+    details.folder-date {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    details.folder-date > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 8px 11px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--pitch);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: rgba(199, 176, 136, 0.06);
+    }
+
+    details.folder-date > summary::-webkit-details-marker { display: none; }
+
+    details.folder-date[open] > summary {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .folder-date-body {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
     .session-list {
       display: flex;
       flex-direction: column;
@@ -11081,18 +11115,45 @@ create policy "Allow anon read/write for personal lab"
           return;
         }
 
-        // Group into Player Folder -> Discipline Subfolder (Batting / Bowling / LBW) -> Files
+        // Helper: derive YYYY-MM-DD date key from original video's filmed date (fileStamp / savedAt)
+        const getSessionDateKey = (s) => {
+          const stampMatch = String(s.fileStamp || '').match(/^(\d{4}-\d{2}-\d{2})/);
+          if (stampMatch) return stampMatch[1];
+          if (s.savedAt) {
+            const d = new Date(s.savedAt);
+            if (!isNaN(d.getTime())) {
+              const pad = (n) => String(n).padStart(2, '0');
+              return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            }
+          }
+          return 'Undated';
+        };
+        const formatDateFolderLabel = (dateKey) => {
+          const m = String(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (!m) return `📅 ${dateKey}`;
+          const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+          const nice = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+          return `📅 ${dateKey} · ${nice}`;
+        };
+
+        // Group into Player Folder -> Video Filmed Date Folder -> Discipline Subfolder (Batting / Bowling) -> Files
         const byPlayer = new Map();
         filtered.forEach(s => {
           if (s.role === 'custom_drills') return;
           const pName = (s.playerName || 'Unassigned Player').trim();
-          if (!byPlayer.has(pName)) byPlayer.set(pName, { batting: [], bowling: [], planCount: 0 });
+          if (!byPlayer.has(pName)) byPlayer.set(pName, { byDate: new Map(), total: 0, planCount: 0 });
+          const pEntry = byPlayer.get(pName);
           if (s.role === 'training_plan') {
-            byPlayer.get(pName).planCount = (s.planDrills || []).filter(d => !d.mastered).length;
+            pEntry.planCount = (s.planDrills || []).filter(d => !d.mastered).length;
             return;
           }
+          const dateKey = getSessionDateKey(s);
+          if (!pEntry.byDate.has(dateKey)) {
+            pEntry.byDate.set(dateKey, { batting: [], bowling: [] });
+          }
           const disc = s.role === 'bowling' ? 'bowling' : 'batting';
-          byPlayer.get(pName)[disc].push(s);
+          pEntry.byDate.get(dateKey)[disc].push(s);
+          pEntry.total++;
         });
 
         const sortedPlayers = Array.from(byPlayer.keys()).sort((a, b) => a.localeCompare(b));
@@ -11102,8 +11163,8 @@ create policy "Allow anon read/write for personal lab"
         ];
 
         sortedPlayers.forEach((pName, pIdx) => {
-          const groups = byPlayer.get(pName);
-          const totalForPlayer = groups.batting.length + groups.bowling.length;
+          const pEntry = byPlayer.get(pName);
+          const totalForPlayer = pEntry.total;
 
           const playerDetails = document.createElement('details');
           playerDetails.className = 'folder-player';
@@ -11152,7 +11213,7 @@ create policy "Allow anon read/write for personal lab"
           const planBtn = document.createElement('button');
           planBtn.type = 'button';
           planBtn.className = 'btn-sm';
-          planBtn.textContent = groups.planCount > 0 ? `📋 Training Plan (${groups.planCount})` : '📋 Training Plan';
+          planBtn.textContent = pEntry.planCount > 0 ? `📋 Training Plan (${pEntry.planCount})` : '📋 Training Plan';
           planBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -11168,27 +11229,49 @@ create policy "Allow anon read/write for personal lab"
           const folderBody = document.createElement('div');
           folderBody.className = 'folder-body';
 
-          discMeta.forEach(dm => {
-            const list = groups[dm.key];
-            if (list.length === 0) return;
+          // Sort date folders newest-first (YYYY-MM-DD descending)
+          const sortedDates = Array.from(pEntry.byDate.keys()).sort((a, b) => b.localeCompare(a));
+          sortedDates.forEach((dateKey, dateIdx) => {
+            const dateGroups = pEntry.byDate.get(dateKey);
+            const totalForDate = dateGroups.batting.length + dateGroups.bowling.length;
 
-            const dDetails = document.createElement('details');
-            dDetails.className = 'folder-discipline';
-            dDetails.open = true;
+            const dateDetails = document.createElement('details');
+            dateDetails.className = 'folder-date';
+            if (dateIdx === 0 || q.length > 0) dateDetails.open = true;
 
-            const dSum = document.createElement('summary');
-            const dLeft = document.createElement('span');
-            dLeft.textContent = `📂 ${dm.label}`;
-            const dRight = document.createElement('span');
-            dRight.className = 'help-text';
-            dRight.textContent = `${list.length}`;
-            dSum.append(dLeft, dRight);
-            dDetails.appendChild(dSum);
+            const dateSum = document.createElement('summary');
+            const dateLeft = document.createElement('span');
+            dateLeft.textContent = formatDateFolderLabel(dateKey);
+            const dateRight = document.createElement('span');
+            dateRight.className = 'help-text';
+            dateRight.textContent = `${totalForDate} file${totalForDate === 1 ? '' : 's'}`;
+            dateSum.append(dateLeft, dateRight);
+            dateDetails.appendChild(dateSum);
 
-            const filesWrap = document.createElement('div');
-            filesWrap.className = 'folder-files';
+            const dateBody = document.createElement('div');
+            dateBody.className = 'folder-date-body';
 
-            list.forEach(s => {
+            discMeta.forEach(dm => {
+              const list = dateGroups[dm.key];
+              if (list.length === 0) return;
+
+              const dDetails = document.createElement('details');
+              dDetails.className = 'folder-discipline';
+              dDetails.open = true;
+
+              const dSum = document.createElement('summary');
+              const dLeft = document.createElement('span');
+              dLeft.textContent = `📂 ${dm.label}`;
+              const dRight = document.createElement('span');
+              dRight.className = 'help-text';
+              dRight.textContent = `${list.length}`;
+              dSum.append(dLeft, dRight);
+              dDetails.appendChild(dSum);
+
+              const filesWrap = document.createElement('div');
+              filesWrap.className = 'folder-files';
+
+              list.forEach(s => {
               const row = document.createElement('div');
               row.className = 'session-row';
 
@@ -11342,8 +11425,12 @@ create policy "Allow anon read/write for personal lab"
               filesWrap.appendChild(row);
             });
 
-            dDetails.appendChild(filesWrap);
-            folderBody.appendChild(dDetails);
+              dDetails.appendChild(filesWrap);
+              dateBody.appendChild(dDetails);
+            });
+
+            dateDetails.appendChild(dateBody);
+            folderBody.appendChild(dateDetails);
           });
 
           playerDetails.appendChild(folderBody);
