@@ -3541,12 +3541,19 @@
           <button type="button" class="btn-sm btn-ghost" id="clearJoinedSelectionBtn">✕ Clear Selection</button>
         </div>
         <div class="field" style="gap:4px;">
-          <label for="joinedNotesInput" style="font-size:0.74rem; color:#b3e5fc;">Combined Coaching Notes for Joined Clips (Optional)</label>
-          <textarea id="joinedNotesInput" class="staged-clip-note" placeholder="Enter one set of coaching notes to apply across all joined clips (e.g., compare side-on and front-on alignment, or track consistency across 3 balls)..."></textarea>
+          <label for="joinedTagInput" style="font-size:0.74rem; color:#b3e5fc;">Tag for Joined Report / Save (Optional)</label>
+          <input type="text" id="joinedTagInput" placeholder="e.g. 5-Ball Consistency Review, Side + Front Angle..." style="padding:7px 10px; font-size:0.84rem; background:var(--bg); border:1px solid var(--border-strong); border-radius:var(--radius-sm); color:var(--text);">
         </div>
-        <div class="btn-group" style="justify-content:flex-end;">
-          <button type="button" class="btn-sm" id="saveJoinedClipsBtn">💾 Save Joined to Storage</button>
-          <button type="button" class="btn-primary" id="analyzeSelectedClipsBtn">✨ Analyze Joined Clips Together</button>
+        <div class="field" style="gap:4px;">
+          <label for="joinedNotesInput" style="font-size:0.74rem; color:#b3e5fc;">Combined Coaching Notes for Joined Clips (Optional)</label>
+          <textarea id="joinedNotesInput" class="staged-clip-note" placeholder="Enter one set of coaching notes to apply across all joined clips (e.g., compare side-on and front-on alignment, or track consistency across 5 balls)..."></textarea>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <span class="help-text" id="joinedFrameBudgetInfo" style="color:#b3e5fc;"></span>
+          <div class="btn-group">
+            <button type="button" class="btn-sm" id="saveJoinedClipsBtn">💾 Save Joined to Storage</button>
+            <button type="button" class="btn-primary" id="analyzeSelectedClipsBtn">✨ Analyze Joined Clips Together</button>
+          </div>
         </div>
       </div>
 
@@ -4099,9 +4106,10 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <input type="text" id="compareInstructionsInput" placeholder="Optional comparison instructions (e.g. Check if front-leg brace &amp; head alignment improved)" style="flex:1; min-width:200px;">
+          <button type="button" class="btn-primary" id="sendSelectedToStagingBtn" disabled title="Send all ticked saved clips to Step 2 Staging to browse frames, edit notes, or run a joint AI analysis">📥 Send to Staging</button>
           <button type="button" id="loadSelectedReportsBtn" disabled title="Load all ticked files into tabs on the Report page to toggle between them">📂 Open in Report</button>
           <button type="button" id="openSideBySideBtn" disabled title="Visually compare both stored frame sequences side by side">🎞️ Side-by-Side</button>
-          <button type="button" class="btn-primary" id="runCompareBtn" disabled>⚖️ Run AI Comparison</button>
+          <button type="button" id="runCompareBtn" disabled>⚖️ AI Compare (2)</button>
         </div>
       </div>
 
@@ -4515,9 +4523,12 @@
       const analyzeSelectedClipsBtn = document.getElementById('analyzeSelectedClipsBtn');
       const joinedClipsBar = document.getElementById('joinedClipsBar');
       const joinedClipsTitle = document.getElementById('joinedClipsTitle');
+      const joinedTagInput = document.getElementById('joinedTagInput');
       const joinedNotesInput = document.getElementById('joinedNotesInput');
+      const joinedFrameBudgetInfo = document.getElementById('joinedFrameBudgetInfo');
       const saveJoinedClipsBtn = document.getElementById('saveJoinedClipsBtn');
       const clearJoinedSelectionBtn = document.getElementById('clearJoinedSelectionBtn');
+      const sendSelectedToStagingBtn = document.getElementById('sendSelectedToStagingBtn');
       const storeAllClipsBtn = document.getElementById('storeAllClipsBtn');
       const runStoredFramesNowBtn = document.getElementById('runStoredFramesNowBtn');
 
@@ -5354,7 +5365,8 @@
           const selected = state.clips.filter(c => c.selected);
           if (selected.length > 0) {
             const combinedNote = (joinedNotesInput?.value || '').trim();
-            runAnalysis(null, selected, combinedNote || null);
+            const combinedTag = (joinedTagInput?.value || '').trim();
+            runAnalysis(null, selected, combinedNote || null, combinedTag || null);
           }
         });
         saveJoinedClipsBtn?.addEventListener('click', async () => {
@@ -5362,9 +5374,19 @@
           if (selected.length < 2) return;
           saveJoinedClipsBtn.disabled = true;
           saveJoinedClipsBtn.textContent = '⏳ Saving...';
-          await storeJoinedClipsToStorage(selected, (joinedNotesInput?.value || '').trim());
+          await storeJoinedClipsToStorage(
+            selected,
+            (joinedNotesInput?.value || '').trim(),
+            (joinedTagInput?.value || '').trim()
+          );
           saveJoinedClipsBtn.disabled = false;
           saveJoinedClipsBtn.textContent = '💾 Save Joined to Storage';
+        });
+        sendSelectedToStagingBtn?.addEventListener('click', () => {
+          const selected = state.compareIds
+            .map(id => cachedSessions.find(s => s.id === id))
+            .filter(Boolean);
+          if (selected.length > 0) sendSessionsToStaging(selected);
         });
         clearJoinedSelectionBtn?.addEventListener('click', () => {
           state.clips.forEach(c => { c.selected = false; });
@@ -6457,22 +6479,179 @@
         }
       }
 
+      function sendSessionsToStaging(sessions) {
+        const list = (Array.isArray(sessions) ? sessions : []).filter(Boolean);
+        if (list.length === 0) return;
+
+        // Sort chronologically so multi-clip joint analysis sees progression in order
+        const sorted = [...list].sort((a, b) => new Date(a.savedAt || 0) - new Date(b.savedAt || 0));
+
+        // Sync active player & discipline if not already set (or if staging was empty)
+        const first = sorted[0];
+        if (first.playerName && (!hasSelectedPlayer() || state.clips.length === 0)) {
+          playerNameInput.value = first.playerName;
+          if (playerQuickSelect && Array.from(playerQuickSelect.options).some(o => o.value === first.playerName)) {
+            playerQuickSelect.value = first.playerName;
+          }
+          updateActivePlayerBadge();
+        }
+        if (first.role && (first.role === 'batting' || first.role === 'bowling') && state.clips.length === 0) {
+          setRole(first.role);
+        }
+
+        let addedCount = 0;
+        const autoSelectForJoin = sorted.length >= 2;
+        if (autoSelectForJoin) {
+          // Clear previous selection so the newly sent batch is cleanly grouped for joining
+          state.clips.forEach(c => { c.selected = false; });
+        }
+
+        sorted.forEach((s) => {
+          const existing = state.clips.find(c => c.storedSessionId === s.id);
+          if (existing) {
+            if (autoSelectForJoin) existing.selected = true;
+            return;
+          }
+          const rawFrames = (s.clipsMeta || []).flatMap((cm) =>
+            (cm.frames || []).map(f => ({
+              time: Number(f.time || 0),
+              dataUrl: f.dataUrl,
+              label: f.label || 'Frame',
+              poseSummary: f.poseSummary || ''
+            }))
+          );
+          const frames = rawFrames.length > 0
+            ? rawFrames
+            : (Array.isArray(s.report?._referenceFrames) ? s.report._referenceFrames.map(f => ({ ...f })) : []);
+          const pins = frames.filter(f => f.label && !/^F\d+$/.test(f.label));
+          const firstMeta = (s.clipsMeta && s.clipsMeta[0]) || {};
+          const isAnalyzed = s.hasAnalysis !== false && Boolean(s.report) && !s.report._framesOnly;
+          const dur = Number(firstMeta.duration || 0);
+
+          state.clips.push({
+            id: state.nextClipId++,
+            sourceId: null,
+            file: null,
+            url: null,
+            fromStorage: true,
+            storedSessionId: s.id,
+            storedHasAnalysis: isAnalyzed,
+            storedSavedAt: s.savedAt || '',
+            storedFileStamp: s.fileStamp || formatFileTimestamp(new Date(s.savedAt || Date.now())),
+            name: firstMeta.name || s.sessionTag || s.fileStamp || 'Stored Clip',
+            tag: s.sessionTag || '',
+            note: s.note || '',
+            angle: firstMeta.angle || 'Auto-detect',
+            duration: dur,
+            trimStart: 0,
+            trimEnd: dur,
+            trimCustom: false,
+            zoomLevel: 1,
+            zoomFocusX: 0.5,
+            zoomFocusY: 0.5,
+            sampleCount: frames.length || state.sampleCount,
+            frames,
+            pins,
+            thumbnail: s.thumbnail || frames[Math.floor(frames.length / 2)]?.dataUrl || frames[0]?.dataUrl || null,
+            releaseTime: null,
+            arrivalTime: null,
+            analyzedSessionId: isAnalyzed ? s.id : null,
+            selected: autoSelectForJoin
+          });
+          addedCount++;
+        });
+
+        state.compareIds = [];
+        updateCompareBarUI();
+        if (historyDialog.open) historyDialog.close();
+        renderMiniStagingBar();
+        renderStagingArea();
+        setStep('staging');
+        showToast(
+          autoSelectForJoin
+            ? `📥 Sent ${sorted.length} stored clip${sorted.length === 1 ? '' : 's'} to Staging (ready to join & analyze)`
+            : `📥 Sent "${first.sessionTag || first.fileStamp || 'clip'}" to Staging`
+        );
+      }
+
+      function budgetFramesForClips(targetClips, maxTotalFrames = 48) {
+        const total = targetClips.reduce((sum, c) => sum + (c.frames?.length || 0), 0);
+        if (targetClips.length <= 1 || total <= maxTotalFrames) {
+          return {
+            perClip: targetClips.map(c => c.frames || []),
+            totalSent: total,
+            downsampled: false
+          };
+        }
+        const perClipBudget = Math.max(4, Math.floor(maxTotalFrames / targetClips.length));
+        const perClip = targetClips.map(c => {
+          const all = c.frames || [];
+          if (all.length <= perClipBudget) return all;
+          const pinned = all.filter(f => f.label && !/^F\d+$/.test(f.label));
+          const regular = all.filter(f => !f.label || /^F\d+$/.test(f.label));
+          const remainingSlots = Math.max(2, perClipBudget - pinned.length);
+          const sampledRegular = sampleEvenly(regular, remainingSlots);
+          return [...sampledRegular, ...pinned].sort((a, b) => (a.time || 0) - (b.time || 0));
+        });
+        const totalSent = perClip.reduce((sum, arr) => sum + arr.length, 0);
+        return { perClip, totalSent, downsampled: true, perClipBudget };
+      }
+
       async function storeClipToStorage(clip, { silent = false } = {}) {
         clearError();
         const playerName = (playerNameInput.value || '').trim();
         if (!playerName || isTestPlayerName(playerName)) {
           if (!silent) {
-            showError('Enter a real Player Name (not "Test - Not Saved") in Step 1 to store clips in a player folder.');
+            showError('Enter a real Player Name (not "Test - Not Saved") in Step 1 to save clips to storage.');
           }
           return false;
         }
         try {
           if (!clip.frames || clip.frames.length === 0) {
-            await extractKeyframesOffscreen(clip, clip.sampleCount || state.sampleCount);
+            if (clip.url) {
+              await extractKeyframesOffscreen(clip, clip.sampleCount || state.sampleCount);
+            }
           }
+          const clipTag = (clip.tag || '').trim();
+          const clipNote = (clip.note || '').trim();
+
+          // In-place update if this clip came from storage (no duplicates!)
+          const existingRecord = clip.storedSessionId
+            ? cachedSessions.find(s => s.id === clip.storedSessionId)
+            : null;
+
+          if (existingRecord) {
+            const updatedRecord = {
+              ...existingRecord,
+              playerName,
+              sessionTag: clipTag,
+              note: clipNote,
+              role: state.role,
+              handedness: handednessSelect.value,
+              style: styleSelect.value,
+              clipsMeta: (existingRecord.clipsMeta && existingRecord.clipsMeta.length > 0)
+                ? existingRecord.clipsMeta.map((cm, i) => i === 0 ? { ...cm, name: clipTag || cm.name, angle: clip.angle || cm.angle } : cm)
+                : [{ name: clipTag || clip.name, angle: clip.angle || 'Auto-detect', duration: clip.duration || 0, frames: clip.frames }],
+              synced: false
+            };
+            if (updatedRecord.report && updatedRecord.report._meta) {
+              updatedRecord.report._meta.sessionTag = clipTag;
+              updatedRecord.report._meta.playerName = playerName;
+            }
+            await putSession(updatedRecord);
+            await refreshSavedCount();
+            if (supabaseClient) {
+              await pushSessionToSupabase(updatedRecord);
+            }
+            if (!silent) {
+              renderStagingArea();
+              showToast(`✓ Updated "${clipTag || existingRecord.fileStamp || 'Clip'}" in storage (no duplicate)`);
+            }
+            return true;
+          }
+
           const nowIso = new Date().toISOString();
           const fileStamp = formatFileTimestamp(new Date(nowIso));
-          const clipTag = (clip.tag || '').trim();
           const speedInfo = computeClipSpeed(clip);
           const firstFrame = clip.thumbnail || clip.frames?.[0]?.dataUrl || null;
           const clipsMeta = [{
@@ -6493,7 +6672,7 @@
             measuredSpeed: speedInfo.valid ? `${speedInfo.kmh.toFixed(1)} km/h (${speedInfo.mph.toFixed(1)} mph)` : null,
             thumbnail: firstFrame,
             clipsMeta,
-            note: (clip.note || '').trim(),
+            note: clipNote,
             includeVideo: false,
             videoBlobs: [],
             hasAnalysis: false,
@@ -6505,6 +6684,8 @@
             await pushSessionToSupabase(record);
           }
           clip.storedSessionId = record.id;
+          clip.storedSavedAt = nowIso;
+          clip.storedFileStamp = fileStamp;
           if (!silent) {
             renderStagingArea();
             showToast(`✓ Saved "${clipTag || 'Clip'}" to storage (${playerName} / ${state.role})`);
@@ -6516,7 +6697,7 @@
         }
       }
 
-      async function storeJoinedClipsToStorage(clips, combinedNote = '') {
+      async function storeJoinedClipsToStorage(clips, combinedNote = '', customTag = '') {
         clearError();
         const playerName = (playerNameInput.value || '').trim();
         if (!playerName || isTestPlayerName(playerName)) {
@@ -6525,19 +6706,20 @@
         }
         try {
           for (const clip of clips) {
-            if (!clip.frames || clip.frames.length === 0) {
+            if ((!clip.frames || clip.frames.length === 0) && clip.url) {
               await extractKeyframesOffscreen(clip, clip.sampleCount || state.sampleCount);
             }
           }
           const nowIso = new Date().toISOString();
           const fileStamp = formatFileTimestamp(new Date(nowIso));
-          const combinedTag = clips.map((c, i) => (c.tag || '').trim() || `Clip ${i + 1}`).join(' + ');
-          const firstFrame = clips[0]?.thumbnail || clips[0]?.frames?.[0]?.dataUrl || null;
+          const combinedTag = (customTag || '').trim() || clips.map((c, i) => (c.tag || '').trim() || `Clip ${i + 1}`).join(' + ');
+          const { perClip } = budgetFramesForClips(clips, 48);
+          const firstFrame = clips[0]?.thumbnail || perClip[0]?.[0]?.dataUrl || null;
           const clipsMeta = clips.map((c, i) => ({
             name: (c.tag || '').trim() || `Clip ${i + 1} (${c.name})`,
             angle: c.angle || 'Auto-detect',
             duration: (c.trimEnd || c.duration || 0) - (c.trimStart || 0),
-            frames: c.frames
+            frames: perClip[i] || c.frames || []
           }));
           const record = {
             id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -6561,9 +6743,8 @@
           if (supabaseClient) {
             await pushSessionToSupabase(record);
           }
-          clips.forEach(c => { c.storedSessionId = record.id; });
           renderStagingArea();
-          showToast(`✓ Saved ${clips.length} joined clips to storage (${playerName})`);
+          showToast(`✓ Saved ${clips.length} joined clips as new entry "${combinedTag}"`);
           return true;
         } catch (err) {
           showError(`Could not save joined clips: ${err.message}`);
@@ -6587,6 +6768,12 @@
           if (joinedClipsTitle && selectedCount >= 2) {
             const labels = selectedClips.map(c => (c.tag || '').trim() || `Clip #${clips.indexOf(c) + 1}`).join(' + ');
             joinedClipsTitle.textContent = `🔗 Joined Clips (${selectedCount}): ${labels}`;
+          }
+          if (joinedFrameBudgetInfo && selectedCount >= 2) {
+            const budget = budgetFramesForClips(selectedClips, 48);
+            joinedFrameBudgetInfo.textContent = budget.downsampled
+              ? `⚡ Smart frame budget: sending ${budget.totalSent} frames across ${selectedCount} clips (~${budget.perClipBudget}/clip + all pins)`
+              : `🎞️ Sending all ${budget.totalSent} frames across ${selectedCount} clips`;
           }
         }
         if (analyzeSelectedClipsBtn) {
@@ -6623,8 +6810,10 @@
           const playPill = document.createElement('span');
           playPill.className = 'staged-clip-play-pill';
           playPill.textContent = '▶ Play Video';
-          playOverlay.appendChild(playPill);
-          preview.appendChild(playOverlay);
+          if (clip.url) {
+            playOverlay.appendChild(playPill);
+            preview.appendChild(playOverlay);
+          }
 
           const topBadges = document.createElement('div');
           topBadges.className = 'staged-clip-preview-badges';
@@ -6649,8 +6838,12 @@
 
           const winChip = document.createElement('span');
           winChip.className = 'clip-window-chip';
-          const durSec = Math.max(0.1, (clip.trimEnd || clip.duration || 0) - (clip.trimStart || 0));
-          winChip.textContent = `${(clip.trimStart || 0).toFixed(1)}s–${(clip.trimEnd || 0).toFixed(1)}s (${durSec.toFixed(1)}s)`;
+          if (clip.fromStorage) {
+            winChip.textContent = `📁 ${clip.storedFileStamp || 'Stored'}`;
+          } else {
+            const durSec = Math.max(0.1, (clip.trimEnd || clip.duration || 0) - (clip.trimStart || 0));
+            winChip.textContent = `${(clip.trimStart || 0).toFixed(1)}s–${(clip.trimEnd || 0).toFixed(1)}s (${durSec.toFixed(1)}s)`;
+          }
 
           topBadges.append(selectLbl, winChip);
           preview.appendChild(topBadges);
@@ -6846,32 +7039,37 @@
             pinTag.textContent = `📌 ${p.label.replace('EXACT ', '')} ${p.time.toFixed(2)}s`;
             pinsWrap.appendChild(pinTag);
           });
-          if (clip.storedSessionId) {
+          if (clip.fromStorage) {
+            const fromStorageBadge = document.createElement('span');
+            fromStorageBadge.className = 'badge badge-pitch';
+            fromStorageBadge.textContent = '📁 From Storage';
+            pinsWrap.appendChild(fromStorageBadge);
+          } else if (clip.storedSessionId) {
             const storedBadge = document.createElement('span');
             storedBadge.className = 'badge badge-green';
             storedBadge.textContent = '💾 Saved';
             pinsWrap.appendChild(storedBadge);
           }
-          if (clip.analyzedSessionId) {
+          if (clip.storedHasAnalysis || clip.analyzedSessionId) {
             const analyzedBadge = document.createElement('span');
             analyzedBadge.className = 'badge badge-blue';
-            analyzedBadge.textContent = '✨ Analyzed';
+            analyzedBadge.textContent = clip.storedHasAnalysis ? '✨ Has Report' : '✨ Analyzed';
             pinsWrap.appendChild(analyzedBadge);
           }
 
-          // Primary Per-Clip Actions: Analyze with AI & Save to Storage
+          // Primary Per-Clip Actions: Analyze with AI & Save/Update in Storage
           const actions = document.createElement('div');
           actions.className = 'staged-clip-actions';
 
           const analyzeClipBtn = document.createElement('button');
           analyzeClipBtn.type = 'button';
           analyzeClipBtn.className = 'btn-primary';
-          analyzeClipBtn.textContent = '✨ Analyze with AI';
+          analyzeClipBtn.textContent = clip.storedHasAnalysis ? '🔄 Re-Analyze with AI' : '✨ Analyze with AI';
           analyzeClipBtn.addEventListener('click', () => runAnalysis(null, [clip]));
 
           const storeClipBtn = document.createElement('button');
           storeClipBtn.type = 'button';
-          storeClipBtn.textContent = clip.storedSessionId ? '✓ Saved (Save Again)' : '💾 Save to Storage';
+          storeClipBtn.textContent = clip.storedSessionId ? '💾 Update in Storage' : '💾 Save to Storage';
           storeClipBtn.addEventListener('click', async () => {
             storeClipBtn.disabled = true;
             storeClipBtn.textContent = '⏳ Saving...';
@@ -6881,23 +7079,32 @@
 
           actions.append(analyzeClipBtn, storeClipBtn);
 
-          // Secondary row: Re-cut & Remove
+          // Secondary row: Re-cut (only when raw video is loaded) & Remove from Staging
           const secRow = document.createElement('div');
           secRow.className = 'staged-clip-secondary-actions';
-          const recutBtn = document.createElement('button');
-          recutBtn.type = 'button';
-          recutBtn.className = 'btn-sm btn-ghost';
-          recutBtn.textContent = '✂️ Re-cut / Pins';
-          recutBtn.addEventListener('click', () => recutStagedClip(clip));
+          if (clip.url) {
+            const recutBtn = document.createElement('button');
+            recutBtn.type = 'button';
+            recutBtn.className = 'btn-sm btn-ghost';
+            recutBtn.textContent = '✂️ Re-cut / Pins';
+            recutBtn.addEventListener('click', () => recutStagedClip(clip));
+            secRow.appendChild(recutBtn);
+          } else {
+            const spacer = document.createElement('span');
+            spacer.className = 'help-text';
+            spacer.style.fontSize = '0.7rem';
+            spacer.textContent = 'Stored frames';
+            secRow.appendChild(spacer);
+          }
 
           const delBtn = document.createElement('button');
           delBtn.type = 'button';
           delBtn.className = 'btn-sm btn-ghost';
           delBtn.style.color = 'var(--danger)';
-          delBtn.textContent = '🗑️ Delete';
+          delBtn.textContent = clip.fromStorage ? '✕ Remove from Staging' : '🗑️ Delete';
           delBtn.addEventListener('click', () => removeStagedClip(clip.id));
 
-          secRow.append(recutBtn, delBtn);
+          secRow.appendChild(delBtn);
 
           body.append(tagRow, clipNoteInput, metaRow);
           if (pinsWrap.childNodes.length > 0) body.appendChild(pinsWrap);
@@ -7458,11 +7665,15 @@
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
       }
 
-      async function runAnalysis(storedFramesOverride = null, clipsOverride = null, notesOverride = null) {
+      async function runAnalysis(storedFramesOverride = null, clipsOverride = null, notesOverride = null, customTagOverride = null) {
         clearError();
-        const targetClips = Array.isArray(clipsOverride) && clipsOverride.length > 0
+        const rawTargetClips = Array.isArray(clipsOverride) && clipsOverride.length > 0
           ? clipsOverride
           : state.clips;
+        // Sort chronologically when joining stored clips so AI sees progression in order
+        const targetClips = rawTargetClips.length > 1
+          ? [...rawTargetClips].sort((a, b) => new Date(a.storedSavedAt || 0) - new Date(b.storedSavedAt || 0))
+          : rawTargetClips;
         const effectiveStoredFrames = (Array.isArray(storedFramesOverride) && storedFramesOverride.length > 0)
           ? storedFramesOverride
           : (targetClips.length === 0 && state.loadedStoredFrames.length > 0 ? state.loadedStoredFrames : null);
@@ -7477,7 +7688,7 @@
         }
 
         if (!usingStoredFrames && targetClips.length === 0) {
-          showError('Please cut at least one clip into Staging first (or open 📁 Folders to load stored frames).');
+          showError('Please cut at least one clip into Staging first (or open 📁 Folders to send stored clips to Staging).');
           return;
         }
 
@@ -7490,11 +7701,12 @@
         setStep('report');
         setLoading(true, 'Preparing video frames...', usingStoredFrames
           ? `Sending ${effectiveStoredFrames.length} stored video frames to ${state.model}.`
-          : `Extracting biomechanical sequences across ${targetClips.length} clip${targetClips.length > 1 ? 's' : ''}.`);
+          : `Preparing biomechanical sequences across ${targetClips.length} clip${targetClips.length > 1 ? 's' : ''}.`);
 
         try {
           const isMultiClip = !usingStoredFrames && targetClips.length > 1;
           const parts = [{ text: buildPrompt(targetClips, notesOverride) }];
+          let budgetedPerClip = null;
 
           if (usingStoredFrames) {
             const storedAngleLines = [];
@@ -7524,29 +7736,35 @@
           } else {
             for (let i = 0; i < targetClips.length; i++) {
               const clip = targetClips[i];
-              if (!clip.frames || clip.frames.length === 0) {
+              if ((!clip.frames || clip.frames.length === 0) && clip.url) {
                 setLoading(true, `Sampling Clip ${i + 1} of ${targetClips.length}...`, `Extracting ${clip.sampleCount || state.sampleCount} frames from ${clip.tag || clip.name}.`);
                 await extractKeyframesOffscreen(clip, clip.sampleCount || state.sampleCount);
               }
             }
 
-            const totalFrames = targetClips.reduce((sum, c) => sum + c.frames.length, 0);
+            const budget = budgetFramesForClips(targetClips, 48);
+            budgetedPerClip = budget.perClip;
+            const totalFrames = budget.totalSent;
             const subtitle = isMultiClip
-              ? `Sending ${totalFrames} frames across ${targetClips.length} camera angles to ${state.model}.`
+              ? `Sending ${totalFrames} frames across ${targetClips.length} clips${budget.downsampled ? ' (smart frame budget + all pins)' : ''} to ${state.model}.`
               : `Sending ${totalFrames} timestamped frames to ${state.model}.`;
             setLoading(true, 'Analyzing biomechanical sequences...', subtitle);
 
             targetClips.forEach((clip, cIdx) => {
+              const framesToSend = budgetedPerClip[cIdx] || clip.frames || [];
+              const datePart = clip.storedFileStamp ? ` | Recorded: ${clip.storedFileStamp}` : '';
               const winDesc = clip.trimCustom
                 ? `${(clip.trimStart || 0).toFixed(2)}s–${(clip.trimEnd || 0).toFixed(2)}s`
-                : `Full clip (${(clip.duration || 0).toFixed(2)}s)`;
+                : clip.fromStorage
+                  ? `Stored clip (${framesToSend.length}f)`
+                  : `Full clip (${(clip.duration || 0).toFixed(2)}s)`;
               const clipLabel = clip.tag ? `${clip.tag} (${clip.name})` : clip.name;
               parts.push({
-                text: `=== CLIP ${cIdx + 1} of ${targetClips.length}: "${clipLabel}" | Camera Angle: ${clip.angle} | Window: ${winDesc} ===`
+                text: `=== CLIP ${cIdx + 1} of ${targetClips.length}: "${clipLabel}"${datePart} | Camera Angle: ${clip.angle} | Window: ${winDesc} ===`
               });
-              clip.frames.forEach((f, fIdx) => {
+              framesToSend.forEach((f, fIdx) => {
                 const poseNote = f.poseSummary ? ` | Measured Pose: ${f.poseSummary}` : '';
-                parts.push({ text: `Clip ${cIdx + 1} (${clip.angle}) — Frame ${fIdx + 1} (${f.label}) at ${f.time.toFixed(2)}s${poseNote}:` });
+                parts.push({ text: `Clip ${cIdx + 1} (${clip.angle}) — Frame ${fIdx + 1} (${f.label}) at ${Number(f.time || 0).toFixed(2)}s${poseNote}:` });
                 parts.push({
                   inlineData: {
                     mimeType: 'image/jpeg',
@@ -7592,9 +7810,11 @@
           if (!rawText) throw new Error('Gemini returned an empty response. Try again.');
 
           const speedInfo = targetClips.map(c => computeClipSpeed(c)).find(s => s.valid);
-          const sessionTag = usingStoredFrames
-            ? (state.loadedStoredLabel || '')
-            : targetClips.map(c => (c.tag || '').trim()).filter(Boolean).join(' + ');
+          const sessionTag = (customTagOverride && customTagOverride.trim())
+            ? customTagOverride.trim()
+            : usingStoredFrames
+              ? (state.loadedStoredLabel || '')
+              : targetClips.map(c => (c.tag || '').trim()).filter(Boolean).join(' + ');
           const nowIso = new Date().toISOString();
           const autoFileStamp = formatFileTimestamp(new Date(nowIso));
           const isTestMode = isTestPlayerName(playerName);
@@ -7614,7 +7834,7 @@
             source: isTestMode
               ? `Test Mode (Not Saved) · ${state.model}`
               : isMultiClip
-                ? `Auto-Saved · ${targetClips.length} Angles (${state.model})`
+                ? `Auto-Saved · ${targetClips.length} Joined Clips (${state.model})`
                 : `Auto-Saved (${state.model})`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           };
@@ -7622,7 +7842,7 @@
           const currentFramesSnapshot = usingStoredFrames
             ? effectiveStoredFrames
             : targetClips.flatMap((c, ci) =>
-                c.frames.map(f => ({
+                ((budgetedPerClip && budgetedPerClip[ci]) || c.frames || []).map(f => ({
                   time: f.time,
                   dataUrl: f.dataUrl,
                   label: targetClips.length > 1 ? `C${ci + 1} ${f.label}` : f.label,
@@ -7634,10 +7854,27 @@
           renderReport(parsed);
 
           if (!isTestMode) {
-            const savedId = await autoSaveAnalysisSession(parsed, playerName, sessionTag, autoFileStamp, nowIso, targetClips);
-            targetClips.forEach(c => { c.analyzedSessionId = savedId || 'done'; });
+            // Upgrade in-place ONLY if analyzing a single frames-only clip loaded from storage (never overwrite existing reports or multi-clip originals!)
+            const upgradeExistingId = (!usingStoredFrames && targetClips.length === 1 && targetClips[0].fromStorage && !targetClips[0].storedHasAnalysis && targetClips[0].storedSessionId)
+              ? targetClips[0].storedSessionId
+              : null;
+            const effectiveNote = (notesOverride && notesOverride.trim())
+              ? notesOverride.trim()
+              : (targetClips.length === 1 ? (targetClips[0].note || '').trim() : '');
+            const savedId = await autoSaveAnalysisSession(parsed, playerName, sessionTag, autoFileStamp, nowIso, targetClips, {
+              upgradeSessionId: upgradeExistingId,
+              note: effectiveNote
+            });
+            targetClips.forEach(c => {
+              c.analyzedSessionId = savedId || 'done';
+              if (upgradeExistingId && c.storedSessionId === upgradeExistingId) {
+                c.storedHasAnalysis = true;
+              }
+            });
             renderStagingArea();
-            showToast(`✓ Auto-saved to ${playerName} / ${state.role}`);
+            showToast(upgradeExistingId
+              ? `✓ Attached AI report to existing stored clip (${playerName})`
+              : `✓ Auto-saved to ${playerName} / ${state.role}`);
           } else {
             targetClips.forEach(c => { c.analyzedSessionId = 'test'; });
             renderStagingArea();
@@ -9850,21 +10087,27 @@ create policy "Allow anon read/write for personal lab"
         }
       }
 
-      async function autoSaveAnalysisSession(reportObj, playerName, sessionTag, fileStamp, savedAtIso, targetClips = state.clips) {
+      async function autoSaveAnalysisSession(reportObj, playerName, sessionTag, fileStamp, savedAtIso, targetClips = state.clips, opts = {}) {
         const refFrames = reportObj._referenceFrames || [];
         const firstFrame = targetClips[0]?.thumbnail || targetClips[0]?.frames?.[0]?.dataUrl || refFrames[0]?.dataUrl || null;
+        const { perClip } = budgetFramesForClips(targetClips, 48);
         const clipsMeta = targetClips.length > 0
-          ? targetClips.map(c => ({
+          ? targetClips.map((c, idx) => ({
               name: c.tag || c.name,
               angle: c.angle,
               duration: (c.trimEnd || c.duration || 0) - (c.trimStart || 0),
-              frames: c.frames
+              frames: perClip[idx] || c.frames
             }))
           : (refFrames.length > 0 ? [{ name: 'Re-analyzed Stored Frames', angle: '', duration: 0, frames: refFrames }] : []);
+
+        const existingUpgrade = opts.upgradeSessionId
+          ? cachedSessions.find(s => s.id === opts.upgradeSessionId)
+          : null;
+
         const record = {
-          id: `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          savedAt: savedAtIso || new Date().toISOString(),
-          fileStamp: fileStamp || formatFileTimestamp(),
+          id: existingUpgrade ? existingUpgrade.id : `sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          savedAt: existingUpgrade ? existingUpgrade.savedAt : (savedAtIso || new Date().toISOString()),
+          fileStamp: existingUpgrade ? existingUpgrade.fileStamp : (fileStamp || formatFileTimestamp()),
           playerName: playerName.trim(),
           sessionTag: (sessionTag || '').trim(),
           role: reportObj._meta?.role || state.role,
@@ -9872,10 +10115,12 @@ create policy "Allow anon read/write for personal lab"
           style: reportObj._meta?.style || styleSelect.value,
           thumbnail: firstFrame,
           clipsMeta,
+          note: (opts.note || existingUpgrade?.note || '').trim(),
           includeVideo: false,
           videoBlobs: [],
           hasAnalysis: true,
-          report: reportObj
+          report: reportObj,
+          synced: false
         };
         try {
           await putSession(record);
@@ -10476,6 +10721,13 @@ create policy "Allow anon read/write for personal lab"
               openBtn.textContent = 'Open';
               openBtn.addEventListener('click', () => loadSavedSession(s));
 
+              const stageOneBtn = document.createElement('button');
+              stageOneBtn.type = 'button';
+              stageOneBtn.className = 'btn-sm';
+              stageOneBtn.textContent = '📥 Stage';
+              stageOneBtn.title = 'Send this clip to Step 2 Staging to browse frames, edit notes, or re-run AI';
+              stageOneBtn.addEventListener('click', () => sendSessionsToStaging([s]));
+
               const movePlayerBtn = document.createElement('button');
               movePlayerBtn.type = 'button';
               movePlayerBtn.className = 'btn-sm btn-ghost';
@@ -10547,7 +10799,7 @@ create policy "Allow anon read/write for personal lab"
                 renderSavedSessionsList();
               });
 
-              actions.append(openBtn, movePlayerBtn, tagBtn, noteBtn, delBtn);
+              actions.append(openBtn, stageOneBtn, movePlayerBtn, tagBtn, noteBtn, delBtn);
               row.append(info, actions);
               filesWrap.appendChild(row);
             });
@@ -11499,6 +11751,10 @@ create policy "Allow anon read/write for personal lab"
           compareBar.classList.remove('active');
           runCompareBtn.disabled = true;
           if (openSideBySideBtn) openSideBySideBtn.disabled = true;
+          if (sendSelectedToStagingBtn) {
+            sendSelectedToStagingBtn.disabled = true;
+            sendSelectedToStagingBtn.textContent = '📥 Send to Staging';
+          }
           if (loadSelectedReportsBtn) {
             loadSelectedReportsBtn.disabled = true;
             loadSelectedReportsBtn.textContent = '📂 Open in Report';
@@ -11511,6 +11767,10 @@ create policy "Allow anon read/write for personal lab"
           .filter(Boolean)
           .sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
 
+        if (sendSelectedToStagingBtn) {
+          sendSelectedToStagingBtn.disabled = selected.length === 0;
+          sendSelectedToStagingBtn.textContent = `📥 Send ${selected.length} to Staging`;
+        }
         if (loadSelectedReportsBtn) {
           loadSelectedReportsBtn.disabled = selected.length === 0;
           loadSelectedReportsBtn.textContent = `📂 Open ${selected.length} in Report`;
@@ -11518,16 +11778,16 @@ create policy "Allow anon read/write for personal lab"
 
         if (selected.length === 1) {
           const s1 = selected[0];
-          compareBarTitle.textContent = `☑️ Selected 1 (${s1.playerName} · ${s1.fileStamp || ''}) — tick more to open together or pick 2 to compare`;
+          compareBarTitle.textContent = `☑️ Selected 1 (${s1.playerName} · ${s1.fileStamp || ''}) — send to Staging, or tick more for joint analysis`;
           runCompareBtn.disabled = true;
           if (openSideBySideBtn) openSideBySideBtn.disabled = true;
         } else if (selected.length === 2) {
           const [a, b] = selected;
-          compareBarTitle.textContent = `⚖️ Selected 2: ${a.playerName} (${a.fileStamp || 'Earlier'})  →  ${b.playerName} (${b.fileStamp || 'Later'})`;
+          compareBarTitle.textContent = `☑️ Selected 2: ${a.playerName} (${a.fileStamp || 'Earlier'}) → ${b.playerName} (${b.fileStamp || 'Later'})`;
           runCompareBtn.disabled = false;
           if (openSideBySideBtn) openSideBySideBtn.disabled = false;
         } else {
-          compareBarTitle.textContent = `📂 Selected ${selected.length} files — tap "Open ${selected.length} in Report" to toggle between all of them (pick 2 for Compare)`;
+          compareBarTitle.textContent = `☑️ Selected ${selected.length} clips — tap "Send ${selected.length} to Staging" to join & run AI with one set of notes`;
           runCompareBtn.disabled = true;
           if (openSideBySideBtn) openSideBySideBtn.disabled = true;
         }
