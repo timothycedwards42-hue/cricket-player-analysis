@@ -1543,12 +1543,12 @@
 
     .segmented {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       padding: 3px;
-      gap: 3px;
+      gap: 4px;
     }
 
     .segmented button {
@@ -9288,6 +9288,7 @@ create policy "Allow anon read/write for personal lab"
             };
             await putSession(merged);
           }
+          dbPlayerNames = [];
           await refreshSavedCount();
           if (historyDialog.open) renderSavedSessionsList();
           supabaseStatusText.textContent = pushErrors.length > 0
@@ -9305,8 +9306,9 @@ create policy "Allow anon read/write for personal lab"
         try {
           const { data, error } = await supabaseClient
             .from(SUPABASE_TABLE)
-            .select('player_name')
-            .neq('discipline', 'custom_drills');
+            .select('player_name, discipline')
+            .neq('discipline', 'custom_drills')
+            .neq('discipline', 'training_plan');
           if (!error && Array.isArray(data)) {
             dbPlayerNames = data
               .map(r => (r.player_name || '').trim())
@@ -9333,15 +9335,26 @@ create policy "Allow anon read/write for personal lab"
 
       function updatePlayerAutocomplete() {
         playerNameList.textContent = '';
-        const names = new Set(['Test - Not Saved']);
-        dbPlayerNames.forEach(n => names.add(n));
+        // Case-insensitive deduplicated map (preserves nicest capitalization)
+        const namesByLower = new Map();
+        const addName = (raw) => {
+          const clean = (raw || '').trim();
+          if (!clean || clean === '__custom_drills__' || isTestPlayerName(clean)) return;
+          const key = clean.toLowerCase();
+          if (!namesByLower.has(key)) namesByLower.set(key, clean);
+        };
+
+        // Use local synced sessions as source of truth; only merge dbPlayerNames if local cache is empty
         cachedSessions.forEach(s => {
           if (s.role === 'custom_drills') return;
-          if (s.playerName && !isTestPlayerName(s.playerName)) {
-            names.add(s.playerName.trim());
-          }
+          if (s.role === 'training_plan' && (!Array.isArray(s.planDrills) || s.planDrills.length === 0)) return;
+          addName(s.playerName);
         });
-        const sortedNames = Array.from(names).sort((a, b) => a === 'Test - Not Saved' ? -1 : b === 'Test - Not Saved' ? 1 : a.localeCompare(b));
+        if (cachedSessions.length === 0) {
+          dbPlayerNames.forEach(addName);
+        }
+
+        const sortedNames = ['Test - Not Saved', ...Array.from(namesByLower.values()).sort((a, b) => a.localeCompare(b))];
         sortedNames.forEach(name => {
           const opt = document.createElement('option');
           opt.value = name;
@@ -9689,6 +9702,15 @@ create policy "Allow anon read/write for personal lab"
           }
           await putSession(s);
           if (supabaseClient) await pushSessionToSupabase(s);
+        }
+        // Also rename any cloud rows under the old player name that may not be in local cache
+        if (supabaseClient) {
+          try {
+            await supabaseClient
+              .from(SUPABASE_TABLE)
+              .update({ player_name: cleanNew })
+              .eq('player_name', cleanOld);
+          } catch {}
         }
 
         // 2. Move / merge training plan record (keyed by player name)
