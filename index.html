@@ -4137,6 +4137,20 @@
                 <span class="help-text" id="reportTimestamp"></span>
               </div>
             </div>
+            <div id="reportMetaEditor" style="display:none; flex-direction:column; gap:8px; background:var(--bg); border:1px solid var(--border-strong); border-radius:var(--radius-sm); padding:10px 12px;">
+              <div class="field" style="gap:4px;">
+                <label for="reportEditTagInput" style="font-size:0.74rem;">🏷️ Session Tag</label>
+                <input type="text" id="reportEditTagInput" placeholder="e.g. Cover Drive, Backfoot Pull, Yorker, Net Session" autocomplete="off">
+              </div>
+              <div class="field" style="gap:4px;">
+                <label for="reportEditNotesInput" style="font-size:0.74rem;">📝 Analysis Instructions / Coaching Notes</label>
+                <textarea id="reportEditNotesInput" rows="3" placeholder="Add coaching notes or analysis instructions..."></textarea>
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:6px;">
+                <button type="button" class="btn-sm btn-ghost" id="cancelReportMetaBtn">Cancel</button>
+                <button type="button" class="btn-sm btn-primary" id="saveReportMetaBtn">💾 Save Changes</button>
+              </div>
+            </div>
             <div id="reportInstructionsBox" style="display:none; background:rgba(79,195,247,0.08); border:1px solid rgba(79,195,247,0.28); border-radius:6px; padding:7px 10px; font-size:0.78rem; color:#d8ecff; line-height:1.45;"></div>
             <p id="reportOverview" style="font-size:0.86rem; color:#e7eaf4;"></p>
           </div>
@@ -6060,20 +6074,48 @@
           }]);
         };
         analyzeStoredFramesBtn?.addEventListener('click', sendCurrentReportToStaging);
-        document.getElementById('editReportMetaBtn')?.addEventListener('click', async () => {
+        const reportMetaEditor = document.getElementById('reportMetaEditor');
+        const reportEditTagInput = document.getElementById('reportEditTagInput');
+        const reportEditNotesInput = document.getElementById('reportEditNotesInput');
+        const editReportMetaBtn = document.getElementById('editReportMetaBtn');
+
+        editReportMetaBtn?.addEventListener('click', () => {
+          if (!state.currentReport || !reportMetaEditor) return;
+          const isOpen = reportMetaEditor.style.display === 'flex';
+          if (isOpen) {
+            reportMetaEditor.style.display = 'none';
+            editReportMetaBtn.classList.remove('btn-active');
+            return;
+          }
+          const activeSess = state.activeLoadedSessionId
+            ? cachedSessions.find(s => s.id === state.activeLoadedSessionId)
+            : null;
+          const fallbackClipNotes = (activeSess?.clipsMeta || [])
+            .map((c, i) => (c.notes || '').trim() ? ((activeSess.clipsMeta.length > 1 ? `[Clip ${i + 1}] ` : '') + (c.notes || '').trim()) : '')
+            .filter(Boolean)
+            .join(' · ');
+          if (reportEditTagInput) {
+            reportEditTagInput.value = state.currentReport._meta?.sessionTag || activeSess?.sessionTag || '';
+          }
+          if (reportEditNotesInput) {
+            reportEditNotesInput.value = state.currentReport._meta?.coachNotes || activeSess?.note || fallbackClipNotes || '';
+          }
+          reportMetaEditor.style.display = 'flex';
+          editReportMetaBtn.classList.add('btn-active');
+          reportEditTagInput?.focus();
+        });
+        document.getElementById('cancelReportMetaBtn')?.addEventListener('click', () => {
+          if (reportMetaEditor) reportMetaEditor.style.display = 'none';
+          editReportMetaBtn?.classList.remove('btn-active');
+        });
+        document.getElementById('saveReportMetaBtn')?.addEventListener('click', async () => {
           if (!state.currentReport) return;
           if (!state.currentReport._meta) state.currentReport._meta = {};
           const activeSess = state.activeLoadedSessionId
             ? cachedSessions.find(s => s.id === state.activeLoadedSessionId)
             : null;
-          const curTag = state.currentReport._meta.sessionTag || activeSess?.sessionTag || '';
-          const curNotes = state.currentReport._meta.coachNotes || activeSess?.note || '';
-          const nextTag = prompt('Session Tag (e.g. Cover Drive, Backfoot Pull, Yorker):', curTag);
-          if (nextTag === null) return;
-          const nextNotes = prompt('Analysis Instructions / Coaching Notes:', curNotes);
-          if (nextNotes === null) return;
-          const cleanTag = nextTag.trim();
-          const cleanNotes = nextNotes.trim();
+          const cleanTag = (reportEditTagInput?.value || '').trim();
+          const cleanNotes = (reportEditNotesInput?.value || '').trim();
           state.currentReport._meta.sessionTag = cleanTag;
           state.currentReport._meta.coachNotes = cleanNotes;
           if (activeSess) {
@@ -6091,8 +6133,10 @@
             if (supabaseClient) pushSessionToSupabase(activeSess).catch(() => {});
             renderLoadedReportsBar();
           }
+          if (reportMetaEditor) reportMetaEditor.style.display = 'none';
+          editReportMetaBtn?.classList.remove('btn-active');
           renderReport(state.currentReport);
-          showToast('✓ Updated Tag & Coaching Notes');
+          showToast('✓ Saved Tag & Coaching Notes');
         });
         document.getElementById('sendReportToStagingBtn')?.addEventListener('click', sendCurrentReportToStaging);
         document.getElementById('emptyBatterDemoBtn')?.addEventListener('click', () => loadDemo('batting'));
