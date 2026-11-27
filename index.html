@@ -3911,6 +3911,14 @@
                     </div>
                   </div>
                 </div>
+                <div id="savedFramePathParts" style="display:none; align-items:center; gap:5px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:5px;">
+                  <span class="phase-pin-label" style="font-size:0.7rem;">📈 Track:</span>
+                  <button type="button" class="btn-sm" data-path="head" title="Head stability &amp; alignment path">🟡 Head</button>
+                  <button type="button" class="btn-sm" data-path="rhand" title="Right hand / wrist swing or bowling arm path">🟢 R-Hand</button>
+                  <button type="button" class="btn-sm" data-path="lhand" title="Left hand / wrist path">🟣 L-Hand</button>
+                  <button type="button" class="btn-sm" data-path="hips" title="Hip center movement &amp; drive path">🔵 Hips</button>
+                  <button type="button" class="btn-sm" data-path="feet" title="Ankle / foot stride path">🔴 Feet</button>
+                </div>
               </div>
             </div>
             <div class="filmstrip" id="savedFramesStrip"></div>
@@ -9320,6 +9328,13 @@ For each improvement's diagram (top-down net/pitch view):
         gridCenterX: 0.5,
         gridCenterY: 0.5,
         pathsEnabled: false,
+        pathTracks: (() => {
+          try {
+            const saved = JSON.parse(localStorage.getItem('cpa_path_tracks') || 'null');
+            if (saved && typeof saved === 'object') return { head: true, rhand: true, lhand: false, hips: false, feet: false, ...saved };
+          } catch {}
+          return { head: true, rhand: true, lhand: false, hips: false, feet: false };
+        })(),
         ghostEnabled: false,
         trailCount: 5,
         trailLandmarks: [], // array of landmark arrays from oldest -> current
@@ -9854,6 +9869,19 @@ For each improvement's diagram (top-down net/pitch view):
 
       function drawJointPathsOnCtx(ctx, lmListOldestToNewest, ox, oy, rw, rh) {
         if (!Array.isArray(lmListOldestToNewest) || lmListOldestToNewest.length < 2) return;
+        const enabled = savedFramePlayer.pathTracks || { head: true, rhand: true, lhand: false, hips: false, feet: false };
+        const maxJumpPx = Math.max(rw, rh) * 0.28; // reject MediaPipe single-frame teleport glitches
+
+        const getVisPt = (lm, idx) => {
+          const p = lm && lm[idx];
+          return (p && (p.visibility ?? 1) >= 0.45) ? p : null;
+        };
+        const getMidPt = (lm, aIdx, bIdx) => {
+          const a = getVisPt(lm, aIdx);
+          const b = getVisPt(lm, bIdx);
+          if (a && b) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          return a || b;
+        };
         const extractSeries = (getter) => lmListOldestToNewest.map(lm => {
           if (!lm) return null;
           const p = getter(lm);
@@ -9861,50 +9889,144 @@ For each improvement's diagram (top-down net/pitch view):
           return { x: ox + p.x * rw, y: oy + p.y * rh };
         });
 
-        const getVisPt = (lm, idx) => {
-          const p = lm[idx];
-          return (p && (p.visibility ?? 1) >= 0.35) ? p : null;
-        };
-        const getMidHip = (lm) => {
-          const a = getVisPt(lm, 23);
-          const b = getVisPt(lm, 24);
-          if (a && b) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-          return a || b;
+        // Break into clean continuous runs (splitting on null or impossible jump glitches) and lightly smooth
+        const buildCleanRuns = (rawPts) => {
+          const runs = [];
+          let cur = [];
+          for (let i = 0; i < rawPts.length; i++) {
+            const p = rawPts[i];
+            if (!p) {
+              if (cur.length >= 2) runs.push(cur);
+              cur = [];
+              continue;
+            }
+            if (cur.length > 0) {
+              const prev = cur[cur.length - 1];
+              const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
+              if (dist > maxJumpPx) {
+                if (cur.length >= 2) runs.push(cur);
+                cur = [p];
+                continue;
+              }
+            }
+            cur.push(p);
+          }
+          if (cur.length >= 2) runs.push(cur);
+          // 3-point weighted smoothing (0.25, 0.5, 0.25) preserving exact start & end points
+          return runs.map(run => run.map((pt, idx) => {
+            if (idx === 0 || idx === run.length - 1) return pt;
+            const prev = run[idx - 1];
+            const next = run[idx + 1];
+            return {
+              x: prev.x * 0.25 + pt.x * 0.5 + next.x * 0.25,
+              y: prev.y * 0.25 + pt.y * 0.5 + next.y * 0.25
+            };
+          }));
         };
 
-        const tracks = [
-          { name: 'Head', pts: extractSeries(lm => getVisPt(lm, 0)), rgb: '255, 183, 77' },      // Amber
-          { name: 'L-Hand', pts: extractSeries(lm => getVisPt(lm, 15)), rgb: '102, 187, 106' },  // Green
-          { name: 'R-Hand', pts: extractSeries(lm => getVisPt(lm, 16)), rgb: '129, 199, 132' },  // Bright Green
-          { name: 'Hips', pts: extractSeries(getMidHip), rgb: '79, 195, 247' }                   // Cyan
-        ];
+        const tracks = [];
+        if (enabled.head)  tracks.push({ name: 'Head',   pts: extractSeries(lm => getVisPt(lm, 0)),      rgb: '255, 193, 7' });   // Amber
+        if (enabled.rhand) tracks.push({ name: 'R-Hand', pts: extractSeries(lm => getVisPt(lm, 16)),     rgb: '76, 217, 100' });  // Crisp Green
+        if (enabled.lhand) tracks.push({ name: 'L-Hand', pts: extractSeries(lm => getVisPt(lm, 15)),     rgb: '186, 104, 200' }); // Violet
+        if (enabled.hips)  tracks.push({ name: 'Hips',   pts: extractSeries(lm => getMidPt(lm, 23, 24)), rgb: '79, 195, 247' });  // Cyan
+        if (enabled.feet)  tracks.push({ name: 'Feet',   pts: extractSeries(lm => getMidPt(lm, 27, 28)), rgb: '255, 112, 67' });  // Coral
+
+        if (tracks.length === 0) return;
 
         ctx.save();
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        const traceSmoothRun = (run) => {
+          ctx.beginPath();
+          ctx.moveTo(run[0].x, run[0].y);
+          if (run.length === 2) {
+            ctx.lineTo(run[1].x, run[1].y);
+          } else {
+            for (let i = 1; i < run.length - 1; i++) {
+              const midX = (run[i].x + run[i + 1].x) / 2;
+              const midY = (run[i].y + run[i + 1].y) / 2;
+              ctx.quadraticCurveTo(run[i].x, run[i].y, midX, midY);
+            }
+            const last = run[run.length - 1];
+            ctx.lineTo(last.x, last.y);
+          }
+        };
+
         tracks.forEach(tr => {
-          const total = tr.pts.length;
-          for (let i = 1; i < total; i++) {
-            const p0 = tr.pts[i - 1];
-            const p1 = tr.pts[i];
-            if (!p0 || !p1) continue;
-            const prog = i / (total - 1); // 0..1 (oldest -> newest)
-            const alpha = 0.22 + prog * 0.76;
-            const width = 1.6 + prog * 2.0;
-            ctx.strokeStyle = `rgba(${tr.rgb}, ${alpha.toFixed(2)})`;
-            ctx.lineWidth = width;
-            ctx.beginPath();
-            ctx.moveTo(p0.x, p0.y);
-            ctx.lineTo(p1.x, p1.y);
+          const runs = buildCleanRuns(tr.pts);
+          if (runs.length === 0) return;
+
+          runs.forEach((run, rIdx) => {
+            // Subtle dark halo for contrast on bright/busy backgrounds
+            traceSmoothRun(run);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.52)';
+            ctx.lineWidth = 5.2;
             ctx.stroke();
 
-            // Subtle waypoint dot
-            ctx.fillStyle = `rgba(${tr.rgb}, ${Math.min(1, alpha + 0.1).toFixed(2)})`;
-            ctx.beginPath();
-            ctx.arc(p1.x, p1.y, i === total - 1 ? 4.2 : 2.2, 0, Math.PI * 2);
-            ctx.fill();
-          }
+            // Gradient smooth broadcast arc (faded tail -> vivid head)
+            const first = run[0];
+            const last = run[run.length - 1];
+            const grad = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
+            grad.addColorStop(0, `rgba(${tr.rgb}, 0.25)`);
+            grad.addColorStop(1, `rgba(${tr.rgb}, 0.98)`);
+            traceSmoothRun(run);
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 3.0;
+            ctx.stroke();
+
+            // Hollow start ring on first run
+            if (rIdx === 0) {
+              ctx.beginPath();
+              ctx.arc(first.x, first.y, 3.6, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+              ctx.fill();
+              ctx.strokeStyle = `rgba(${tr.rgb}, 0.85)`;
+              ctx.lineWidth = 1.6;
+              ctx.stroke();
+            }
+
+            // Current-frame glowing dot + direction chevron + clean label pill on final run
+            if (rIdx === runs.length - 1) {
+              const prev = run[run.length - 2];
+              const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
+              const moveDist = Math.hypot(last.x - prev.x, last.y - prev.y);
+
+              ctx.beginPath();
+              ctx.arc(last.x, last.y, 5.0, 0, Math.PI * 2);
+              ctx.fillStyle = `rgb(${tr.rgb})`;
+              ctx.fill();
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+
+              // Small directional arrowhead if moving
+              if (moveDist > 4) {
+                const ax = last.x + Math.cos(angle) * 9;
+                const ay = last.y + Math.sin(angle) * 9;
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(ax - Math.cos(angle - 0.55) * 6, ay - Math.sin(angle - 0.55) * 6);
+                ctx.lineTo(ax - Math.cos(angle + 0.55) * 6, ay - Math.sin(angle + 0.55) * 6);
+                ctx.closePath();
+                ctx.fillStyle = `rgb(${tr.rgb})`;
+                ctx.fill();
+              }
+
+              // Compact label pill next to current point
+              ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
+              const tw = ctx.measureText(tr.name).width;
+              const lx = Math.min(ox + rw - tw - 12, Math.max(ox + 4, last.x + 10));
+              const ly = Math.min(oy + rh - 18, Math.max(oy + 14, last.y - 8));
+              ctx.fillStyle = 'rgba(10, 14, 22, 0.82)';
+              ctx.fillRect(lx - 4, ly - 10, tw + 8, 14);
+              ctx.strokeStyle = `rgba(${tr.rgb}, 0.8)`;
+              ctx.lineWidth = 1;
+              ctx.strokeRect(lx - 4, ly - 10, tw + 8, 14);
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(tr.name, lx, ly + 1);
+            }
+          });
         });
         ctx.restore();
       }
@@ -9947,9 +10069,31 @@ For each improvement's diagram (top-down net/pitch view):
         redrawSavedFrameOverlay();
       }
 
+      const savedFramePathParts = document.getElementById('savedFramePathParts');
+
+      function syncPathTrackButtons() {
+        document.querySelectorAll('#savedFramePathParts button[data-path]').forEach(btn => {
+          const key = btn.dataset.path;
+          btn.classList.toggle('btn-active', Boolean(savedFramePlayer.pathTracks?.[key]));
+        });
+      }
+      syncPathTrackButtons();
+      document.querySelectorAll('#savedFramePathParts button[data-path]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const key = btn.dataset.path;
+          savedFramePlayer.pathTracks[key] = !savedFramePlayer.pathTracks[key];
+          localStorage.setItem('cpa_path_tracks', JSON.stringify(savedFramePlayer.pathTracks));
+          syncPathTrackButtons();
+          redrawSavedFrameOverlay();
+        });
+      });
+
       function syncTrailCountVisibility() {
         if (savedFrameTrailCount) {
           savedFrameTrailCount.style.display = (savedFramePlayer.pathsEnabled || savedFramePlayer.ghostEnabled) ? 'inline-block' : 'none';
+        }
+        if (savedFramePathParts) {
+          savedFramePathParts.style.display = savedFramePlayer.pathsEnabled ? 'flex' : 'none';
         }
       }
 
