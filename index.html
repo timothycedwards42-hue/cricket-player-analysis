@@ -3913,7 +3913,7 @@
             <strong style="font-size:0.86rem; color:#b3e5fc;">🎞️ Side-by-Side 2-Video Compare (Same or Different Players)</strong>
             <button type="button" class="btn-sm btn-ghost" id="closeInlineSbsBtn">Hide ✕</button>
           </div>
-          <div class="sbs-grid">
+          <div class="sbs-grid" id="inlineSbsGrid">
             <!-- LEFT VIDEO -->
             <div class="sbs-pane">
               <div style="padding:6px 8px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; gap:6px; align-items:center;">
@@ -3928,6 +3928,7 @@
               </div>
               <div class="sbs-pane-bar">
                 <div class="btn-group">
+                  <button type="button" class="btn-sm" id="inlineSbsMarkSyncA" title="Mark this frame as Left video Impact/Release sync anchor">🎯 Sync A</button>
                   <button type="button" class="btn-sm" id="inlineSbsPrevA" title="Nudge Left video back 1 frame">◀</button>
                   <span id="inlineSbsLabelA" style="font-variant-numeric:tabular-nums;">0/0</span>
                   <button type="button" class="btn-sm" id="inlineSbsNextA" title="Nudge Left video forward 1 frame">▶</button>
@@ -3958,6 +3959,7 @@
               </div>
               <div class="sbs-pane-bar">
                 <div class="btn-group">
+                  <button type="button" class="btn-sm" id="inlineSbsMarkSyncB" title="Mark this frame as Right video Impact/Release sync anchor">🎯 Sync B</button>
                   <button type="button" class="btn-sm" id="inlineSbsPrevB" title="Nudge Right video back 1 frame">◀</button>
                   <span id="inlineSbsLabelB" style="font-variant-numeric:tabular-nums;">0/0</span>
                   <button type="button" class="btn-sm" id="inlineSbsNextB" title="Nudge Right video forward 1 frame">▶</button>
@@ -3975,10 +3977,17 @@
               </div>
             </div>
           </div>
+          <!-- INLINE ONION-SKIN OVERLAY STAGE -->
+          <div class="sbs-onion-stage" id="inlineSbsOnionStage">
+            <img id="inlineSbsOnionImgA" alt="Base video (Left)">
+            <img id="inlineSbsOnionImgB" alt="Overlay video (Right)" style="opacity:0.5;">
+            <canvas id="inlineSbsOnionCanvas"></canvas>
+          </div>
           <div style="display:flex; flex-direction:column; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px;">
             <div class="scrubber-row">
               <span class="help-text" style="white-space:nowrap;">Sync Timeline:</span>
               <input type="range" id="inlineSbsScrubber" min="0" max="0" step="1" value="0" aria-label="Inline side-by-side synchronized scrubber">
+              <span id="inlineSbsSyncBadge" style="font-size:0.74rem; color:#fde68a; font-variant-numeric:tabular-nums; white-space:nowrap;"></span>
             </div>
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
               <div class="btn-group">
@@ -3993,8 +4002,25 @@
                 </select>
               </div>
               <div class="btn-group">
-                <button type="button" class="btn-sm" id="inlineSbsExportBtn" title="Download side-by-side comparison PNG">📸 Export PNG</button>
+                <button type="button" class="btn-sm" id="inlineSbsSyncLockBtn" title="Lock both clips relative to their marked Impact/Release sync frames">🔗 Sync Lock</button>
+                <button type="button" class="btn-sm" id="inlineSbsOnionBtn" title="Blend Right video directly on top of Left video with adjustable transparency">🧅 Onion-Skin</button>
+                <button type="button" class="btn-sm" id="inlineSbsExportBtn" title="Download comparison PNG">📸 Export PNG</button>
               </div>
+            </div>
+            <div class="sbs-onion-controls" id="inlineSbsOnionControls">
+              <label style="display:flex; align-items:center; gap:6px;">
+                <span>Overlay Opacity: <strong id="inlineSbsOnionOpacityVal">50%</strong></span>
+                <input type="range" id="inlineSbsOnionOpacity" min="0" max="100" value="50" style="width:120px;">
+              </label>
+              <label style="display:flex; align-items:center; gap:5px;">
+                <span>Shift X:</span>
+                <input type="range" id="inlineSbsOnionShiftX" min="-120" max="120" value="0" style="width:86px;">
+              </label>
+              <label style="display:flex; align-items:center; gap:5px;">
+                <span>Shift Y:</span>
+                <input type="range" id="inlineSbsOnionShiftY" min="-120" max="120" value="0" style="width:86px;">
+              </label>
+              <button type="button" class="btn-sm" id="inlineSbsOnionResetBtn">Reset Align</button>
             </div>
           </div>
         </div>
@@ -13682,9 +13708,40 @@ create policy "Allow anon read/write for personal lab"
       const inlineSbs = {
         A: makeInlinePaneState(),
         B: makeInlinePaneState(),
+        syncA: 0,
+        syncB: 0,
+        syncLocked: false,
+        syncOffset: 0,
+        onionMode: false,
+        onionOpacity: 0.5,
+        onionShiftX: 0,
+        onionShiftY: 0,
         isPlaying: false,
         timerId: null
       };
+
+      function getInlineSbsSyncBounds() {
+        const minOff = -Math.max(inlineSbs.syncA, inlineSbs.syncB);
+        const maxOff = Math.max(
+          Math.max(0, inlineSbs.A.frames.length - 1 - inlineSbs.syncA),
+          Math.max(0, inlineSbs.B.frames.length - 1 - inlineSbs.syncB)
+        );
+        return { minOff, maxOff };
+      }
+
+      function applyInlineSbsSyncOffset(offset) {
+        const { minOff, maxOff } = getInlineSbsSyncBounds();
+        inlineSbs.syncOffset = Math.max(minOff, Math.min(maxOff, offset));
+        inlineSbs.A.idx = Math.max(0, Math.min(Math.max(0, inlineSbs.A.frames.length - 1), inlineSbs.syncA + inlineSbs.syncOffset));
+        inlineSbs.B.idx = Math.max(0, Math.min(Math.max(0, inlineSbs.B.frames.length - 1), inlineSbs.syncB + inlineSbs.syncOffset));
+      }
+
+      function redrawInlineSbsOnion() {
+        const imgB = document.getElementById('inlineSbsOnionImgB');
+        if (!imgB) return;
+        imgB.style.opacity = String(inlineSbs.onionOpacity);
+        imgB.style.transform = `translate(${inlineSbs.onionShiftX}px, ${inlineSbs.onionShiftY}px)`;
+      }
 
       toggleStudioBtn?.addEventListener('click', () => {
         const collapsed = document.body.classList.toggle('studio-collapsed');
@@ -13822,22 +13879,46 @@ create policy "Allow anon read/write for personal lab"
           const p = inlineSbs[side];
           const f = p.frames[p.idx];
           const img = document.getElementById(`inlineSbsImg${side}`);
+          const onionImg = document.getElementById(`inlineSbsOnionImg${side}`);
           const lbl = document.getElementById(`inlineSbsLabel${side}`);
+          const syncBtn = document.getElementById(`inlineSbsMarkSync${side}`);
+          const syncVal = side === 'A' ? inlineSbs.syncA : inlineSbs.syncB;
           if (f && img) {
             img.src = f.dataUrl;
+            if (onionImg) onionImg.src = f.dataUrl;
             if (lbl) lbl.textContent = `${p.idx + 1}/${p.frames.length} · ${f.label || ''}`;
           } else if (lbl) {
             lbl.textContent = 'No frames';
+          }
+          if (syncBtn) {
+            syncBtn.textContent = `🎯 Sync ${side} (F${syncVal + 1})`;
+            syncBtn.classList.toggle('btn-active', p.idx === syncVal);
           }
           applyInlineSbsZoom(side);
           if (p.skeletonEnabled && f?.dataUrl) evalInlineSbsPose(side, f.dataUrl);
           else redrawInlineSbsPane(side);
         });
-        const maxLen = Math.max(inlineSbs.A.frames.length, inlineSbs.B.frames.length, 1);
+        if (inlineSbs.onionMode) redrawInlineSbsOnion();
         const scr = document.getElementById('inlineSbsScrubber');
+        const badge = document.getElementById('inlineSbsSyncBadge');
         if (scr) {
-          scr.max = String(maxLen - 1);
-          scr.value = String(Math.min(maxLen - 1, Math.max(inlineSbs.A.idx, inlineSbs.B.idx)));
+          if (inlineSbs.syncLocked) {
+            const { minOff, maxOff } = getInlineSbsSyncBounds();
+            scr.min = String(minOff);
+            scr.max = String(maxOff);
+            scr.value = String(inlineSbs.syncOffset);
+            if (badge) {
+              badge.textContent = inlineSbs.syncOffset === 0
+                ? '🎯 SYNC (0f)'
+                : `Δ ${inlineSbs.syncOffset > 0 ? '+' : ''}${inlineSbs.syncOffset}f`;
+            }
+          } else {
+            const maxLen = Math.max(inlineSbs.A.frames.length, inlineSbs.B.frames.length, 1);
+            scr.min = '0';
+            scr.max = String(maxLen - 1);
+            scr.value = String(Math.min(maxLen - 1, Math.max(inlineSbs.A.idx, inlineSbs.B.idx)));
+            if (badge) badge.textContent = '';
+          }
         }
       }
 
@@ -13850,6 +13931,9 @@ create policy "Allow anon read/write for personal lab"
         p.frames = frames;
         p.title = label;
         p.idx = keyIdx >= 0 ? keyIdx : 0;
+        if (side === 'A') inlineSbs.syncA = p.idx;
+        else inlineSbs.syncB = p.idx;
+        inlineSbs.syncOffset = 0;
         p.landmarks = null;
         p.metrics = null;
         renderInlineSbsFrames();
@@ -14132,25 +14216,103 @@ create policy "Allow anon read/write for personal lab"
         });
       });
 
+      document.getElementById('inlineSbsMarkSyncA')?.addEventListener('click', () => {
+        inlineSbs.syncA = inlineSbs.A.idx;
+        inlineSbs.syncOffset = 0;
+        renderInlineSbsFrames();
+        showToast(`🎯 Marked Left video sync anchor at F${inlineSbs.syncA + 1}`);
+      });
+      document.getElementById('inlineSbsMarkSyncB')?.addEventListener('click', () => {
+        inlineSbs.syncB = inlineSbs.B.idx;
+        inlineSbs.syncOffset = 0;
+        renderInlineSbsFrames();
+        showToast(`🎯 Marked Right video sync anchor at F${inlineSbs.syncB + 1}`);
+      });
+      document.getElementById('inlineSbsSyncLockBtn')?.addEventListener('click', (e) => {
+        inlineSbs.syncLocked = !inlineSbs.syncLocked;
+        e.currentTarget.classList.toggle('btn-active', inlineSbs.syncLocked);
+        if (inlineSbs.syncLocked) {
+          inlineSbs.syncOffset = 0;
+          applyInlineSbsSyncOffset(0);
+          showToast(`🔗 Sync-Locked on Left F${inlineSbs.syncA + 1} ↔ Right F${inlineSbs.syncB + 1}`);
+        } else {
+          showToast('🔓 Sync Lock off');
+        }
+        renderInlineSbsFrames();
+      });
+      document.getElementById('inlineSbsOnionBtn')?.addEventListener('click', (e) => {
+        inlineSbs.onionMode = !inlineSbs.onionMode;
+        e.currentTarget.classList.toggle('btn-active', inlineSbs.onionMode);
+        const gridEl = document.getElementById('inlineSbsGrid');
+        if (gridEl) gridEl.style.display = inlineSbs.onionMode ? 'none' : '';
+        document.getElementById('inlineSbsOnionStage')?.classList.toggle('active', inlineSbs.onionMode);
+        document.getElementById('inlineSbsOnionControls')?.classList.toggle('active', inlineSbs.onionMode);
+        if (inlineSbs.onionMode) {
+          redrawInlineSbsOnion();
+          showToast('🧅 Onion-Skin Overlay ON — adjust opacity & X/Y shift to align players');
+        }
+      });
+      document.getElementById('inlineSbsOnionOpacity')?.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10) || 0;
+        inlineSbs.onionOpacity = pct / 100;
+        const lbl = document.getElementById('inlineSbsOnionOpacityVal');
+        if (lbl) lbl.textContent = `${pct}%`;
+        redrawInlineSbsOnion();
+      });
+      document.getElementById('inlineSbsOnionShiftX')?.addEventListener('input', (e) => {
+        inlineSbs.onionShiftX = parseInt(e.target.value, 10) || 0;
+        redrawInlineSbsOnion();
+      });
+      document.getElementById('inlineSbsOnionShiftY')?.addEventListener('input', (e) => {
+        inlineSbs.onionShiftY = parseInt(e.target.value, 10) || 0;
+        redrawInlineSbsOnion();
+      });
+      document.getElementById('inlineSbsOnionResetBtn')?.addEventListener('click', () => {
+        inlineSbs.onionOpacity = 0.5;
+        inlineSbs.onionShiftX = 0;
+        inlineSbs.onionShiftY = 0;
+        const op = document.getElementById('inlineSbsOnionOpacity');
+        const sx = document.getElementById('inlineSbsOnionShiftX');
+        const sy = document.getElementById('inlineSbsOnionShiftY');
+        const lbl = document.getElementById('inlineSbsOnionOpacityVal');
+        if (op) op.value = '50';
+        if (sx) sx.value = '0';
+        if (sy) sy.value = '0';
+        if (lbl) lbl.textContent = '50%';
+        redrawInlineSbsOnion();
+      });
+
       document.getElementById('inlineSbsBackBoth')?.addEventListener('click', () => {
         stopInlineSbsPlayback();
-        inlineSbs.A.idx = Math.max(0, inlineSbs.A.idx - 1);
-        inlineSbs.B.idx = Math.max(0, inlineSbs.B.idx - 1);
+        if (inlineSbs.syncLocked) {
+          applyInlineSbsSyncOffset(inlineSbs.syncOffset - 1);
+        } else {
+          inlineSbs.A.idx = Math.max(0, inlineSbs.A.idx - 1);
+          inlineSbs.B.idx = Math.max(0, inlineSbs.B.idx - 1);
+        }
         renderInlineSbsFrames();
       });
       document.getElementById('inlineSbsFwdBoth')?.addEventListener('click', () => {
         stopInlineSbsPlayback();
-        inlineSbs.A.idx = Math.min(Math.max(0, inlineSbs.A.frames.length - 1), inlineSbs.A.idx + 1);
-        inlineSbs.B.idx = Math.min(Math.max(0, inlineSbs.B.frames.length - 1), inlineSbs.B.idx + 1);
+        if (inlineSbs.syncLocked) {
+          applyInlineSbsSyncOffset(inlineSbs.syncOffset + 1);
+        } else {
+          inlineSbs.A.idx = Math.min(Math.max(0, inlineSbs.A.frames.length - 1), inlineSbs.A.idx + 1);
+          inlineSbs.B.idx = Math.min(Math.max(0, inlineSbs.B.frames.length - 1), inlineSbs.B.idx + 1);
+        }
         renderInlineSbsFrames();
       });
       document.getElementById('inlineSbsScrubber')?.addEventListener('input', (e) => {
         stopInlineSbsPlayback();
         const val = parseInt(e.target.value, 10) || 0;
-        const maxVal = Math.max(1, parseInt(e.target.max, 10) || 1);
-        const ratio = val / maxVal;
-        inlineSbs.A.idx = Math.round(ratio * Math.max(0, inlineSbs.A.frames.length - 1));
-        inlineSbs.B.idx = Math.round(ratio * Math.max(0, inlineSbs.B.frames.length - 1));
+        if (inlineSbs.syncLocked) {
+          applyInlineSbsSyncOffset(val);
+        } else {
+          const maxVal = Math.max(1, parseInt(e.target.max, 10) || 1);
+          const ratio = val / maxVal;
+          inlineSbs.A.idx = Math.round(ratio * Math.max(0, inlineSbs.A.frames.length - 1));
+          inlineSbs.B.idx = Math.round(ratio * Math.max(0, inlineSbs.B.frames.length - 1));
+        }
         renderInlineSbsFrames();
       });
       document.getElementById('inlineSbsPlayBtn')?.addEventListener('click', () => {
@@ -14159,8 +14321,14 @@ create policy "Allow anon read/write for personal lab"
         inlineSbs.isPlaying = true;
         document.getElementById('inlineSbsPlayBtn').textContent = '⏸ Pause';
         inlineSbs.timerId = setInterval(() => {
-          inlineSbs.A.idx = (inlineSbs.A.idx + 1) % Math.max(1, inlineSbs.A.frames.length);
-          inlineSbs.B.idx = (inlineSbs.B.idx + 1) % Math.max(1, inlineSbs.B.frames.length);
+          if (inlineSbs.syncLocked) {
+            const { minOff, maxOff } = getInlineSbsSyncBounds();
+            const nextOff = inlineSbs.syncOffset >= maxOff ? minOff : inlineSbs.syncOffset + 1;
+            applyInlineSbsSyncOffset(nextOff);
+          } else {
+            inlineSbs.A.idx = (inlineSbs.A.idx + 1) % Math.max(1, inlineSbs.A.frames.length);
+            inlineSbs.B.idx = (inlineSbs.B.idx + 1) % Math.max(1, inlineSbs.B.frames.length);
+          }
           renderInlineSbsFrames();
         }, Math.round(1000 / fps));
       });
@@ -14168,6 +14336,33 @@ create policy "Allow anon read/write for personal lab"
         const imgA = document.getElementById('inlineSbsImgA');
         const imgB = document.getElementById('inlineSbsImgB');
         if (!imgA?.naturalWidth || !imgB?.naturalWidth) return;
+        if (inlineSbs.onionMode) {
+          const outW = 960, outH = 560, capH = 44;
+          const c = document.createElement('canvas');
+          c.width = outW;
+          c.height = outH + capH;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#0e1118';
+          ctx.fillRect(0, 0, c.width, c.height);
+          const rectA = getImgDisplayRectInStage(imgA, outW, outH);
+          const rectB = getImgDisplayRectInStage(imgB, outW, outH);
+          ctx.drawImage(imgA, rectA.ox, rectA.oy, rectA.rw, rectA.rh);
+          ctx.save();
+          ctx.globalAlpha = inlineSbs.onionOpacity;
+          ctx.drawImage(imgB, rectB.ox + inlineSbs.onionShiftX, rectB.oy + inlineSbs.onionShiftY, rectB.rw, rectB.rh);
+          ctx.restore();
+          ctx.fillStyle = '#151822';
+          ctx.fillRect(0, outH, outW, capH);
+          ctx.fillStyle = '#c7b088';
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText(`🧅 Onion-Skin (${Math.round(inlineSbs.onionOpacity * 100)}%) · ${inlineSbs.A.title}  vs.  ${inlineSbs.B.title}`, 12, outH + 26);
+          const a = document.createElement('a');
+          a.href = c.toDataURL('image/png');
+          a.download = `cricket-onion-skin-${new Date().toISOString().slice(0, 10)}.png`;
+          a.click();
+          showToast('📸 Exported Onion-Skin Overlay PNG');
+          return;
+        }
         const paneW = 640, paneH = 420, gap = 12, capH = 44;
         const c = document.createElement('canvas');
         c.width = paneW * 2 + gap;
