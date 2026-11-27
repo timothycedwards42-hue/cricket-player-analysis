@@ -4548,19 +4548,6 @@
       <button type="button" class="btn-sm btn-ghost" id="closeHistoryDialogBtn" aria-label="Close">✕</button>
     </div>
     <div class="dialog-body">
-      <!-- Save / Re-tag Current Session Box -->
-      <div id="saveCurrentBox" style="display:none; flex-direction:column; gap:8px; background:var(--bg); border:1px solid rgba(76,175,80,0.4); border-radius:var(--radius-sm); padding:10px 12px;">
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="sessionNameInput" placeholder="Player name (folder)" style="flex:1; min-width:140px;">
-          <input type="text" id="sessionTagModalInput" placeholder="Optional file tag (e.g. Match 1)" style="flex:1; min-width:140px;">
-          <button type="button" class="btn-primary" id="confirmSaveSessionBtn">💾 Save</button>
-        </div>
-        <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.76rem; color:var(--text-muted); cursor:pointer;">
-          <input type="checkbox" id="saveRawVideoChk" style="width:auto; accent-color:var(--accent-bright);">
-          Also store raw video file(s) locally (keyframes + full report are always saved automatically)
-        </label>
-      </div>
-
       <!-- Optional Supabase Cloud Sync Panel -->
       <details class="supabase-box" id="supabaseDetails">
         <summary>
@@ -6153,7 +6140,7 @@
         historyDialog.addEventListener('click', (e) => {
           if (e.target === historyDialog) historyDialog.close();
         });
-        document.getElementById('confirmSaveSessionBtn').addEventListener('click', () => saveCurrentSession(false));
+        document.getElementById('confirmSaveSessionBtn')?.addEventListener('click', () => saveCurrentSession(false));
         historySearchInput.addEventListener('input', renderSavedSessionsList);
         document.getElementById('exportBackupBtn').addEventListener('click', exportSessionsBackup);
         document.getElementById('importBackupBtn').addEventListener('click', () => importBackupInput.click());
@@ -12300,24 +12287,11 @@ create policy "Allow anon read/write for personal lab"
         }
       }
 
-      async function openHistoryDialog(focusSave = false) {
+      async function openHistoryDialog() {
         await refreshSavedCount();
-        const hasReport = Boolean(state.currentReport);
-        saveCurrentBox.style.display = hasReport ? 'flex' : 'none';
-        if (hasReport) {
-          const m = state.currentReport._meta || {};
-          const curPlayer = (m.playerName || playerNameInput.value || '').trim();
-          sessionNameInput.value = isTestPlayerName(curPlayer) ? '' : curPlayer;
-          sessionTagModalInput.value = (m.sessionTag || '').trim();
-          saveRawVideoChk.disabled = state.clips.length === 0;
-          if (state.clips.length === 0) saveRawVideoChk.checked = false;
-        }
         updateCompareBarUI();
         renderSavedSessionsList();
         historyDialog.showModal();
-        if (focusSave && hasReport) {
-          sessionNameInput.focus();
-        }
       }
 
       async function saveCurrentSession() {
