@@ -11229,11 +11229,46 @@ create policy "Allow anon read/write for personal lab"
           const folderBody = document.createElement('div');
           folderBody.className = 'folder-body';
 
-          // Sort date folders newest-first (YYYY-MM-DD descending)
+        const updateSessionsFilmedDate = async (sessionsToUpdate, currentDateKey, promptLabel) => {
+          const input = prompt(
+            `Enter original filmed date (YYYY-MM-DD) for ${promptLabel}:`,
+            /^\d{4}-\d{2}-\d{2}$/.test(currentDateKey) ? currentDateKey : formatFileTimestamp().slice(0, 10)
+          );
+          if (input === null) return;
+          const trimmed = input.trim();
+          const m = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          if (!m) {
+            showToast('Please use YYYY-MM-DD format (e.g. 2026-11-21)');
+            return;
+          }
+          const yr = Number(m[1]), mo = Number(m[2]) - 1, dy = Number(m[3]);
+          for (const sess of sessionsToUpdate) {
+            const oldTimeMatch = String(sess.fileStamp || '').match(/(\d{2}):(\d{2})$/);
+            const hh = oldTimeMatch ? Number(oldTimeMatch[1]) : 12;
+            const mm = oldTimeMatch ? Number(oldTimeMatch[2]) : 0;
+            const newDateObj = new Date(yr, mo, dy, hh, mm, 0);
+            const newStamp = `${trimmed} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+            sess.fileStamp = newStamp;
+            sess.savedAt = newDateObj.toISOString();
+            sess.synced = false;
+            if (sess.report?._meta) {
+              sess.report._meta.fileStamp = newStamp;
+              sess.report._meta.savedAt = sess.savedAt;
+            }
+            await putSession(sess);
+            if (supabaseClient) await pushSessionToSupabase(sess);
+          }
+          await refreshSavedCount();
+          renderSavedSessionsList();
+          showToast(`✓ Updated filmed date to ${trimmed} (${sessionsToUpdate.length} file${sessionsToUpdate.length === 1 ? '' : 's'})`);
+        };
+
+        // Sort date folders newest-first (YYYY-MM-DD descending)
           const sortedDates = Array.from(pEntry.byDate.keys()).sort((a, b) => b.localeCompare(a));
           sortedDates.forEach((dateKey, dateIdx) => {
             const dateGroups = pEntry.byDate.get(dateKey);
-            const totalForDate = dateGroups.batting.length + dateGroups.bowling.length;
+            const allInDate = [...dateGroups.batting, ...dateGroups.bowling];
+            const totalForDate = allInDate.length;
 
             const dateDetails = document.createElement('details');
             dateDetails.className = 'folder-date';
@@ -11242,10 +11277,23 @@ create policy "Allow anon read/write for personal lab"
             const dateSum = document.createElement('summary');
             const dateLeft = document.createElement('span');
             dateLeft.textContent = formatDateFolderLabel(dateKey);
+            const dateRightWrap = document.createElement('div');
+            dateRightWrap.className = 'btn-group';
+            const editDateFolderBtn = document.createElement('button');
+            editDateFolderBtn.type = 'button';
+            editDateFolderBtn.className = 'btn-sm btn-ghost';
+            editDateFolderBtn.textContent = '📅 Edit Date';
+            editDateFolderBtn.title = `Change filmed date for all ${totalForDate} file(s) in this folder`;
+            editDateFolderBtn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              await updateSessionsFilmedDate(allInDate, dateKey, `all ${totalForDate} file(s) under ${pName} (${dateKey})`);
+            });
             const dateRight = document.createElement('span');
             dateRight.className = 'help-text';
             dateRight.textContent = `${totalForDate} file${totalForDate === 1 ? '' : 's'}`;
-            dateSum.append(dateLeft, dateRight);
+            dateRightWrap.append(editDateFolderBtn, dateRight);
+            dateSum.append(dateLeft, dateRightWrap);
             dateDetails.appendChild(dateSum);
 
             const dateBody = document.createElement('div');
@@ -11408,6 +11456,15 @@ create policy "Allow anon read/write for personal lab"
                 showToast(trimmed ? '✓ Note saved' : '✓ Note cleared');
               });
 
+              const dateBtn = document.createElement('button');
+              dateBtn.type = 'button';
+              dateBtn.className = 'btn-sm btn-ghost';
+              dateBtn.textContent = '📅';
+              dateBtn.title = 'Change original filmed date for this file';
+              dateBtn.addEventListener('click', async () => {
+                await updateSessionsFilmedDate([s], dateKey, `"${s.sessionTag || stamp}"`);
+              });
+
               const delBtn = document.createElement('button');
               delBtn.type = 'button';
               delBtn.className = 'btn-sm btn-ghost';
@@ -11420,7 +11477,7 @@ create policy "Allow anon read/write for personal lab"
                 renderSavedSessionsList();
               });
 
-              actions.append(openBtn, stageOneBtn, movePlayerBtn, tagBtn, noteBtn, delBtn);
+              actions.append(openBtn, stageOneBtn, movePlayerBtn, dateBtn, tagBtn, noteBtn, delBtn);
               row.append(info, actions);
               filesWrap.appendChild(row);
             });
