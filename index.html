@@ -2621,7 +2621,73 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
       background: rgba(255, 255, 255, 0.02);
+    }
+
+    details.folder-player > summary > span:first-child,
+    details.folder-date > summary > span:first-child {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .folder-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .folder-act-icon {
+      width: 30px;
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+      flex-shrink: 0;
+    }
+
+    .folder-act-trends {
+      width: 82px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .folder-act-plan {
+      width: 138px;
+      justify-content: center;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .folder-act-editdate {
+      width: 92px;
+      justify-content: center;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .folder-act-count {
+      width: 68px;
+      justify-content: center;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 640px) {
+      details.folder-player > summary,
+      details.folder-date > summary {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .folder-actions-row {
+        flex-wrap: wrap;
+      }
     }
 
     details.folder-player > summary::-webkit-details-marker { display: none; }
@@ -12577,10 +12643,10 @@ create policy "Allow anon read/write for personal lab"
           const pLeft = document.createElement('span');
           pLeft.textContent = `📁 ${pName}`;
           const pRightWrap = document.createElement('div');
-          pRightWrap.className = 'btn-group';
+          pRightWrap.className = 'folder-actions-row';
           const renamePlayerBtn = document.createElement('button');
           renamePlayerBtn.type = 'button';
-          renamePlayerBtn.className = 'btn-sm btn-ghost';
+          renamePlayerBtn.className = 'btn-sm btn-ghost folder-act-icon';
           renamePlayerBtn.textContent = '✏️';
           renamePlayerBtn.title = `Rename player "${pName}" (updates all stored files & training plan)`;
           renamePlayerBtn.addEventListener('click', async (e) => {
@@ -12599,7 +12665,7 @@ create policy "Allow anon read/write for personal lab"
           });
           const deletePlayerBtn = document.createElement('button');
           deletePlayerBtn.type = 'button';
-          deletePlayerBtn.className = 'btn-sm btn-ghost';
+          deletePlayerBtn.className = 'btn-sm btn-ghost folder-act-icon';
           deletePlayerBtn.style.color = 'var(--danger)';
           deletePlayerBtn.textContent = '🗑️';
           deletePlayerBtn.title = `Delete player "${pName}" and all their files from local storage & Supabase`;
@@ -12615,7 +12681,7 @@ create policy "Allow anon read/write for personal lab"
           });
           const trendsBtn = document.createElement('button');
           trendsBtn.type = 'button';
-          trendsBtn.className = 'btn-sm';
+          trendsBtn.className = 'btn-sm folder-act-trends';
           trendsBtn.textContent = '📈 Trends';
           trendsBtn.title = `View progress trends across dates for ${pName}`;
           trendsBtn.addEventListener('click', (e) => {
@@ -12625,7 +12691,7 @@ create policy "Allow anon read/write for personal lab"
           });
           const planBtn = document.createElement('button');
           planBtn.type = 'button';
-          planBtn.className = 'btn-sm';
+          planBtn.className = 'btn-sm folder-act-plan';
           planBtn.textContent = pEntry.planCount > 0 ? `📋 Training Plan (${pEntry.planCount})` : '📋 Training Plan';
           planBtn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -12633,7 +12699,7 @@ create policy "Allow anon read/write for personal lab"
             openTrainingPlanDialog(pName);
           });
           const pBadge = document.createElement('span');
-          pBadge.className = 'badge badge-pitch';
+          pBadge.className = 'badge badge-pitch folder-act-count';
           pBadge.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
           pRightWrap.append(renamePlayerBtn, deletePlayerBtn, trendsBtn, planBtn, pBadge);
           pSum.append(pLeft, pRightWrap);
@@ -12691,10 +12757,10 @@ create policy "Allow anon read/write for personal lab"
             const dateLeft = document.createElement('span');
             dateLeft.textContent = formatDateFolderLabel(dateKey);
             const dateRightWrap = document.createElement('div');
-            dateRightWrap.className = 'btn-group';
+            dateRightWrap.className = 'folder-actions-row';
             const editDateFolderBtn = document.createElement('button');
             editDateFolderBtn.type = 'button';
-            editDateFolderBtn.className = 'btn-sm btn-ghost';
+            editDateFolderBtn.className = 'btn-sm btn-ghost folder-act-editdate';
             editDateFolderBtn.textContent = '📅 Edit Date';
             editDateFolderBtn.title = `Change filmed date for all ${totalForDate} file(s) in this folder`;
             editDateFolderBtn.addEventListener('click', async (e) => {
@@ -12703,7 +12769,7 @@ create policy "Allow anon read/write for personal lab"
               await updateSessionsFilmedDate(allInDate, dateKey, `all ${totalForDate} file(s) under ${pName} (${dateKey})`);
             });
             const dateRight = document.createElement('span');
-            dateRight.className = 'help-text';
+            dateRight.className = 'help-text folder-act-count';
             dateRight.textContent = `${totalForDate} file${totalForDate === 1 ? '' : 's'}`;
             dateRightWrap.append(editDateFolderBtn, dateRight);
             dateSum.append(dateLeft, dateRightWrap);
