@@ -2892,6 +2892,173 @@
       margin: 0 auto;
     }
 
+    /* Upgraded Coaching Analysis Tools (Draw Palette, Sparkline, Stopwatch, Notes, Onion-Skin, Trends) */
+    .coach-subbar {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      border-top: 1px dashed var(--border);
+      padding-top: 6px;
+    }
+    .coach-subbar.active { display: flex; }
+
+    .draw-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.28);
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: transform 0.12s, border-color 0.12s;
+    }
+    .draw-swatch.active {
+      border-color: #ffffff;
+      transform: scale(1.18);
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.22);
+    }
+
+    .frame-note-pill {
+      display: none;
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      max-width: calc(100% - 20px);
+      background: rgba(12, 16, 24, 0.88);
+      border: 1px solid rgba(245, 158, 11, 0.7);
+      color: #fde68a;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      z-index: 6;
+      pointer-events: none;
+      text-align: left;
+      backdrop-filter: blur(4px);
+    }
+    .frame-note-pill.active { display: inline-flex; align-items: center; gap: 6px; }
+
+    .scrubber-markers-track {
+      position: relative;
+      height: 10px;
+      width: 100%;
+      display: none;
+      margin-top: -2px;
+    }
+    .scrubber-markers-track.has-markers { display: block; }
+    .scrubber-note-dot {
+      position: absolute;
+      top: 1px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      border: 1px solid #0e1118;
+      transform: translateX(-50%);
+      cursor: pointer;
+      padding: 0;
+    }
+    .scrubber-note-dot:hover { transform: translateX(-50%) scale(1.35); }
+
+    .sparkline-box {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      border-top: 1px dashed var(--border);
+      padding-top: 6px;
+    }
+    .sparkline-box.active { display: flex; }
+    .sparkline-canvas {
+      width: 100%;
+      height: 76px;
+      background: #0c1018;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      display: block;
+    }
+
+    .frame-thumb-note-badge {
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      background: rgba(245, 158, 11, 0.92);
+      color: #0e1118;
+      font-size: 0.62rem;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 4px;
+      line-height: 1.2;
+      pointer-events: none;
+    }
+
+    .sbs-onion-stage {
+      display: none;
+      position: relative;
+      background: #000;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      aspect-ratio: 16 / 9;
+      max-height: 58vh;
+      width: 100%;
+      overflow: hidden;
+      align-items: center;
+      justify-content: center;
+    }
+    .sbs-onion-stage.active { display: flex; }
+    .sbs-onion-stage img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    .sbs-onion-stage canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 4;
+    }
+    .sbs-onion-controls {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border);
+      font-size: 0.74rem;
+    }
+    .sbs-onion-controls.active { display: flex; }
+
+    .trend-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+    }
+    .trend-stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .trend-stat-card .t-lbl { font-size: 0.7rem; color: var(--muted); }
+    .trend-stat-card .t-val { font-size: 1.05rem; font-weight: 700; color: var(--pitch); }
+    .trend-canvas {
+      width: 100%;
+      height: 220px;
+      background: #0c1018;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      display: block;
+    }
+
     .supabase-box {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -3879,6 +4046,7 @@
                 <img id="savedFrameLargeImg" alt="Selected video reference frame">
                 <canvas id="savedFrameOverlayCanvas"></canvas>
                 <div class="pose-hud" id="savedFramePoseHud" aria-live="polite"></div>
+                <div class="frame-note-pill" id="savedFrameNotePill" aria-live="polite"></div>
                 <div class="zoom-select-box" id="savedFrameZoomBox"></div>
               </div>
               <div style="padding:7px 9px; font-size:0.74rem; color:var(--pitch); display:flex; flex-direction:column; gap:6px; background:var(--surface);">
@@ -3886,6 +4054,7 @@
                   <input type="range" id="savedFrameScrubber" min="0" max="0" step="1" value="0" aria-label="Stored frame timeline">
                   <span id="savedFrameLargeLabel" style="font-variant-numeric:tabular-nums; white-space:nowrap;"></span>
                 </div>
+                <div class="scrubber-markers-track" id="savedFrameNoteMarkers" aria-label="Frame note markers"></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
                   <div class="btn-group">
                     <button type="button" class="btn-sm" id="savedFramePrevBtn" title="Previous frame">◀</button>
@@ -3900,7 +4069,7 @@
                   </div>
                   <div class="btn-group">
                     <button type="button" class="btn-sm" id="savedFrameGridBtn" title="Toggle alignment grid &amp; plumb line (click frame to move center)">⊞ Grid</button>
-                    <button type="button" class="btn-sm" id="savedFramePathsBtn" title="Trace glowing motion paths of Head (amber), Hands (green), and Hips (cyan)">📈 Paths</button>
+                    <button type="button" class="btn-sm" id="savedFramePathsBtn" title="Trace glowing motion paths of selected body joints">📈 Paths</button>
                     <button type="button" class="btn-sm" id="savedFrameGhostBtn" title="Draw fading stroboscopic stick-figure skeletons from previous frames">👻 Ghost</button>
                     <select id="savedFrameTrailCount" aria-label="Trail history length" title="How many previous frames to include in Paths &amp; Ghost Skeletons" style="display:none; width:auto; padding:3px 5px; font-size:0.72rem;">
                       <option value="2">2f</option>
@@ -3910,9 +4079,12 @@
                       <option value="99">All</option>
                     </select>
                     <button type="button" class="btn-sm" id="savedFrameAngleBtn" title="Tap 3 points (e.g. Hip → Knee → Ankle) to measure exact angle">📐 Angle</button>
-                    <button type="button" class="btn-sm" id="savedFrameDrawBtn" title="Draw alignment lines on stored frames">✏️ Draw</button>
-                    <button type="button" class="btn-sm" id="savedFrameClearBtn" title="Clear lines &amp; angle measurements">Clear</button>
-                    <button type="button" class="btn-sm" id="savedFrameSnapBtn" title="Export annotated frame with skeleton, grid &amp; angles as PNG">📸 PNG</button>
+                    <button type="button" class="btn-sm" id="savedFrameDrawBtn" title="Draw lines, arrows, circles, text callouts &amp; anchor plumb lines">✏️ Draw</button>
+                    <button type="button" class="btn-sm" id="savedFrameTimerBtn" title="Measure phase timing (ms) and estimated ball speed between any 2 frames">⏱ Timer</button>
+                    <button type="button" class="btn-sm" id="savedFrameSparkBtn" title="Plot synced biomechanics graph (Knee, Elbow, Trunk, Head Drift)">📊 Graph</button>
+                    <button type="button" class="btn-sm" id="savedFrameClearBtn" title="Clear drawings &amp; angle measurements">Clear</button>
+                    <button type="button" class="btn-sm" id="savedFrameSnapBtn" title="Export annotated frame as PNG">📸 PNG</button>
+                    <button type="button" class="btn-sm" id="savedFrameStripBtn" title="Export 4-frame key-phase coaching contact sheet PNG">🎞 Strip</button>
                     <button type="button" class="btn-sm" id="savedFrameFsBtn" title="Fullscreen frame viewer with controls">⛶</button>
                     <button type="button" class="btn-sm btn-ghost" id="closeFramePreviewBtn">Hide ✕</button>
                   </div>
@@ -3937,6 +4109,58 @@
                     </div>
                   </div>
                 </div>
+                <!-- Upgraded Telestrator Palette (shown when Draw is active) -->
+                <div class="coach-subbar" id="savedFrameDrawTools">
+                  <span class="phase-pin-label" style="font-size:0.7rem;">✏️ Tool:</span>
+                  <button type="button" class="btn-sm btn-active" data-dtool="line" title="Straight reference line">╱ Line</button>
+                  <button type="button" class="btn-sm" data-dtool="arrow" title="Directional arrow (bat path / momentum)">➔ Arrow</button>
+                  <button type="button" class="btn-sm" data-dtool="circle" title="Highlight circle (head / ball / front foot)">◯ Circle</button>
+                  <button type="button" class="btn-sm" data-dtool="pen" title="Freehand telestrator pen">〰 Free</button>
+                  <button type="button" class="btn-sm" data-dtool="text" title="Tap frame to drop a coaching text callout">T Text</button>
+                  <button type="button" class="btn-sm" data-dtool="plumb" title="Tap frame to drop a locked vertical anchor/plumb line">┆ Plumb</button>
+                  <span style="width:1px; height:16px; background:var(--border); margin:0 2px;"></span>
+                  <button type="button" class="draw-swatch active" data-dcolor="#ef4444" style="background:#ef4444;" title="Red"></button>
+                  <button type="button" class="draw-swatch" data-dcolor="#22c55e" style="background:#22c55e;" title="Green"></button>
+                  <button type="button" class="draw-swatch" data-dcolor="#f59e0b" style="background:#f59e0b;" title="Amber"></button>
+                  <button type="button" class="draw-swatch" data-dcolor="#38bdf8" style="background:#38bdf8;" title="Cyan"></button>
+                  <span style="width:1px; height:16px; background:var(--border); margin:0 2px;"></span>
+                  <button type="button" class="btn-sm" id="savedFrameDrawScopeBtn" title="Toggle whether new drawings persist across all frames or stay only on this frame">🌐 All Frames</button>
+                  <button type="button" class="btn-sm" id="savedFrameUndoBtn" title="Undo last drawing or angle">↩ Undo</button>
+                </div>
+                <!-- Phase Stopwatch & Speed Timer Bar -->
+                <div class="coach-subbar" id="savedFrameTimerBar">
+                  <span class="phase-pin-label" style="font-size:0.7rem;">⏱ Stopwatch:</span>
+                  <button type="button" class="btn-sm" id="timerSetABtn" title="Mark current frame as Start (A)">Set A</button>
+                  <button type="button" class="btn-sm" id="timerSetBBtn" title="Mark current frame as End (B)">Set B</button>
+                  <select id="timerDistSelect" aria-label="Pitch distance for speed estimate" style="width:auto; padding:3px 6px; font-size:0.72rem;">
+                    <option value="20.12">20.12m (Full Pitch)</option>
+                    <option value="18.0" selected>18.0m (Release→Stumps)</option>
+                    <option value="16.0">16.0m (Junior)</option>
+                    <option value="14.0">14.0m (Short)</option>
+                  </select>
+                  <span id="timerReadout" style="font-variant-numeric:tabular-nums; color:#fde68a; font-weight:600;">Mark A &amp; B frames to measure ms &amp; ball speed</span>
+                  <button type="button" class="btn-sm btn-primary" id="timerSaveSpeedBtn" style="display:none;" title="Save this measured speed to the session for Player Trends">💾 Save Speed</button>
+                  <button type="button" class="btn-sm btn-ghost" id="timerResetBtn">Reset</button>
+                </div>
+                <!-- Synchronized Biomechanics Sparkline Graph -->
+                <div class="sparkline-box" id="savedFrameSparklineBox">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
+                    <div class="btn-group">
+                      <span class="phase-pin-label" style="font-size:0.7rem;">📊 Biomechanics:</span>
+                      <select id="sparklineMetricSelect" aria-label="Biomechanics metric" style="width:auto; padding:3px 6px; font-size:0.72rem;">
+                        <option value="leftKnee">Left Knee Brace (°)</option>
+                        <option value="rightKnee">Right Knee Brace (°)</option>
+                        <option value="trunkTilt">Trunk Lean (°)</option>
+                        <option value="leftElbow">Left Elbow Angle (°)</option>
+                        <option value="rightElbow">Right Elbow Angle (°)</option>
+                        <option value="headDrift">Head Drift (% frame)</option>
+                      </select>
+                    </div>
+                    <span id="sparklineSummary" style="font-size:0.72rem; color:#b3e5fc; font-variant-numeric:tabular-nums;">Click Graph to scan frames</span>
+                  </div>
+                  <canvas class="sparkline-canvas" id="savedFrameSparklineCanvas" height="76"></canvas>
+                </div>
+                <!-- Paths Track Selector -->
                 <div id="savedFramePathParts" style="display:none; align-items:center; gap:5px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:5px;">
                   <span class="phase-pin-label" style="font-size:0.7rem;">📈 Track:</span>
                   <button type="button" class="btn-sm" data-path="head" title="Head stability &amp; alignment path">🟡 Head</button>
@@ -3944,6 +4168,13 @@
                   <button type="button" class="btn-sm" data-path="lhand" title="Left hand / wrist path">🟣 L-Hand</button>
                   <button type="button" class="btn-sm" data-path="hips" title="Hip center movement &amp; drive path">🔵 Hips</button>
                   <button type="button" class="btn-sm" data-path="feet" title="Ankle / foot stride path">🔴 Feet</button>
+                </div>
+                <!-- Frame-Pinned Coach Note Bar -->
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:5px;">
+                  <span class="phase-pin-label" style="font-size:0.7rem;">📌 Frame Note:</span>
+                  <input type="text" id="savedFrameNoteInput" placeholder="Pin a coaching note to this frame (e.g. Front toe opening early)..." style="flex:1; min-width:170px; padding:4px 8px; font-size:0.74rem;">
+                  <button type="button" class="btn-sm btn-primary" id="savedFrameNoteSaveBtn" title="Pin note to this frame">Pin</button>
+                  <button type="button" class="btn-sm btn-ghost" id="savedFrameNoteClearBtn" title="Remove note from this frame" style="display:none;">✕</button>
                 </div>
               </div>
             </div>
@@ -4401,12 +4632,12 @@
     <div class="dialog-header">
       <div>
         <h3 id="sbsDialogTitle">🎞️ Side-by-Side Before vs. After Visual Compare</h3>
-        <span class="help-text" id="sbsSubtitle">Scrub both sessions together, nudge either side to align Release/Impact, and toggle Skeleton or Grid.</span>
+        <span class="help-text" id="sbsSubtitle">Mark Impact/Release to Sync-Lock both clips, or toggle Onion-Skin Overlay to blend them directly.</span>
       </div>
       <button type="button" class="btn-sm btn-ghost" id="closeSbsDialogBtn" aria-label="Close">✕</button>
     </div>
     <div class="dialog-body">
-      <div class="sbs-grid">
+      <div class="sbs-grid" id="sbsSplitGrid">
         <!-- LEFT PANE: BEFORE / EARLIER -->
         <div class="sbs-pane">
           <div class="sbs-stage" id="sbsStageA">
@@ -4417,6 +4648,7 @@
           <div class="sbs-pane-bar">
             <strong id="sbsTitleA">Before</strong>
             <div class="btn-group">
+              <button type="button" class="btn-sm" id="sbsMarkSyncA" title="Mark this frame as Clip A's Impact/Release sync anchor">🎯 Sync A</button>
               <button type="button" class="btn-sm" id="sbsPrevA" title="Nudge Before frame back 1">◀</button>
               <span id="sbsLabelA" style="font-variant-numeric:tabular-nums;">1/1</span>
               <button type="button" class="btn-sm" id="sbsNextA" title="Nudge Before frame forward 1">▶</button>
@@ -4434,6 +4666,7 @@
           <div class="sbs-pane-bar">
             <strong id="sbsTitleB">After</strong>
             <div class="btn-group">
+              <button type="button" class="btn-sm" id="sbsMarkSyncB" title="Mark this frame as Clip B's Impact/Release sync anchor">🎯 Sync B</button>
               <button type="button" class="btn-sm" id="sbsPrevB" title="Nudge After frame back 1">◀</button>
               <span id="sbsLabelB" style="font-variant-numeric:tabular-nums;">1/1</span>
               <button type="button" class="btn-sm" id="sbsNextB" title="Nudge After frame forward 1">▶</button>
@@ -4442,11 +4675,19 @@
         </div>
       </div>
 
+      <!-- ONION-SKIN OVERLAY STAGE (blends Clip B on top of Clip A) -->
+      <div class="sbs-onion-stage" id="sbsOnionStage">
+        <img id="sbsOnionImgA" alt="Base frame (Clip A)">
+        <img id="sbsOnionImgB" alt="Overlay frame (Clip B)" style="opacity:0.5;">
+        <canvas id="sbsOnionCanvas"></canvas>
+      </div>
+
       <!-- SYNCHRONIZED PLAYBACK & OVERLAY CONTROLS -->
       <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
         <div class="scrubber-row">
-          <span class="help-text" style="white-space:nowrap;">Sync Timeline:</span>
+          <span class="help-text" id="sbsSyncTimelineLbl" style="white-space:nowrap;">Sync Timeline:</span>
           <input type="range" id="sbsSyncScrubber" min="0" max="100" step="1" value="0" aria-label="Synchronized comparison scrubber">
+          <span id="sbsSyncOffsetBadge" style="font-size:0.74rem; color:#fde68a; font-variant-numeric:tabular-nums; white-space:nowrap;"></span>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
           <div class="btn-group">
@@ -4461,15 +4702,70 @@
             </select>
           </div>
           <div class="btn-group">
+            <button type="button" class="btn-sm" id="sbsSyncLockBtn" title="Lock both clips relative to their marked Impact/Release sync frames">🔗 Sync Lock</button>
+            <button type="button" class="btn-sm" id="sbsOnionBtn" title="Blend Clip B directly on top of Clip A with adjustable transparency">🧅 Onion-Skin</button>
             <button type="button" class="btn-sm" id="sbsGridBtn" title="Toggle plumb line &amp; alignment grid on both panes">⊞ Grid</button>
             <button type="button" class="btn-sm" id="sbsSkelBtn" title="Toggle MediaPipe skeleton &amp; joint angles on both panes">🦴 Skeleton</button>
-            <button type="button" class="btn-sm" id="sbsExportPngBtn" title="Download side-by-side comparison PNG">📸 Export PNG</button>
+            <button type="button" class="btn-sm" id="sbsExportPngBtn" title="Download comparison PNG">📸 Export PNG</button>
           </div>
+        </div>
+        <div class="sbs-onion-controls" id="sbsOnionControls">
+          <label style="display:flex; align-items:center; gap:6px;">
+            <span>Overlay Opacity: <strong id="sbsOnionOpacityVal">50%</strong></span>
+            <input type="range" id="sbsOnionOpacity" min="0" max="100" value="50" style="width:120px;">
+          </label>
+          <label style="display:flex; align-items:center; gap:5px;">
+            <span>Shift X:</span>
+            <input type="range" id="sbsOnionShiftX" min="-120" max="120" value="0" style="width:86px;">
+          </label>
+          <label style="display:flex; align-items:center; gap:5px;">
+            <span>Shift Y:</span>
+            <input type="range" id="sbsOnionShiftY" min="-120" max="120" value="0" style="width:86px;">
+          </label>
+          <button type="button" class="btn-sm" id="sbsOnionResetAlignBtn">Reset Align</button>
         </div>
       </div>
     </div>
     <div class="dialog-footer">
       <button type="button" class="btn-ghost" id="doneSbsDialogBtn">Close</button>
+    </div>
+  </dialog>
+
+  <!-- PLAYER PROGRESS TRENDS DIALOG -->
+  <dialog id="playerTrendsDialog" aria-labelledby="playerTrendsTitle" style="width:min(860px, 95vw);">
+    <div class="dialog-header">
+      <div>
+        <h3 id="playerTrendsTitle">📈 Player Progress Trends</h3>
+        <span class="help-text" id="playerTrendsSubtitle">Track biomechanics, ball speed, and AI ratings across saved dates.</span>
+      </div>
+      <button type="button" class="btn-sm btn-ghost" id="closePlayerTrendsBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <div class="btn-group">
+          <select id="trendDisciplineFilter" aria-label="Filter discipline" style="width:auto; padding:4px 8px; font-size:0.78rem;">
+            <option value="all">All Disciplines</option>
+            <option value="batting">🏏 Batting</option>
+            <option value="bowling">⚡ Bowling</option>
+          </select>
+          <select id="trendMetricSelect" aria-label="Select trend metric" style="width:auto; padding:4px 8px; font-size:0.78rem;">
+            <option value="aiScore">AI Overall Rating (/10)</option>
+            <option value="ballSpeedKmh">Stopwatch Ball Speed (km/h)</option>
+            <option value="leftKnee">Left Knee Brace Avg (°)</option>
+            <option value="rightKnee">Right Knee Brace Avg (°)</option>
+            <option value="trunkTilt">Trunk Lean Avg (°)</option>
+            <option value="leftElbow">Left Elbow Avg (°)</option>
+            <option value="rightElbow">Right Elbow Avg (°)</option>
+          </select>
+        </div>
+        <span class="help-text" id="trendPointCount"></span>
+      </div>
+      <div class="trend-stat-grid" id="trendStatGrid"></div>
+      <canvas class="trend-canvas" id="playerTrendsCanvas" height="220"></canvas>
+      <div id="trendSessionList" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;"></div>
+    </div>
+    <div class="dialog-footer">
+      <button type="button" class="btn-ghost" id="donePlayerTrendsBtn">Close</button>
     </div>
   </dialog>
 
@@ -9439,12 +9735,21 @@ For each improvement's diagram (top-down net/pitch view):
         aimMode: false,
         boxZoomMode: false,
         drawMode: false,
+        drawTool: 'line', // 'line' | 'arrow' | 'circle' | 'pen' | 'text' | 'plumb'
+        drawColor: '#ef4444',
+        drawScope: 'all', // 'all' | 'frame'
+        activePenPoints: [],
         angleMode: false,
         isDrawing: false,
         drawStart: null,
         drawings: [],
         angles: [],
         angleDraftPoints: [],
+        timerEnabled: false,
+        timerA: null, // { idx, time }
+        timerB: null, // { idx, time }
+        sparklineEnabled: false,
+        sparklineData: [], // array of { idx, time, metrics, headX }
         dragStart: null,
         gridEnabled: false,
         gridCenterX: 0.5,
@@ -9617,6 +9922,134 @@ For each improvement's diagram (top-down net/pitch view):
         ctx.restore();
       }
 
+      function drawCoachingAnnotationsOnCtx(ctx, items, curFrameIdx, ox, oy, rw, rh, scaleMul = 1) {
+        if (!ctx || !Array.isArray(items) || items.length === 0) return;
+        const mapX = (nx) => ox + nx * rw;
+        const mapY = (ny) => oy + ny * rh;
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        items.forEach(d => {
+          if (d.frameIdx !== null && d.frameIdx !== undefined && d.frameIdx !== curFrameIdx) return;
+          const color = d.color || '#ef4444';
+          const lw = Math.max(2, 3 * scaleMul);
+
+          if (d.type === 'plumb') {
+            const px = mapX(d.x1);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+            ctx.lineWidth = lw + 2;
+            ctx.setLineDash([8 * scaleMul, 5 * scaleMul]);
+            ctx.beginPath();
+            ctx.moveTo(px, oy);
+            ctx.lineTo(px, oy + rh);
+            ctx.stroke();
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lw * 0.85;
+            ctx.beginPath();
+            ctx.moveTo(px, oy);
+            ctx.lineTo(px, oy + rh);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(12, 16, 24, 0.85)';
+            ctx.font = `bold ${Math.round(10 * scaleMul)}px -apple-system, BlinkMacSystemFont, sans-serif`;
+            const lbl = d.text || 'PLUMB';
+            const tw = ctx.measureText(lbl).width;
+            const lx = Math.min(ox + rw - tw - 10, Math.max(ox + 4, px - tw / 2));
+            const ly = oy + 6 * scaleMul;
+            ctx.fillRect(lx - 4, ly, tw + 8, 15 * scaleMul);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(lx - 4, ly, tw + 8, 15 * scaleMul);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(lbl, lx, ly + 11 * scaleMul);
+            ctx.restore();
+            return;
+          }
+
+          if (d.type === 'text') {
+            const tx = mapX(d.x1);
+            const ty = mapY(d.y1);
+            const txt = String(d.text || '').trim();
+            if (!txt) return;
+            ctx.save();
+            ctx.font = `bold ${Math.round(12 * scaleMul)}px -apple-system, BlinkMacSystemFont, sans-serif`;
+            const tw = ctx.measureText(txt).width;
+            const padX = 7 * scaleMul;
+            const boxH = 20 * scaleMul;
+            const bx = Math.min(ox + rw - tw - padX * 2 - 4, Math.max(ox + 4, tx));
+            const by = Math.min(oy + rh - boxH - 4, Math.max(oy + 4, ty - boxH / 2));
+            ctx.fillStyle = 'rgba(12, 16, 24, 0.88)';
+            ctx.fillRect(bx, by, tw + padX * 2, boxH);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.6 * scaleMul;
+            ctx.strokeRect(bx, by, tw + padX * 2, boxH);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(txt, bx + padX, by + 14 * scaleMul);
+            ctx.restore();
+            return;
+          }
+
+          if (d.type === 'pen' && Array.isArray(d.points) && d.points.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(mapX(d.points[0].x), mapY(d.points[0].y));
+            for (let i = 1; i < d.points.length; i++) {
+              ctx.lineTo(mapX(d.points[i].x), mapY(d.points[i].y));
+            }
+            ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+            ctx.lineWidth = lw + 2;
+            ctx.stroke();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lw;
+            ctx.stroke();
+            return;
+          }
+
+          if (d.type === 'circle') {
+            const cx = mapX(d.x1), cy = mapY(d.y1);
+            const rx = mapX(d.x2) - cx, ry = mapY(d.y2) - cy;
+            const rad = Math.max(4, Math.hypot(rx, ry));
+            ctx.beginPath();
+            ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+            ctx.lineWidth = lw + 2;
+            ctx.stroke();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lw;
+            ctx.stroke();
+            return;
+          }
+
+          // Default: straight line or arrow
+          const x1 = mapX(d.x1), y1 = mapY(d.y1);
+          const x2 = mapX(d.x2), y2 = mapY(d.y2);
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+          ctx.lineWidth = lw + 2;
+          ctx.stroke();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lw;
+          ctx.stroke();
+
+          if (d.type === 'arrow') {
+            const ang = Math.atan2(y2 - y1, x2 - x1);
+            const headLen = Math.max(10, 13 * scaleMul);
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - headLen * Math.cos(ang - 0.45), y2 - headLen * Math.sin(ang - 0.45));
+            ctx.lineTo(x2 - headLen * Math.cos(ang + 0.45), y2 - headLen * Math.sin(ang + 0.45));
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+          }
+        });
+        ctx.restore();
+      }
+
       function redrawSavedFrameOverlay(previewStart = null, previewEnd = null) {
         if (!savedFrameOverlayCanvas || !savedFrameStage) return;
         const rect = savedFrameStage.getBoundingClientRect();
@@ -9637,7 +10070,7 @@ For each improvement's diagram (top-down net/pitch view):
           drawGhostSkeletonsOnCtx(ctx, savedFramePlayer.trailLandmarks.slice(0, -1), ox, oy, rw, rh);
         }
 
-        // 0.75. Joint Path Traces (Head = amber, Hands = green, Hips = cyan)
+        // 0.75. Joint Path Traces
         if (savedFramePlayer.pathsEnabled && savedFramePlayer.trailLandmarks.length > 1) {
           drawJointPathsOnCtx(ctx, savedFramePlayer.trailLandmarks, ox, oy, rw, rh);
         }
@@ -9647,23 +10080,30 @@ For each improvement's diagram (top-down net/pitch view):
           drawSkeletonOnCtx(ctx, savedFramePlayer.latestLandmarks, savedFramePlayer.latestMetrics, ox, oy, rw, rh);
         }
 
-        // 2. Drawn lines
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        const drawLine = (x1, y1, x2, y2, color) => {
-          ctx.strokeStyle = color;
-          ctx.beginPath();
-          ctx.moveTo(x1 * rect.width, y1 * rect.height);
-          ctx.lineTo(x2 * rect.width, y2 * rect.height);
-          ctx.stroke();
-        };
-        savedFramePlayer.drawings.forEach(d => drawLine(d.x1, d.y1, d.x2, d.y2, '#4caf50'));
-        if (previewStart && previewEnd) {
-          drawLine(previewStart.x, previewStart.y, previewEnd.x, previewEnd.y, '#ffb74d');
+        // 2. Drawn shapes, arrows, circles, freehand, text callouts & plumb anchor lines
+        drawCoachingAnnotationsOnCtx(ctx, savedFramePlayer.drawings, savedFramePlayer.index, ox, oy, rw, rh, 1);
+        if (savedFramePlayer.drawTool === 'pen' && savedFramePlayer.activePenPoints.length > 1) {
+          drawCoachingAnnotationsOnCtx(ctx, [{
+            type: 'pen',
+            color: savedFramePlayer.drawColor,
+            frameIdx: null,
+            points: savedFramePlayer.activePenPoints
+          }], savedFramePlayer.index, ox, oy, rw, rh, 1);
+        } else if (previewStart && previewEnd) {
+          drawCoachingAnnotationsOnCtx(ctx, [{
+            type: savedFramePlayer.drawTool === 'arrow' ? 'arrow' : (savedFramePlayer.drawTool === 'circle' ? 'circle' : 'line'),
+            color: savedFramePlayer.drawColor,
+            frameIdx: null,
+            x1: previewStart.x, y1: previewStart.y,
+            x2: previewEnd.x, y2: previewEnd.y
+          }], savedFramePlayer.index, ox, oy, rw, rh, 1);
         }
 
         // 3. 3-point angle protractor measurements
-        savedFramePlayer.angles.forEach(a => drawAngleOnCtx(ctx, a.points, rect.width, rect.height, '#4fc3f7'));
+        savedFramePlayer.angles.forEach(a => {
+          if (a.frameIdx !== null && a.frameIdx !== undefined && a.frameIdx !== savedFramePlayer.index) return;
+          drawAngleOnCtx(ctx, a.points, rect.width, rect.height, a.color || '#4fc3f7');
+        });
         if (savedFramePlayer.angleDraftPoints.length > 0) {
           drawAngleOnCtx(ctx, savedFramePlayer.angleDraftPoints, rect.width, rect.height, '#ffb74d');
         }
@@ -10317,26 +10757,19 @@ For each improvement's diagram (top-down net/pitch view):
         if (savedFramePlayer.skeletonEnabled && savedFramePlayer.latestLandmarks) {
           drawSkeletonOnCtx(ctx, savedFramePlayer.latestLandmarks, savedFramePlayer.latestMetrics, mapOffX, mapOffY, mapFullW, mapFullH);
         }
-        // Draw user lines & angles
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        savedFramePlayer.drawings.forEach(d => {
-          ctx.strokeStyle = '#4caf50';
-          ctx.beginPath();
-          ctx.moveTo(mapOffX + d.x1 * mapFullW, mapOffY + d.y1 * mapFullH);
-          ctx.lineTo(mapOffX + d.x2 * mapFullW, mapOffY + d.y2 * mapFullH);
-          ctx.stroke();
-        });
+        // Draw user shapes, arrows, circles, freehand, text callouts, plumb lines & angles
+        drawCoachingAnnotationsOnCtx(ctx, savedFramePlayer.drawings, savedFramePlayer.index, mapOffX, mapOffY, mapFullW, mapFullH, outW / 720);
         savedFramePlayer.angles.forEach(a => {
+          if (a.frameIdx !== null && a.frameIdx !== undefined && a.frameIdx !== savedFramePlayer.index) return;
           const mappedPts = a.points.map(p => ({
             x: (mapOffX + p.x * mapFullW) / outW,
             y: (mapOffY + p.y * mapFullH) / outH
           }));
-          drawAngleOnCtx(ctx, mappedPts, outW, outH, '#4fc3f7');
+          drawAngleOnCtx(ctx, mappedPts, outW, outH, a.color || '#4fc3f7');
         });
         ctx.restore();
 
-        // Bottom caption bar with Player, Frame Label & Measured Angles
+        // Bottom caption bar with Player, Frame Label, Measured Angles & Pinned Coach Note
         ctx.fillStyle = '#151822';
         ctx.fillRect(0, outH, outW, captionH);
         ctx.fillStyle = '#c7b088';
@@ -10345,7 +10778,8 @@ For each improvement's diagram (top-down net/pitch view):
         const poseTxt = savedFramePlayer.skeletonEnabled && savedFramePlayer.latestMetrics
           ? `  |  ${formatPoseMetricsCompact(savedFramePlayer.latestMetrics)}`
           : '';
-        ctx.fillText(`${pName} · ${f.label || `F${savedFramePlayer.index + 1}`} @ ${Number(f.time || 0).toFixed(2)}s${poseTxt}`, 12, outH + 24);
+        const noteTxt = f.coachNote ? `  |  📌 ${f.coachNote}` : '';
+        ctx.fillText(`${pName} · ${f.label || `F${savedFramePlayer.index + 1}`} @ ${Number(f.time || 0).toFixed(2)}s${poseTxt}${noteTxt}`, 12, outH + 24);
 
         const a = document.createElement('a');
         a.href = c.toDataURL('image/png');
@@ -10377,11 +10811,54 @@ For each improvement's diagram (top-down net/pitch view):
         }
       });
 
+      const savedFrameDrawTools = document.getElementById('savedFrameDrawTools');
+      const savedFrameDrawScopeBtn = document.getElementById('savedFrameDrawScopeBtn');
+      const savedFrameUndoBtn = document.getElementById('savedFrameUndoBtn');
+
       const syncSavedCanvasInteractive = () => {
         const on = savedFramePlayer.drawMode || savedFramePlayer.angleMode;
         savedFrameOverlayCanvas?.classList.toggle('drawing-enabled', on);
         savedFrameStage?.classList.toggle('draw-mode', on);
+        savedFrameDrawTools?.classList.toggle('active', Boolean(savedFramePlayer.drawMode));
       };
+      document.querySelectorAll('#savedFrameDrawTools button[data-dtool]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          savedFramePlayer.drawTool = btn.dataset.dtool || 'line';
+          document.querySelectorAll('#savedFrameDrawTools button[data-dtool]').forEach(b => {
+            b.classList.toggle('btn-active', b === btn);
+          });
+          if (savedFramePlayer.drawTool === 'plumb') {
+            showToast('┆ Tap anywhere on the frame to drop a locked vertical Plumb Anchor Line');
+          } else if (savedFramePlayer.drawTool === 'text') {
+            showToast('T Tap anywhere on the frame to place a Text Callout');
+          }
+        });
+      });
+      document.querySelectorAll('#savedFrameDrawTools button[data-dcolor]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          savedFramePlayer.drawColor = btn.dataset.dcolor || '#ef4444';
+          document.querySelectorAll('#savedFrameDrawTools button[data-dcolor]').forEach(b => {
+            b.classList.toggle('active', b === btn);
+          });
+        });
+      });
+      savedFrameDrawScopeBtn?.addEventListener('click', () => {
+        savedFramePlayer.drawScope = savedFramePlayer.drawScope === 'all' ? 'frame' : 'all';
+        savedFrameDrawScopeBtn.textContent = savedFramePlayer.drawScope === 'all' ? '🌐 All Frames' : '🎞 This Frame';
+        savedFrameDrawScopeBtn.classList.toggle('btn-active', savedFramePlayer.drawScope === 'frame');
+        showToast(savedFramePlayer.drawScope === 'all'
+          ? '🌐 New drawings will stay pinned across all frames'
+          : '🎞 New drawings will appear only on this frame');
+      });
+      savedFrameUndoBtn?.addEventListener('click', () => {
+        if (savedFramePlayer.drawings.length > 0) {
+          savedFramePlayer.drawings.pop();
+        } else if (savedFramePlayer.angles.length > 0) {
+          savedFramePlayer.angles.pop();
+        }
+        redrawSavedFrameOverlay();
+      });
+
       savedFrameDrawBtn?.addEventListener('click', () => {
         const next = !savedFramePlayer.drawMode;
         exitSavedFrameModes();
@@ -10409,6 +10886,7 @@ For each improvement's diagram (top-down net/pitch view):
         savedFramePlayer.drawings = [];
         savedFramePlayer.angles = [];
         savedFramePlayer.angleDraftPoints = [];
+        savedFramePlayer.activePenPoints = [];
         redrawSavedFrameOverlay();
       });
       const getSavedCanvasPt = (e) => {
@@ -10416,6 +10894,18 @@ For each improvement's diagram (top-down net/pitch view):
         return {
           x: Math.max(0, Math.min(1, (e.clientX - rect.left) / (rect.width || 1))),
           y: Math.max(0, Math.min(1, (e.clientY - rect.top) / (rect.height || 1)))
+        };
+      };
+      // Map pointer onto normalized [0..1] image coordinates inside (ox, oy, rw, rh)
+      const getSavedImgPt = (e) => {
+        const stageRect = savedFrameStage.getBoundingClientRect();
+        const canvasRect = savedFrameOverlayCanvas.getBoundingClientRect();
+        const relX = (e.clientX - canvasRect.left) / (canvasRect.width || 1) * stageRect.width;
+        const relY = (e.clientY - canvasRect.top) / (canvasRect.height || 1) * stageRect.height;
+        const { ox, oy, rw, rh } = getSavedFrameDisplayRect(stageRect.width, stageRect.height);
+        return {
+          x: Math.max(0, Math.min(1, (relX - ox) / (rw || stageRect.width))),
+          y: Math.max(0, Math.min(1, (relY - oy) / (rh || stageRect.height)))
         };
       };
       savedFrameOverlayCanvas?.addEventListener('pointerdown', (e) => {
@@ -10426,7 +10916,12 @@ For each improvement's diagram (top-down net/pitch view):
           if (savedFramePlayer.angleDraftPoints.length === 3) {
             const [p1, v, p3] = savedFramePlayer.angleDraftPoints;
             const deg = calcAngleDeg(p1, v, p3);
-            savedFramePlayer.angles.push({ deg: deg ?? 0, points: savedFramePlayer.angleDraftPoints.map(p => ({ ...p })) });
+            savedFramePlayer.angles.push({
+              deg: deg ?? 0,
+              color: '#4fc3f7',
+              frameIdx: savedFramePlayer.drawScope === 'frame' ? savedFramePlayer.index : null,
+              points: savedFramePlayer.angleDraftPoints.map(p => ({ ...p }))
+            });
             savedFramePlayer.angleDraftPoints = [];
             showToast(`📐 Measured ${deg ?? 0}°`);
           }
@@ -10435,20 +10930,79 @@ For each improvement's diagram (top-down net/pitch view):
         }
         if (!savedFramePlayer.drawMode) return;
         e.preventDefault();
+        const pt = getSavedImgPt(e);
+        const scopeIdx = savedFramePlayer.drawScope === 'frame' ? savedFramePlayer.index : null;
+        if (savedFramePlayer.drawTool === 'plumb') {
+          savedFramePlayer.drawings.push({
+            type: 'plumb',
+            color: savedFramePlayer.drawColor,
+            frameIdx: null, // Plumb anchor lines stay locked across all frames by design
+            x1: pt.x, y1: 0, x2: pt.x, y2: 1,
+            text: 'PLUMB'
+          });
+          redrawSavedFrameOverlay();
+          showToast('┆ Locked vertical Plumb Line placed (stays fixed as you scrub)');
+          return;
+        }
+        if (savedFramePlayer.drawTool === 'text') {
+          const txt = prompt('Enter short coaching callout text (e.g. Head Still, Front Knee Brace):');
+          if (txt && txt.trim()) {
+            savedFramePlayer.drawings.push({
+              type: 'text',
+              color: savedFramePlayer.drawColor,
+              frameIdx: scopeIdx,
+              x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y,
+              text: txt.trim()
+            });
+            redrawSavedFrameOverlay();
+          }
+          return;
+        }
         savedFramePlayer.isDrawing = true;
-        savedFramePlayer.drawStart = getSavedCanvasPt(e);
+        savedFramePlayer.drawStart = pt;
+        if (savedFramePlayer.drawTool === 'pen') {
+          savedFramePlayer.activePenPoints = [pt];
+        }
         try { savedFrameOverlayCanvas.setPointerCapture(e.pointerId); } catch {}
       });
       savedFrameOverlayCanvas?.addEventListener('pointermove', (e) => {
         if (!savedFramePlayer.isDrawing || !savedFramePlayer.drawStart) return;
         e.preventDefault();
-        redrawSavedFrameOverlay(savedFramePlayer.drawStart, getSavedCanvasPt(e));
+        const pt = getSavedImgPt(e);
+        if (savedFramePlayer.drawTool === 'pen') {
+          const last = savedFramePlayer.activePenPoints[savedFramePlayer.activePenPoints.length - 1];
+          if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) > 0.004) {
+            savedFramePlayer.activePenPoints.push(pt);
+          }
+          redrawSavedFrameOverlay();
+        } else {
+          redrawSavedFrameOverlay(savedFramePlayer.drawStart, pt);
+        }
       });
       savedFrameOverlayCanvas?.addEventListener('pointerup', (e) => {
         if (!savedFramePlayer.isDrawing || !savedFramePlayer.drawStart) return;
         e.preventDefault();
-        const pt = getSavedCanvasPt(e);
-        savedFramePlayer.drawings.push({ x1: savedFramePlayer.drawStart.x, y1: savedFramePlayer.drawStart.y, x2: pt.x, y2: pt.y });
+        const pt = getSavedImgPt(e);
+        const scopeIdx = savedFramePlayer.drawScope === 'frame' ? savedFramePlayer.index : null;
+        if (savedFramePlayer.drawTool === 'pen') {
+          if (savedFramePlayer.activePenPoints.length > 1) {
+            savedFramePlayer.drawings.push({
+              type: 'pen',
+              color: savedFramePlayer.drawColor,
+              frameIdx: scopeIdx,
+              points: savedFramePlayer.activePenPoints.map(p => ({ ...p }))
+            });
+          }
+          savedFramePlayer.activePenPoints = [];
+        } else {
+          savedFramePlayer.drawings.push({
+            type: savedFramePlayer.drawTool || 'line',
+            color: savedFramePlayer.drawColor,
+            frameIdx: scopeIdx,
+            x1: savedFramePlayer.drawStart.x, y1: savedFramePlayer.drawStart.y,
+            x2: pt.x, y2: pt.y
+          });
+        }
         savedFramePlayer.isDrawing = false;
         savedFramePlayer.drawStart = null;
         redrawSavedFrameOverlay();
@@ -10469,6 +11023,8 @@ For each improvement's diagram (top-down net/pitch view):
         Array.from(savedFramesStrip.children).forEach((card, ci) => {
           card.classList.toggle('active-frame', ci === safeIdx);
         });
+        syncSavedFrameNoteUI();
+        if (savedFramePlayer.sparklineEnabled) drawBiomechanicsSparkline();
         applySavedFrameZoom();
         updateSavedFrameGhost();
         if (savedFramePlayer.skeletonEnabled && f.dataUrl) {
@@ -10560,9 +11116,487 @@ For each improvement's diagram (top-down net/pitch view):
         savedFramePlayer.drawings = [];
         savedFramePlayer.angles = [];
         savedFramePlayer.angleDraftPoints = [];
+        savedFramePlayer.activePenPoints = [];
+        savedFramePlayer.timerA = null;
+        savedFramePlayer.timerB = null;
+        savedFramePlayer.sparklineData = [];
+        updateStopwatchReadout();
+        // Hydrate any saved frame-pinned notes from the loaded report
+        const savedNotesMap = state.currentReport?._frameNotes || {};
+        savedFramePlayer.frames.forEach((fr, i) => {
+          if (savedNotesMap[i] && !fr.coachNote) fr.coachNote = savedNotesMap[i];
+        });
+        renderSavedFrameNoteMarkers();
         const keyIdx = savedFramePlayer.frames.findIndex(f => /RELEASE|IMPACT/i.test(f.label || ''));
         showSavedFrameAt(keyIdx >= 0 ? keyIdx : 0);
       }
+
+      // --- COACHING TOOLS: FRAME-PINNED NOTES, STOPWATCH, BIOMECHANICS SPARKLINE & CONTACT SHEET ---
+      const savedFrameNotePill = document.getElementById('savedFrameNotePill');
+      const savedFrameNoteMarkers = document.getElementById('savedFrameNoteMarkers');
+      const savedFrameNoteInput = document.getElementById('savedFrameNoteInput');
+      const savedFrameNoteSaveBtn = document.getElementById('savedFrameNoteSaveBtn');
+      const savedFrameNoteClearBtn = document.getElementById('savedFrameNoteClearBtn');
+
+      async function persistCurrentSessionCoachExtras({ frameNotes = null, coachMetrics = null } = {}) {
+        if (state.currentReport) {
+          if (frameNotes) state.currentReport._frameNotes = { ...(state.currentReport._frameNotes || {}), ...frameNotes };
+          if (coachMetrics) state.currentReport._coachMetrics = { ...(state.currentReport._coachMetrics || {}), ...coachMetrics };
+        }
+        const activeSess = state.activeLoadedSessionId
+          ? cachedSessions.find(s => s.id === state.activeLoadedSessionId)
+          : null;
+        if (activeSess) {
+          if (!activeSess.report) activeSess.report = {};
+          if (frameNotes) activeSess.report._frameNotes = { ...(activeSess.report._frameNotes || {}), ...frameNotes };
+          if (coachMetrics) activeSess.report._coachMetrics = { ...(activeSess.report._coachMetrics || {}), ...coachMetrics };
+          activeSess.synced = false;
+          try {
+            await putSession(activeSess);
+            if (supabaseClient) pushSessionToSupabase(activeSess).catch(() => {});
+          } catch (err) {
+            console.warn('Could not persist coach extras:', err);
+          }
+        }
+      }
+
+      function renderSavedFrameNoteMarkers() {
+        if (!savedFrameNoteMarkers) return;
+        savedFrameNoteMarkers.textContent = '';
+        const total = savedFramePlayer.frames.length;
+        let count = 0;
+        savedFramePlayer.frames.forEach((fr, i) => {
+          const thumb = savedFramesStrip?.children?.[i];
+          if (thumb) {
+            let badge = thumb.querySelector('.frame-thumb-note-badge');
+            if (fr.coachNote) {
+              if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'frame-thumb-note-badge';
+                badge.textContent = '📌';
+                thumb.style.position = 'relative';
+                thumb.appendChild(badge);
+              }
+              badge.title = fr.coachNote;
+            } else if (badge) {
+              badge.remove();
+            }
+          }
+          if (!fr.coachNote) return;
+          count++;
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'scrubber-note-dot';
+          const pct = total > 1 ? (i / (total - 1)) * 100 : 50;
+          dot.style.left = `${pct}%`;
+          dot.title = `F${i + 1}: ${fr.coachNote}`;
+          dot.addEventListener('click', () => {
+            stopSavedFramePlayback();
+            showSavedFrameAt(i);
+          });
+          savedFrameNoteMarkers.appendChild(dot);
+        });
+        savedFrameNoteMarkers.classList.toggle('has-markers', count > 0);
+      }
+
+      function syncSavedFrameNoteUI() {
+        const f = savedFramePlayer.frames[savedFramePlayer.index];
+        const note = (f?.coachNote || '').trim();
+        if (savedFrameNotePill) {
+          savedFrameNotePill.textContent = note ? `📌 ${note}` : '';
+          savedFrameNotePill.classList.toggle('active', Boolean(note));
+        }
+        if (savedFrameNoteInput) savedFrameNoteInput.value = note;
+        if (savedFrameNoteClearBtn) savedFrameNoteClearBtn.style.display = note ? 'inline-flex' : 'none';
+      }
+
+      async function saveCurrentFrameNote(noteText) {
+        const f = savedFramePlayer.frames[savedFramePlayer.index];
+        if (!f) return;
+        const cleaned = String(noteText || '').trim();
+        f.coachNote = cleaned;
+        const notesObj = {};
+        savedFramePlayer.frames.forEach((fr, i) => {
+          if (fr.coachNote) notesObj[i] = fr.coachNote;
+        });
+        if (state.currentReport) state.currentReport._frameNotes = notesObj;
+        const activeSess = state.activeLoadedSessionId
+          ? cachedSessions.find(s => s.id === state.activeLoadedSessionId)
+          : null;
+        if (activeSess) {
+          if (!activeSess.report) activeSess.report = {};
+          activeSess.report._frameNotes = notesObj;
+          activeSess.synced = false;
+          try {
+            await putSession(activeSess);
+            if (supabaseClient) pushSessionToSupabase(activeSess).catch(() => {});
+          } catch {}
+        }
+        syncSavedFrameNoteUI();
+        renderSavedFrameNoteMarkers();
+        showToast(cleaned ? `📌 Pinned note to frame ${savedFramePlayer.index + 1}` : 'Removed frame note');
+      }
+
+      savedFrameNoteSaveBtn?.addEventListener('click', () => saveCurrentFrameNote(savedFrameNoteInput?.value || ''));
+      savedFrameNoteInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          saveCurrentFrameNote(savedFrameNoteInput.value);
+        }
+      });
+      savedFrameNoteClearBtn?.addEventListener('click', () => saveCurrentFrameNote(''));
+
+      // Phase Stopwatch & Speed Timer
+      const savedFrameTimerBtn = document.getElementById('savedFrameTimerBtn');
+      const savedFrameTimerBar = document.getElementById('savedFrameTimerBar');
+      const timerSetABtn = document.getElementById('timerSetABtn');
+      const timerSetBBtn = document.getElementById('timerSetBBtn');
+      const timerDistSelect = document.getElementById('timerDistSelect');
+      const timerReadout = document.getElementById('timerReadout');
+      const timerSaveSpeedBtn = document.getElementById('timerSaveSpeedBtn');
+      const timerResetBtn = document.getElementById('timerResetBtn');
+
+      function updateStopwatchReadout() {
+        if (!timerReadout) return;
+        const a = savedFramePlayer.timerA;
+        const b = savedFramePlayer.timerB;
+        if (timerSetABtn) timerSetABtn.textContent = a ? `A: F${a.idx + 1}` : 'Set A';
+        if (timerSetBBtn) timerSetBBtn.textContent = b ? `B: F${b.idx + 1}` : 'Set B';
+        if (!a && !b) {
+          timerReadout.textContent = 'Mark A & B frames to measure ms & ball speed';
+          if (timerSaveSpeedBtn) timerSaveSpeedBtn.style.display = 'none';
+          return;
+        }
+        if (a && !b) {
+          timerReadout.textContent = `Start A: F${a.idx + 1} (${a.time.toFixed(3)}s) — scrub to end frame and click Set B`;
+          if (timerSaveSpeedBtn) timerSaveSpeedBtn.style.display = 'none';
+          return;
+        }
+        if (!a && b) {
+          timerReadout.textContent = `End B: F${b.idx + 1} (${b.time.toFixed(3)}s) — scrub to start frame and click Set A`;
+          if (timerSaveSpeedBtn) timerSaveSpeedBtn.style.display = 'none';
+          return;
+        }
+        const dt = Math.abs(b.time - a.time);
+        const df = Math.abs(b.idx - a.idx);
+        const ms = Math.round(dt * 1000);
+        const distM = parseFloat(timerDistSelect?.value) || 18.0;
+        if (dt > 0.01) {
+          const kmh = (distM / dt) * 3.6;
+          const mph = kmh * 0.621371;
+          timerReadout.textContent = `Δ ${ms} ms (${df}f) · Est. ${kmh.toFixed(1)} km/h (${mph.toFixed(1)} mph) @ ${distM}m`;
+          if (timerSaveSpeedBtn) {
+            timerSaveSpeedBtn.style.display = 'inline-flex';
+            timerSaveSpeedBtn.dataset.kmh = kmh.toFixed(1);
+            timerSaveSpeedBtn.dataset.ms = String(ms);
+          }
+        } else {
+          timerReadout.textContent = `Δ ${ms} ms (${df}f) — pick two frames at different timestamps`;
+          if (timerSaveSpeedBtn) timerSaveSpeedBtn.style.display = 'none';
+        }
+      }
+
+      savedFrameTimerBtn?.addEventListener('click', () => {
+        savedFramePlayer.timerEnabled = !savedFramePlayer.timerEnabled;
+        savedFrameTimerBtn.classList.toggle('btn-active', savedFramePlayer.timerEnabled);
+        savedFrameTimerBar?.classList.toggle('active', savedFramePlayer.timerEnabled);
+        updateStopwatchReadout();
+      });
+      timerSetABtn?.addEventListener('click', () => {
+        const f = savedFramePlayer.frames[savedFramePlayer.index];
+        if (!f) return;
+        savedFramePlayer.timerA = { idx: savedFramePlayer.index, time: Number(f.time || 0) };
+        updateStopwatchReadout();
+      });
+      timerSetBBtn?.addEventListener('click', () => {
+        const f = savedFramePlayer.frames[savedFramePlayer.index];
+        if (!f) return;
+        savedFramePlayer.timerB = { idx: savedFramePlayer.index, time: Number(f.time || 0) };
+        updateStopwatchReadout();
+      });
+      timerDistSelect?.addEventListener('change', updateStopwatchReadout);
+      timerResetBtn?.addEventListener('click', () => {
+        savedFramePlayer.timerA = null;
+        savedFramePlayer.timerB = null;
+        updateStopwatchReadout();
+      });
+      timerSaveSpeedBtn?.addEventListener('click', async () => {
+        const kmh = parseFloat(timerSaveSpeedBtn.dataset.kmh || '0');
+        const ms = parseInt(timerSaveSpeedBtn.dataset.ms || '0', 10);
+        if (!kmh) return;
+        await persistCurrentSessionCoachExtras({ coachMetrics: { ballSpeedKmh: kmh, phaseMs: ms } });
+        showToast(`💾 Saved ${kmh.toFixed(1)} km/h (${ms} ms) to session for Player Trends`);
+      });
+
+      // Synchronized Biomechanics Sparkline Graph
+      const savedFrameSparkBtn = document.getElementById('savedFrameSparkBtn');
+      const savedFrameSparklineBox = document.getElementById('savedFrameSparklineBox');
+      const sparklineMetricSelect = document.getElementById('sparklineMetricSelect');
+      const sparklineSummary = document.getElementById('sparklineSummary');
+      const savedFrameSparklineCanvas = document.getElementById('savedFrameSparklineCanvas');
+
+      async function scanAllFramesForSparkline() {
+        const frames = savedFramePlayer.frames;
+        if (!frames.length) return;
+        if (sparklineSummary) sparklineSummary.textContent = `Scanning 0/${frames.length} frames...`;
+        try {
+          await ensurePoseLandmarker();
+        } catch (err) {
+          if (sparklineSummary) sparklineSummary.textContent = `Pose unavailable: ${err.message}`;
+          return;
+        }
+        const results = [];
+        let runningTorso = null;
+        let baseHeadX = null;
+        for (let i = 0; i < frames.length; i++) {
+          const entry = await ensurePoseForDataUrl(frames[i].dataUrl, runningTorso);
+          const lm = entry?.landmarks || null;
+          if (lm) runningTorso = getPoseTorsoCenter(lm) || runningTorso;
+          const headX = (lm && (lm[0]?.visibility ?? 1) > 0.35) ? lm[0].x : null;
+          if (baseHeadX === null && headX !== null) baseHeadX = headX;
+          const headDrift = (headX !== null && baseHeadX !== null) ? Math.round(Math.abs(headX - baseHeadX) * 1000) / 10 : null;
+          results.push({
+            idx: i,
+            time: Number(frames[i].time || 0),
+            metrics: entry?.metrics || null,
+            headDrift
+          });
+          if (sparklineSummary && (i % 4 === 0 || i === frames.length - 1)) {
+            sparklineSummary.textContent = `Scanning ${i + 1}/${frames.length} frames...`;
+          }
+        }
+        savedFramePlayer.sparklineData = results;
+        // Persist average biomechanics to session for Player Trends
+        const avgOf = (key) => {
+          const vals = results.map(r => r.metrics?.[key]).filter(v => typeof v === 'number' && isFinite(v));
+          return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+        };
+        const coachMetrics = {};
+        ['leftKnee', 'rightKnee', 'trunkTilt', 'leftElbow', 'rightElbow'].forEach(k => {
+          const v = avgOf(k);
+          if (v !== null) coachMetrics[k] = v;
+        });
+        if (Object.keys(coachMetrics).length > 0) {
+          persistCurrentSessionCoachExtras({ coachMetrics });
+        }
+        drawBiomechanicsSparkline();
+      }
+
+      function drawBiomechanicsSparkline() {
+        if (!savedFrameSparklineCanvas || !savedFramePlayer.sparklineEnabled) return;
+        const rect = savedFrameSparklineCanvas.getBoundingClientRect();
+        const w = Math.max(260, Math.round(rect.width || 400));
+        const h = 76;
+        savedFrameSparklineCanvas.width = w;
+        savedFrameSparklineCanvas.height = h;
+        const ctx = savedFrameSparklineCanvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+
+        const data = savedFramePlayer.sparklineData;
+        const metricKey = sparklineMetricSelect?.value || 'leftKnee';
+        const isDrift = metricKey === 'headDrift';
+        const unit = isDrift ? '%' : '°';
+        const vals = data.map(d => (isDrift ? d.headDrift : d.metrics?.[metricKey] ?? null));
+        const valid = vals.filter(v => typeof v === 'number' && isFinite(v));
+        if (valid.length === 0) {
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText('No pose measurements detected for this metric', 12, h / 2 + 4);
+          if (sparklineSummary) sparklineSummary.textContent = 'No pose data';
+          return;
+        }
+        const minV = Math.min(...valid);
+        const maxV = Math.max(...valid);
+        const spanV = Math.max(isDrift ? 2 : 10, maxV - minV);
+        const padL = 32, padR = 14, padT = 12, padB = 16;
+        const plotW = w - padL - padR;
+        const plotH = h - padT - padB;
+        const n = Math.max(1, data.length - 1);
+        const toX = (i) => padL + (i / n) * plotW;
+        const toY = (v) => padT + (1 - (v - minV) / spanV) * plotH;
+
+        // Horizontal reference lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        [0, 0.5, 1].forEach(frac => {
+          const y = padT + frac * plotH;
+          ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+        });
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(`${Math.round(maxV)}${unit}`, 4, padT + 4);
+        ctx.fillText(`${Math.round(minV)}${unit}`, 4, padT + plotH + 3);
+
+        // Plot line
+        ctx.strokeStyle = isDrift ? '#f59e0b' : '#38bdf8';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        let started = false;
+        vals.forEach((v, i) => {
+          if (v === null) { started = false; return; }
+          const x = toX(i), y = toY(v);
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Current frame vertical playhead
+        const curIdx = savedFramePlayer.index;
+        const cx = toX(curIdx);
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.9)';
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(cx, padT - 4); ctx.lineTo(cx, h - padB + 4); ctx.stroke();
+        ctx.setLineDash([]);
+
+        const curV = vals[curIdx];
+        if (typeof curV === 'number' && isFinite(curV)) {
+          const cy = toY(curV);
+          ctx.beginPath();
+          ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#f59e0b';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+        }
+        if (sparklineSummary) {
+          const curStr = typeof curV === 'number' ? `Now: ${curV}${unit}` : 'Now: —';
+          sparklineSummary.textContent = `${curStr}  ·  Min ${minV}${unit} / Max ${maxV}${unit} (tap graph to scrub)`;
+        }
+      }
+
+      savedFrameSparkBtn?.addEventListener('click', async () => {
+        savedFramePlayer.sparklineEnabled = !savedFramePlayer.sparklineEnabled;
+        savedFrameSparkBtn.classList.toggle('btn-active', savedFramePlayer.sparklineEnabled);
+        savedFrameSparklineBox?.classList.toggle('active', savedFramePlayer.sparklineEnabled);
+        if (savedFramePlayer.sparklineEnabled) {
+          if (savedFramePlayer.sparklineData.length !== savedFramePlayer.frames.length) {
+            await scanAllFramesForSparkline();
+          } else {
+            drawBiomechanicsSparkline();
+          }
+        }
+      });
+      sparklineMetricSelect?.addEventListener('change', drawBiomechanicsSparkline);
+      savedFrameSparklineCanvas?.addEventListener('pointerdown', (e) => {
+        if (!savedFramePlayer.frames.length) return;
+        const rect = savedFrameSparklineCanvas.getBoundingClientRect();
+        const padL = 32, padR = 14;
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left - padL) / Math.max(1, rect.width - padL - padR)));
+        const targetIdx = Math.round(ratio * Math.max(0, savedFramePlayer.frames.length - 1));
+        stopSavedFramePlayback();
+        showSavedFrameAt(targetIdx);
+      });
+
+      // 1-Click Key-Phase Coaching Contact Sheet Export (4-panel strip PNG)
+      const savedFrameStripBtn = document.getElementById('savedFrameStripBtn');
+      savedFrameStripBtn?.addEventListener('click', async () => {
+        const frames = savedFramePlayer.frames;
+        if (!frames.length) return;
+        // Pick up to 4 key frames: prioritize frames with coach notes or custom phase labels, then fill evenly
+        const targetCount = Math.min(4, frames.length);
+        const picked = new Set();
+        frames.forEach((f, i) => {
+          if (picked.size < targetCount && (f.coachNote || (f.label && !/^F\d+$/i.test(f.label)))) {
+            picked.add(i);
+          }
+        });
+        for (let k = 0; k < targetCount && picked.size < targetCount; k++) {
+          const idx = targetCount === 1 ? 0 : Math.round((k / (targetCount - 1)) * (frames.length - 1));
+          picked.add(idx);
+        }
+        const indices = Array.from(picked).sort((a, b) => a - b);
+
+        // Load all selected frame images
+        const loaded = await Promise.all(indices.map(i => new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ idx: i, frame: frames[i], img });
+          img.onerror = () => resolve(null);
+          img.src = frames[i].dataUrl;
+        })));
+        const validPanels = loaded.filter(Boolean);
+        if (!validPanels.length) return;
+
+        const firstAspect = (validPanels[0].img.naturalWidth || 16) / (validPanels[0].img.naturalHeight || 9);
+        const panelW = firstAspect < 0.85 ? 360 : 440;
+        const panelH = Math.round(panelW / Math.max(0.5, Math.min(1.85, firstAspect)));
+        const gap = 12, pad = 16, headerH = 54, footerH = 58;
+        const totalW = pad * 2 + validPanels.length * panelW + (validPanels.length - 1) * gap;
+        const totalH = headerH + panelH + footerH + pad;
+
+        const c = document.createElement('canvas');
+        c.width = totalW;
+        c.height = totalH;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#0e1118';
+        ctx.fillRect(0, 0, totalW, totalH);
+
+        // Header bar
+        const pName = state.currentReport?._meta?.playerName || playerNameInput.value.trim() || 'Player';
+        const disc = (state.currentReport?._meta?.discipline || state.discipline || '').toUpperCase();
+        const stamp = state.currentReport?._meta?.fileStamp || new Date().toISOString().slice(0, 10);
+        const speedStr = timerSaveSpeedBtn?.dataset?.kmh ? `  ·  ⏱ ${timerSaveSpeedBtn.dataset.kmh} km/h` : '';
+        ctx.fillStyle = '#c7b088';
+        ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(`🏏 ${pName} — Key-Phase Coaching Contact Sheet`, pad, 26);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(`${disc}  ·  ${stamp}${speedStr}`, pad, 44);
+
+        const defaultPhaseNames = state.discipline === 'bowling'
+          ? ['Gather / BFC', 'FFC / Brace', 'Release', 'Follow-Through']
+          : ['Trigger / Setup', 'Stride', 'Impact', 'Follow-Through'];
+
+        validPanels.forEach((p, slot) => {
+          const x0 = pad + slot * (panelW + gap);
+          const y0 = headerH;
+          ctx.fillStyle = '#05070c';
+          ctx.fillRect(x0, y0, panelW, panelH);
+
+          const { ox, oy, rw, rh } = getImgDisplayRectInStage(p.img, panelW, panelH);
+          ctx.drawImage(p.img, x0 + ox, y0 + oy, rw, rh);
+
+          // Render persistent/frame annotations & cached skeleton if enabled
+          if (savedFramePlayer.gridEnabled) {
+            drawAlignmentGridOnCtx(ctx, x0 + ox, y0 + oy, rw, rh, savedFramePlayer.gridCenterX, savedFramePlayer.gridCenterY);
+          }
+          const cachedPose = savedFramePlayer.poseCache.get(getSavedPoseCacheKey(p.frame.dataUrl));
+          if (savedFramePlayer.skeletonEnabled && cachedPose?.landmarks) {
+            drawSkeletonOnCtx(ctx, cachedPose.landmarks, cachedPose.metrics, x0 + ox, y0 + oy, rw, rh);
+          }
+          drawCoachingAnnotationsOnCtx(ctx, savedFramePlayer.drawings, p.idx, x0 + ox, y0 + oy, rw, rh, panelW / 600);
+
+          // Panel border
+          ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x0, y0, panelW, panelH);
+
+          // Footer caption card
+          ctx.fillStyle = '#151924';
+          ctx.fillRect(x0, y0 + panelH, panelW, footerH);
+          const labelTxt = p.frame.label && !/^F\d+$/i.test(p.frame.label)
+            ? p.frame.label
+            : `${defaultPhaseNames[slot] || `Phase ${slot + 1}`} (F${p.idx + 1})`;
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText(`${labelTxt}  ·  ${Number(p.frame.time || 0).toFixed(2)}s`, x0 + 8, y0 + panelH + 19);
+
+          const angleLine = cachedPose?.metrics ? formatPoseMetricsCompact(cachedPose.metrics) : '';
+          const noteLine = p.frame.coachNote ? `📌 ${p.frame.coachNote}` : angleLine;
+          if (noteLine) {
+            ctx.fillStyle = p.frame.coachNote ? '#fde68a' : '#b3e5fc';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText(noteLine.slice(0, 56), x0 + 8, y0 + panelH + 40);
+          }
+        });
+
+        const a = document.createElement('a');
+        a.href = c.toDataURL('image/png');
+        a.download = `${pName.replace(/[^a-z0-9_-]+/gi, '_')}-contact-sheet.png`;
+        a.click();
+        showToast('🎞 Exported 4-phase coaching Contact Sheet PNG');
+      });
 
       // --- SUPABASE CLOUD STORAGE SYNC ---
       let supabaseClient = null;
@@ -11478,6 +12512,16 @@ create policy "Allow anon read/write for personal lab"
             deletePlayerBtn.disabled = true;
             await deletePlayerInStorage(pName);
           });
+          const trendsBtn = document.createElement('button');
+          trendsBtn.type = 'button';
+          trendsBtn.className = 'btn-sm';
+          trendsBtn.textContent = '📈 Trends';
+          trendsBtn.title = `View progress trends across dates for ${pName}`;
+          trendsBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openPlayerTrendsDialog(pName);
+          });
           const planBtn = document.createElement('button');
           planBtn.type = 'button';
           planBtn.className = 'btn-sm';
@@ -11490,7 +12534,7 @@ create policy "Allow anon read/write for personal lab"
           const pBadge = document.createElement('span');
           pBadge.className = 'badge badge-pitch';
           pBadge.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
-          pRightWrap.append(renamePlayerBtn, deletePlayerBtn, planBtn, pBadge);
+          pRightWrap.append(renamePlayerBtn, deletePlayerBtn, trendsBtn, planBtn, pBadge);
           pSum.append(pLeft, pRightWrap);
           playerDetails.appendChild(pSum);
 
@@ -11811,6 +12855,14 @@ create policy "Allow anon read/write for personal lab"
         titleB: 'After',
         idxA: 0,
         idxB: 0,
+        syncA: 0,
+        syncB: 0,
+        syncLocked: false,
+        syncOffset: 0,
+        onionMode: false,
+        onionOpacity: 0.5,
+        onionShiftX: 0,
+        onionShiftY: 0,
         isPlaying: false,
         timerId: null,
         gridEnabled: false,
@@ -11914,24 +12966,93 @@ create policy "Allow anon read/write for personal lab"
         } catch {}
       }
 
+      function getSbsSyncBounds() {
+        const minOff = -Math.max(sbsState.syncA, sbsState.syncB);
+        const maxOff = Math.max(
+          Math.max(0, sbsState.framesA.length - 1 - sbsState.syncA),
+          Math.max(0, sbsState.framesB.length - 1 - sbsState.syncB)
+        );
+        return { minOff, maxOff };
+      }
+
+      function applySbsSyncOffset(offset) {
+        const { minOff, maxOff } = getSbsSyncBounds();
+        sbsState.syncOffset = Math.max(minOff, Math.min(maxOff, offset));
+        sbsState.idxA = Math.max(0, Math.min(sbsState.framesA.length - 1, sbsState.syncA + sbsState.syncOffset));
+        sbsState.idxB = Math.max(0, Math.min(sbsState.framesB.length - 1, sbsState.syncB + sbsState.syncOffset));
+      }
+
+      function redrawSbsOnionOverlay() {
+        const stage = document.getElementById('sbsOnionStage');
+        const imgA = document.getElementById('sbsOnionImgA');
+        const imgB = document.getElementById('sbsOnionImgB');
+        const canvas = document.getElementById('sbsOnionCanvas');
+        if (!stage || !imgA || !imgB) return;
+        imgB.style.opacity = String(sbsState.onionOpacity);
+        imgB.style.transform = `translate(${sbsState.onionShiftX}px, ${sbsState.onionShiftY}px)`;
+        if (!canvas) return;
+        const rect = stage.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        const { ox, oy, rw, rh } = getImgDisplayRectInStage(imgA, rect.width, rect.height);
+        if (sbsState.gridEnabled) {
+          drawAlignmentGridOnCtx(ctx, ox, oy, rw, rh);
+        }
+      }
+
       function renderSbsFrames() {
         const fA = sbsState.framesA[sbsState.idxA];
         const fB = sbsState.framesB[sbsState.idxB];
         const imgA = document.getElementById('sbsImgA');
         const imgB = document.getElementById('sbsImgB');
+        const onionImgA = document.getElementById('sbsOnionImgA');
+        const onionImgB = document.getElementById('sbsOnionImgB');
         if (fA && imgA) {
           imgA.src = fA.dataUrl;
+          if (onionImgA) onionImgA.src = fA.dataUrl;
           document.getElementById('sbsLabelA').textContent = `${sbsState.idxA + 1}/${sbsState.framesA.length} · ${fA.label || ''}`;
         }
         if (fB && imgB) {
           imgB.src = fB.dataUrl;
+          if (onionImgB) onionImgB.src = fB.dataUrl;
           document.getElementById('sbsLabelB').textContent = `${sbsState.idxB + 1}/${sbsState.framesB.length} · ${fB.label || ''}`;
         }
-        const maxLen = Math.max(sbsState.framesA.length, sbsState.framesB.length, 1);
+        const markBtnA = document.getElementById('sbsMarkSyncA');
+        const markBtnB = document.getElementById('sbsMarkSyncB');
+        if (markBtnA) {
+          markBtnA.textContent = `🎯 Sync A (F${sbsState.syncA + 1})`;
+          markBtnA.classList.toggle('btn-active', sbsState.idxA === sbsState.syncA);
+        }
+        if (markBtnB) {
+          markBtnB.textContent = `🎯 Sync B (F${sbsState.syncB + 1})`;
+          markBtnB.classList.toggle('btn-active', sbsState.idxB === sbsState.syncB);
+        }
         const syncScrubber = document.getElementById('sbsSyncScrubber');
+        const syncBadge = document.getElementById('sbsSyncOffsetBadge');
         if (syncScrubber) {
-          syncScrubber.max = String(maxLen - 1);
-          syncScrubber.value = String(Math.min(maxLen - 1, Math.max(sbsState.idxA, sbsState.idxB)));
+          if (sbsState.syncLocked) {
+            const { minOff, maxOff } = getSbsSyncBounds();
+            syncScrubber.min = String(minOff);
+            syncScrubber.max = String(maxOff);
+            syncScrubber.value = String(sbsState.syncOffset);
+            if (syncBadge) {
+              syncBadge.textContent = sbsState.syncOffset === 0
+                ? '🎯 SYNC (0f)'
+                : `Δ ${sbsState.syncOffset > 0 ? '+' : ''}${sbsState.syncOffset}f`;
+            }
+          } else {
+            const maxLen = Math.max(sbsState.framesA.length, sbsState.framesB.length, 1);
+            syncScrubber.min = '0';
+            syncScrubber.max = String(maxLen - 1);
+            syncScrubber.value = String(Math.min(maxLen - 1, Math.max(sbsState.idxA, sbsState.idxB)));
+            if (syncBadge) syncBadge.textContent = '';
+          }
+        }
+        if (sbsState.onionMode) {
+          redrawSbsOnionOverlay();
         }
         if (sbsState.skeletonEnabled) {
           if (fA?.dataUrl) evalSbsPanePose('A', fA.dataUrl);
@@ -11959,7 +13080,19 @@ create policy "Allow anon read/write for personal lab"
         const keyB = framesB.findIndex(f => /RELEASE|IMPACT/i.test(f.label || ''));
         sbsState.idxA = keyA >= 0 ? keyA : 0;
         sbsState.idxB = keyB >= 0 ? keyB : 0;
+        sbsState.syncA = sbsState.idxA;
+        sbsState.syncB = sbsState.idxB;
+        sbsState.syncOffset = 0;
+        sbsState.syncLocked = (keyA >= 0 && keyB >= 0);
+        sbsState.onionMode = false;
+        sbsState.onionShiftX = 0;
+        sbsState.onionShiftY = 0;
 
+        document.getElementById('sbsSyncLockBtn')?.classList.toggle('btn-active', sbsState.syncLocked);
+        document.getElementById('sbsOnionBtn')?.classList.toggle('btn-active', false);
+        document.getElementById('sbsSplitGrid').style.display = '';
+        document.getElementById('sbsOnionStage')?.classList.remove('active');
+        document.getElementById('sbsOnionControls')?.classList.remove('active');
         document.getElementById('sbsTitleA').textContent = sbsState.titleA;
         document.getElementById('sbsTitleB').textContent = sbsState.titleB;
         if (historyDialog.open) historyDialog.close();
@@ -12001,25 +13134,102 @@ create policy "Allow anon read/write for personal lab"
         sbsState.idxB = Math.min(sbsState.framesB.length - 1, sbsState.idxB + 1);
         renderSbsFrames();
       });
+      document.getElementById('sbsMarkSyncA')?.addEventListener('click', () => {
+        sbsState.syncA = sbsState.idxA;
+        sbsState.syncOffset = 0;
+        renderSbsFrames();
+        showToast(`🎯 Marked Clip A sync anchor at F${sbsState.syncA + 1}`);
+      });
+      document.getElementById('sbsMarkSyncB')?.addEventListener('click', () => {
+        sbsState.syncB = sbsState.idxB;
+        sbsState.syncOffset = 0;
+        renderSbsFrames();
+        showToast(`🎯 Marked Clip B sync anchor at F${sbsState.syncB + 1}`);
+      });
+      document.getElementById('sbsSyncLockBtn')?.addEventListener('click', (e) => {
+        sbsState.syncLocked = !sbsState.syncLocked;
+        e.currentTarget.classList.toggle('btn-active', sbsState.syncLocked);
+        if (sbsState.syncLocked) {
+          sbsState.syncOffset = 0;
+          applySbsSyncOffset(0);
+          showToast(`🔗 Sync-Locked on A:F${sbsState.syncA + 1} ↔ B:F${sbsState.syncB + 1}`);
+        } else {
+          showToast('🔓 Sync Lock off (free scrubbing)');
+        }
+        renderSbsFrames();
+      });
+      document.getElementById('sbsOnionBtn')?.addEventListener('click', (e) => {
+        sbsState.onionMode = !sbsState.onionMode;
+        e.currentTarget.classList.toggle('btn-active', sbsState.onionMode);
+        document.getElementById('sbsSplitGrid').style.display = sbsState.onionMode ? 'none' : '';
+        document.getElementById('sbsOnionStage')?.classList.toggle('active', sbsState.onionMode);
+        document.getElementById('sbsOnionControls')?.classList.toggle('active', sbsState.onionMode);
+        if (sbsState.onionMode) {
+          redrawSbsOnionOverlay();
+          showToast('🧅 Onion-Skin Overlay ON — adjust opacity & X/Y shift to align players');
+        }
+      });
+      document.getElementById('sbsOnionOpacity')?.addEventListener('input', (e) => {
+        const pct = parseInt(e.target.value, 10) || 0;
+        sbsState.onionOpacity = pct / 100;
+        const lbl = document.getElementById('sbsOnionOpacityVal');
+        if (lbl) lbl.textContent = `${pct}%`;
+        redrawSbsOnionOverlay();
+      });
+      document.getElementById('sbsOnionShiftX')?.addEventListener('input', (e) => {
+        sbsState.onionShiftX = parseInt(e.target.value, 10) || 0;
+        redrawSbsOnionOverlay();
+      });
+      document.getElementById('sbsOnionShiftY')?.addEventListener('input', (e) => {
+        sbsState.onionShiftY = parseInt(e.target.value, 10) || 0;
+        redrawSbsOnionOverlay();
+      });
+      document.getElementById('sbsOnionResetAlignBtn')?.addEventListener('click', () => {
+        sbsState.onionOpacity = 0.5;
+        sbsState.onionShiftX = 0;
+        sbsState.onionShiftY = 0;
+        const op = document.getElementById('sbsOnionOpacity');
+        const sx = document.getElementById('sbsOnionShiftX');
+        const sy = document.getElementById('sbsOnionShiftY');
+        const lbl = document.getElementById('sbsOnionOpacityVal');
+        if (op) op.value = '50';
+        if (sx) sx.value = '0';
+        if (sy) sy.value = '0';
+        if (lbl) lbl.textContent = '50%';
+        redrawSbsOnionOverlay();
+      });
+
       document.getElementById('sbsStepBackBoth')?.addEventListener('click', () => {
         stopSbsPlayback();
-        sbsState.idxA = Math.max(0, sbsState.idxA - 1);
-        sbsState.idxB = Math.max(0, sbsState.idxB - 1);
+        if (sbsState.syncLocked) {
+          applySbsSyncOffset(sbsState.syncOffset - 1);
+        } else {
+          sbsState.idxA = Math.max(0, sbsState.idxA - 1);
+          sbsState.idxB = Math.max(0, sbsState.idxB - 1);
+        }
         renderSbsFrames();
       });
       document.getElementById('sbsStepFwdBoth')?.addEventListener('click', () => {
         stopSbsPlayback();
-        sbsState.idxA = Math.min(sbsState.framesA.length - 1, sbsState.idxA + 1);
-        sbsState.idxB = Math.min(sbsState.framesB.length - 1, sbsState.idxB + 1);
+        if (sbsState.syncLocked) {
+          applySbsSyncOffset(sbsState.syncOffset + 1);
+        } else {
+          sbsState.idxA = Math.min(sbsState.framesA.length - 1, sbsState.idxA + 1);
+          sbsState.idxB = Math.min(sbsState.framesB.length - 1, sbsState.idxB + 1);
+        }
         renderSbsFrames();
       });
       document.getElementById('sbsSyncScrubber')?.addEventListener('input', (e) => {
         stopSbsPlayback();
         const val = parseInt(e.target.value, 10) || 0;
-        const maxVal = Math.max(1, parseInt(e.target.max, 10) || 1);
-        const ratio = val / maxVal;
-        sbsState.idxA = Math.round(ratio * Math.max(0, sbsState.framesA.length - 1));
-        sbsState.idxB = Math.round(ratio * Math.max(0, sbsState.framesB.length - 1));
+        if (sbsState.syncLocked) {
+          applySbsSyncOffset(val);
+        } else {
+          const maxVal = Math.max(1, parseInt(e.target.max, 10) || 1);
+          const ratio = val / maxVal;
+          sbsState.idxA = Math.round(ratio * Math.max(0, sbsState.framesA.length - 1));
+          sbsState.idxB = Math.round(ratio * Math.max(0, sbsState.framesB.length - 1));
+        }
         renderSbsFrames();
       });
       document.getElementById('sbsPlayBothBtn')?.addEventListener('click', () => {
@@ -12031,8 +13241,14 @@ create policy "Allow anon read/write for personal lab"
         sbsState.isPlaying = true;
         document.getElementById('sbsPlayBothBtn').textContent = '⏸ Pause';
         sbsState.timerId = setInterval(() => {
-          sbsState.idxA = (sbsState.idxA + 1) % Math.max(1, sbsState.framesA.length);
-          sbsState.idxB = (sbsState.idxB + 1) % Math.max(1, sbsState.framesB.length);
+          if (sbsState.syncLocked) {
+            const { minOff, maxOff } = getSbsSyncBounds();
+            const nextOff = sbsState.syncOffset >= maxOff ? minOff : sbsState.syncOffset + 1;
+            applySbsSyncOffset(nextOff);
+          } else {
+            sbsState.idxA = (sbsState.idxA + 1) % Math.max(1, sbsState.framesA.length);
+            sbsState.idxB = (sbsState.idxB + 1) % Math.max(1, sbsState.framesB.length);
+          }
           renderSbsFrames();
         }, Math.round(1000 / fps));
       });
@@ -12041,6 +13257,7 @@ create policy "Allow anon read/write for personal lab"
         e.currentTarget.classList.toggle('btn-active', sbsState.gridEnabled);
         redrawSbsPane('A');
         redrawSbsPane('B');
+        if (sbsState.onionMode) redrawSbsOnionOverlay();
       });
       document.getElementById('sbsSkelBtn')?.addEventListener('click', async (e) => {
         const btn = e.currentTarget;
@@ -12070,6 +13287,36 @@ create policy "Allow anon read/write for personal lab"
         const imgA = document.getElementById('sbsImgA');
         const imgB = document.getElementById('sbsImgB');
         if (!imgA?.naturalWidth || !imgB?.naturalWidth) return;
+
+        if (sbsState.onionMode) {
+          const outW = 960, outH = 560, capH = 44;
+          const c = document.createElement('canvas');
+          c.width = outW;
+          c.height = outH + capH;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#0e1118';
+          ctx.fillRect(0, 0, c.width, c.height);
+          const rectA = getImgDisplayRectInStage(imgA, outW, outH);
+          const rectB = getImgDisplayRectInStage(imgB, outW, outH);
+          ctx.drawImage(imgA, rectA.ox, rectA.oy, rectA.rw, rectA.rh);
+          ctx.save();
+          ctx.globalAlpha = sbsState.onionOpacity;
+          ctx.drawImage(imgB, rectB.ox + sbsState.onionShiftX, rectB.oy + sbsState.onionShiftY, rectB.rw, rectB.rh);
+          ctx.restore();
+          if (sbsState.gridEnabled) drawAlignmentGridOnCtx(ctx, rectA.ox, rectA.oy, rectA.rw, rectA.rh);
+          ctx.fillStyle = '#151822';
+          ctx.fillRect(0, outH, outW, capH);
+          ctx.fillStyle = '#c7b088';
+          ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText(`🧅 Onion-Skin (${Math.round(sbsState.onionOpacity * 100)}%) · ${sbsState.titleA}  vs.  ${sbsState.titleB}`, 12, outH + 26);
+          const a = document.createElement('a');
+          a.href = c.toDataURL('image/png');
+          a.download = `cricket-onion-skin-${new Date().toISOString().slice(0, 10)}.png`;
+          a.click();
+          showToast('📸 Exported Onion-Skin Overlay PNG');
+          return;
+        }
+
         const paneW = 640, paneH = 420, gap = 12, capH = 44;
         const c = document.createElement('canvas');
         c.width = paneW * 2 + gap;
@@ -12103,6 +13350,216 @@ create policy "Allow anon read/write for personal lab"
         a.click();
         showToast('📸 Exported Side-by-Side Comparison PNG');
       });
+
+      // --- PLAYER PROGRESS TRENDS OVER TIME ---
+      const playerTrendsDialog = document.getElementById('playerTrendsDialog');
+      const trendDisciplineFilter = document.getElementById('trendDisciplineFilter');
+      const trendMetricSelect = document.getElementById('trendMetricSelect');
+      const trendStatGrid = document.getElementById('trendStatGrid');
+      const playerTrendsCanvas = document.getElementById('playerTrendsCanvas');
+      const trendSessionList = document.getElementById('trendSessionList');
+      const trendPointCount = document.getElementById('trendPointCount');
+      let currentTrendPlayer = '';
+
+      function extractTrendMetricFromSession(sess, metricKey) {
+        const rep = sess?.report || {};
+        if (metricKey === 'aiScore') {
+          if (typeof rep.overallRating === 'number' && isFinite(rep.overallRating)) return rep.overallRating;
+          if (typeof rep.overallScore === 'number' && isFinite(rep.overallScore)) return rep.overallScore;
+          const m = String(rep.overallRating || rep.overallScore || '').match(/(\d+(?:\.\d+)?)/);
+          if (m) return parseFloat(m[1]);
+          if (Array.isArray(rep.mechanics) && rep.mechanics.length > 0) {
+            const scores = rep.mechanics
+              .map(x => {
+                if (typeof x.score === 'number') return x.score;
+                const sm = String(x.score || x.rating || '').match(/(\d+(?:\.\d+)?)/);
+                return sm ? parseFloat(sm[1]) : null;
+              })
+              .filter(v => typeof v === 'number' && isFinite(v));
+            if (scores.length > 0) return Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+          }
+          return null;
+        }
+        const cm = rep._coachMetrics || {};
+        if (typeof cm[metricKey] === 'number' && isFinite(cm[metricKey])) return cm[metricKey];
+        return null;
+      }
+
+      function renderPlayerTrends() {
+        if (!currentTrendPlayer) return;
+        const discFilter = trendDisciplineFilter?.value || 'all';
+        const metricKey = trendMetricSelect?.value || 'aiScore';
+        const unitMap = {
+          aiScore: '/10',
+          ballSpeedKmh: ' km/h',
+          leftKnee: '°',
+          rightKnee: '°',
+          trunkTilt: '°',
+          leftElbow: '°',
+          rightElbow: '°'
+        };
+        const unit = unitMap[metricKey] || '';
+
+        const playerSessions = cachedSessions
+          .filter(s => (s.playerName || '').trim().toLowerCase() === currentTrendPlayer.trim().toLowerCase())
+          .filter(s => discFilter === 'all' || (s.discipline || 'batting') === discFilter)
+          .sort((a, b) => String(a.fileStamp || a.savedAt || '').localeCompare(String(b.fileStamp || b.savedAt || '')));
+
+        const points = playerSessions
+          .map(s => ({
+            sess: s,
+            dateLabel: String(s.fileStamp || s.savedAt || '').slice(0, 10) || 'Unknown',
+            val: extractTrendMetricFromSession(s, metricKey)
+          }))
+          .filter(p => p.val !== null);
+
+        if (trendPointCount) {
+          trendPointCount.textContent = `${points.length} measured of ${playerSessions.length} session${playerSessions.length === 1 ? '' : 's'}`;
+        }
+
+        // Stat cards
+        if (trendStatGrid) {
+          trendStatGrid.textContent = '';
+          if (points.length > 0) {
+            const vals = points.map(p => p.val);
+            const latest = vals[vals.length - 1];
+            const first = vals[0];
+            const delta = Math.round((latest - first) * 10) / 10;
+            const minV = Math.min(...vals);
+            const maxV = Math.max(...vals);
+            const cards = [
+              { lbl: 'Latest', val: `${latest}${unit}` },
+              { lbl: 'Change (First → Latest)', val: `${delta > 0 ? '+' : ''}${delta}${unit}` },
+              { lbl: 'Best / Max', val: `${maxV}${unit}` },
+              { lbl: 'Lowest / Min', val: `${minV}${unit}` }
+            ];
+            cards.forEach(cd => {
+              const el = document.createElement('div');
+              el.className = 'trend-stat-card';
+              el.innerHTML = `<span class="t-lbl">${cd.lbl}</span><span class="t-val">${cd.val}</span>`;
+              trendStatGrid.appendChild(el);
+            });
+          }
+        }
+
+        // Canvas chart
+        if (playerTrendsCanvas) {
+          const rect = playerTrendsCanvas.getBoundingClientRect();
+          const w = Math.max(300, Math.round(rect.width || 600));
+          const h = 220;
+          playerTrendsCanvas.width = w;
+          playerTrendsCanvas.height = h;
+          const ctx = playerTrendsCanvas.getContext('2d');
+          ctx.clearRect(0, 0, w, h);
+
+          if (points.length === 0) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('No saved data for this metric yet.', 18, 96);
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Tip: Run 📊 Graph or save a ⏱ Timer speed on any session to populate trends.', 18, 118);
+          } else {
+            const vals = points.map(p => p.val);
+            const minV = Math.min(...vals);
+            const maxV = Math.max(...vals);
+            const padRange = Math.max(2, (maxV - minV) * 0.18);
+            const lo = Math.max(0, minV - padRange);
+            const hi = maxV + padRange;
+            const padL = 48, padR = 24, padT = 20, padB = 34;
+            const plotW = w - padL - padR;
+            const plotH = h - padT - padB;
+            const toX = (i) => points.length === 1 ? padL + plotW / 2 : padL + (i / (points.length - 1)) * plotW;
+            const toY = (v) => padT + (1 - (v - lo) / Math.max(0.01, hi - lo)) * plotH;
+
+            // Gridlines + Y labels
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            [0, 0.5, 1].forEach(frac => {
+              const y = padT + frac * plotH;
+              const v = hi - frac * (hi - lo);
+              ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+              ctx.fillText(`${v.toFixed(1)}${unit}`, 4, y + 3);
+            });
+
+            // Line
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            points.forEach((p, i) => {
+              const x = toX(i), y = toY(p.val);
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // Dots + value & date labels
+            points.forEach((p, i) => {
+              const x = toX(i), y = toY(p.val);
+              ctx.beginPath();
+              ctx.arc(x, y, 5, 0, Math.PI * 2);
+              ctx.fillStyle = '#f59e0b';
+              ctx.fill();
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+
+              ctx.fillStyle = '#f8fafc';
+              ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
+              ctx.fillText(`${p.val}`, x - 10, Math.max(14, y - 9));
+
+              if (points.length <= 8 || i === 0 || i === points.length - 1 || i % Math.ceil(points.length / 6) === 0) {
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.fillText(p.dateLabel.slice(5), x - 16, h - 10);
+              }
+            });
+          }
+        }
+
+        // Clickable session breakdown list
+        if (trendSessionList) {
+          trendSessionList.textContent = '';
+          playerSessions.slice().reverse().forEach(sess => {
+            const val = extractTrendMetricFromSession(sess, metricKey);
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.78rem;';
+            const left = document.createElement('div');
+            left.innerHTML = `<strong>${sess.fileStamp || ''}</strong> · ${sess.discipline === 'bowling' ? '⚡ Bowling' : '🏏 Batting'}${sess.sessionTag ? ` · ${sess.sessionTag}` : ''}`;
+            const right = document.createElement('div');
+            right.className = 'btn-group';
+            const badge = document.createElement('span');
+            badge.className = 'badge badge-pitch';
+            badge.textContent = val !== null ? `${val}${unit}` : 'No data';
+            const openBtn = document.createElement('button');
+            openBtn.type = 'button';
+            openBtn.className = 'btn-sm';
+            openBtn.textContent = 'Open';
+            openBtn.addEventListener('click', () => {
+              if (playerTrendsDialog.open) playerTrendsDialog.close();
+              if (historyDialog.open) historyDialog.close();
+              loadSavedSession(sess, true);
+            });
+            right.append(badge, openBtn);
+            row.append(left, right);
+            trendSessionList.appendChild(row);
+          });
+        }
+      }
+
+      function openPlayerTrendsDialog(playerName) {
+        currentTrendPlayer = playerName;
+        const titleEl = document.getElementById('playerTrendsTitle');
+        if (titleEl) titleEl.textContent = `📈 Progress Trends — ${playerName}`;
+        if (playerTrendsDialog && !playerTrendsDialog.open) playerTrendsDialog.showModal();
+        renderPlayerTrends();
+      }
+
+      document.getElementById('closePlayerTrendsBtn')?.addEventListener('click', () => playerTrendsDialog?.close());
+      document.getElementById('donePlayerTrendsBtn')?.addEventListener('click', () => playerTrendsDialog?.close());
+      playerTrendsDialog?.addEventListener('click', (e) => { if (e.target === playerTrendsDialog) playerTrendsDialog.close(); });
+      trendDisciplineFilter?.addEventListener('change', renderPlayerTrends);
+      trendMetricSelect?.addEventListener('change', renderPlayerTrends);
 
       loadSelectedReportsBtn?.addEventListener('click', () => {
         const selected = state.compareIds
