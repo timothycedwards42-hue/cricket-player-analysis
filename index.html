@@ -8760,47 +8760,120 @@
           }
 
           const cleanApiKey = (state.apiKey || '').trim();
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent?key=${encodeURIComponent(cleanApiKey)}`;
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(cleanApiKey)}`;
 
-          let res;
-          let lastFetchErr = null;
-          const retryDelays = [2500, 5000];
-          for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
-            lastFetchErr = null;
-            try {
-              res = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: requestBody
-              });
-              if (res.ok || (res.status !== 503 && res.status !== 429) || attempt === retryDelays.length) {
-                break;
-              }
-              const waitMs = retryDelays[attempt];
-              setLoading(true, `Gemini busy (${res.status}) — retrying...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
-              await new Promise(r => setTimeout(r, waitMs));
-            } catch (fetchErr) {
-              lastFetchErr = fetchErr;
-              if (attempt === retryDelays.length) break;
-              const waitMs = retryDelays[attempt];
-              setLoading(true, `Network hiccup — retrying (${payloadMb.toFixed(1)} MB)...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
-              await new Promise(r => setTimeout(r, waitMs));
+          // Keep mobile screens awake during long AI video analysis so iOS doesn't drop the socket
+          let wakeLock = null;
+          try {
+            if (navigator.wakeLock?.request) {
+              wakeLock = await navigator.wakeLock.request('screen');
             }
+          } catch {}
+
+          let rawText = '';
+          try {
+            let res;
+            let lastFetchErr = null;
+            const retryDelays = [2500, 5000];
+            for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+              lastFetchErr = null;
+              try {
+                setLoading(true, `Uploading ${payloadMb.toFixed(1)} MB to ${state.model}...`, 'Using live SSE stream to prevent mobile connection timeouts.');
+                res = await fetch(endpoint, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: requestBody
+                });
+                if (res.ok || (res.status !== 503 && res.status !== 429) || attempt === retryDelays.length) {
+                  break;
+                }
+                const waitMs = retryDelays[attempt];
+                setLoading(true, `Gemini busy (${res.status}) — retrying...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
+                await new Promise(r => setTimeout(r, waitMs));
+              } catch (fetchErr) {
+                lastFetchErr = fetchErr;
+                if (attempt === retryDelays.length) break;
+                const waitMs = retryDelays[attempt];
+                setLoading(true, `Network hiccup — retrying (${payloadMb.toFixed(1)} MB)...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
+                await new Promise(r => setTimeout(r, waitMs));
+              }
+            }
+
+            if (lastFetchErr) {
+              throw new Error(
+                `Network error (${lastFetchErr.message}) sending ${payloadMb.toFixed(1)} MB to ${state.model}. Check internet/VPN/ad-blocker, or try fewer frames / a different model in AI Settings.`
+              );
+            }
+
+            if (!res.ok) {
+              const errText = await res.text().catch(() => '');
+              let errMsg = '';
+              try {
+                const errJson = JSON.parse(errText);
+                errMsg = errJson?.error?.message || (Array.isArray(errJson) ? errJson[0]?.error?.message : '') || '';
+              } catch {}
+              throw new Error(errMsg || `Gemini API error (${res.status})`);
+            }
+
+            // Read SSE stream chunks as they arrive to keep iOS/mobile connections alive
+            const extractChunkText = (jsonStr) => {
+              try {
+                const obj = JSON.parse(jsonStr);
+                const partsArr = obj?.candidates?.[0]?.content?.parts || [];
+                let out = '';
+                for (const p of partsArr) {
+                  if (p && !p.thought && typeof p.text === 'string') out += p.text;
+                }
+                return out;
+              } catch {
+                return '';
+              }
+            };
+
+            let chunkCount = 0;
+            if (res.body && typeof res.body.getReader === 'function') {
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder('utf-8');
+              let buffer = '';
+              while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split(/\r?\n/);
+                buffer = lines.pop() || '';
+                for (const line of lines) {
+                  if (!line.startsWith('data:')) continue;
+                  const payload = line.slice(5).trim();
+                  if (!payload || payload === '[DONE]') continue;
+                  const piece = extractChunkText(payload);
+                  if (piece) {
+                    rawText += piece;
+                    chunkCount++;
+                    if (chunkCount === 1 || chunkCount % 6 === 0) {
+                      setLoading(true, `Streaming coaching report from ${state.model}...`, `Received ${(rawText.length / 1024).toFixed(1)} KB so far...`);
+                    }
+                  }
+                }
+              }
+              if (buffer.startsWith('data:')) {
+                const payload = buffer.slice(5).trim();
+                if (payload && payload !== '[DONE]') rawText += extractChunkText(payload);
+              }
+            } else {
+              // Fallback for browsers without ReadableStream
+              const fullText = await res.text();
+              for (const line of fullText.split(/\r?\n/)) {
+                if (!line.startsWith('data:')) continue;
+                const payload = line.slice(5).trim();
+                if (payload && payload !== '[DONE]') rawText += extractChunkText(payload);
+              }
+              if (!rawText) rawText = extractChunkText(fullText);
+            }
+          } finally {
+            try { await wakeLock?.release(); } catch {}
           }
 
-          if (lastFetchErr) {
-            throw new Error(
-              `Network error (${lastFetchErr.message}) sending ${payloadMb.toFixed(1)} MB to ${state.model}. Check internet/VPN/ad-blocker, or try fewer frames / a different model in AI Settings.`
-            );
-          }
-
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error?.message || `Gemini API error (${res.status})`);
-          }
-
-          const data = await res.json();
-          const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          rawText = rawText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
           if (!rawText) throw new Error('Gemini returned an empty response. Try again.');
 
           const speedInfo = targetClips.map(c => computeClipSpeed(c)).find(s => s.valid);
