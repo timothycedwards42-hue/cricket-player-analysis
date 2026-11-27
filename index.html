@@ -3662,7 +3662,16 @@
           <textarea id="joinedNotesInput" class="staged-clip-note" placeholder="Enter one set of coaching notes to apply across all joined clips (e.g., compare side-on and front-on alignment, or track consistency across 5 balls)..."></textarea>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-          <span class="help-text" id="joinedFrameBudgetInfo" style="color:#b3e5fc;"></span>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <label for="joinedFrameBudgetSelect" style="font-size:0.74rem; color:#b3e5fc; font-weight:700;">Max Frames:</label>
+            <select id="joinedFrameBudgetSelect" aria-label="Max total frames for joined clips" style="width:auto; padding:4px 8px; font-size:0.76rem; font-weight:600;">
+              <option value="48" selected>48 frames (Fast / Mobile)</option>
+              <option value="60">60 frames</option>
+              <option value="90">90 frames</option>
+              <option value="120">120 frames (Max Detail)</option>
+            </select>
+            <span class="help-text" id="joinedFrameBudgetInfo" style="color:#b3e5fc;"></span>
+          </div>
           <div class="btn-group">
             <button type="button" class="btn-sm" id="saveJoinedClipsBtn">💾 Save Joined to Storage</button>
             <button type="button" class="btn-primary" id="analyzeSelectedClipsBtn">✨ Analyze Joined Clips Together</button>
@@ -4687,6 +4696,7 @@
       const joinedClipsTitle = document.getElementById('joinedClipsTitle');
       const joinedTagInput = document.getElementById('joinedTagInput');
       const joinedNotesInput = document.getElementById('joinedNotesInput');
+      const joinedFrameBudgetSelect = document.getElementById('joinedFrameBudgetSelect');
       const joinedFrameBudgetInfo = document.getElementById('joinedFrameBudgetInfo');
       const saveJoinedClipsBtn = document.getElementById('saveJoinedClipsBtn');
       const clearJoinedSelectionBtn = document.getElementById('clearJoinedSelectionBtn');
@@ -5554,7 +5564,17 @@
           });
         });
 
-        // Step 2: Bulk & Joined Staging Actions & Stored Frames Re-Analysis
+        // Step 2: Bulk & Joined Staging Actions
+        if (joinedFrameBudgetSelect) {
+          const savedBudget = localStorage.getItem('cpa_joined_frame_budget');
+          if (savedBudget && ['48', '60', '90', '120'].includes(savedBudget)) {
+            joinedFrameBudgetSelect.value = savedBudget;
+          }
+          joinedFrameBudgetSelect.addEventListener('change', () => {
+            localStorage.setItem('cpa_joined_frame_budget', joinedFrameBudgetSelect.value);
+            renderStagingArea();
+          });
+        }
         analyzeSelectedClipsBtn?.addEventListener('click', () => {
           const selected = state.clips.filter(c => c.selected);
           if (selected.length > 0) {
@@ -6938,16 +6958,22 @@
         );
       }
 
-      function budgetFramesForClips(targetClips, maxTotalFrames = 48) {
+      function getJoinedFrameBudget() {
+        const val = parseInt(joinedFrameBudgetSelect?.value, 10);
+        return [48, 60, 90, 120].includes(val) ? val : 48;
+      }
+
+      function budgetFramesForClips(targetClips, maxTotalFrames = getJoinedFrameBudget()) {
+        const cap = Math.min(120, Math.max(12, Number(maxTotalFrames) || 48));
         const total = targetClips.reduce((sum, c) => sum + (c.frames?.length || 0), 0);
-        if (targetClips.length <= 1 || total <= maxTotalFrames) {
+        if (targetClips.length <= 1 || total <= cap) {
           return {
             perClip: targetClips.map(c => c.frames || []),
             totalSent: total,
             downsampled: false
           };
         }
-        const perClipBudget = Math.max(4, Math.floor(maxTotalFrames / targetClips.length));
+        const perClipBudget = Math.max(4, Math.floor(cap / targetClips.length));
         const perClip = targetClips.map(c => {
           const all = c.frames || [];
           if (all.length <= perClipBudget) return all;
@@ -7077,7 +7103,7 @@
           const nowIso = new Date().toISOString();
           const fileStamp = formatFileTimestamp(new Date(nowIso));
           const combinedTag = (customTag || '').trim() || clips.map((c, i) => (c.tag || '').trim() || `Clip ${i + 1}`).join(' + ');
-          const { perClip } = budgetFramesForClips(clips, 48);
+          const { perClip } = budgetFramesForClips(clips, getJoinedFrameBudget());
           const firstFrame = clips[0]?.thumbnail || perClip[0]?.[0]?.dataUrl || null;
           const clipsMeta = clips.map((c, i) => ({
             name: (c.tag || '').trim() || `Clip ${i + 1} (${c.name})`,
@@ -7322,9 +7348,9 @@
             joinedClipsTitle.textContent = `🔗 Joined Clips (${selectedCount}): ${labels}`;
           }
           if (joinedFrameBudgetInfo && selectedCount >= 2) {
-            const budget = budgetFramesForClips(selectedClips, 48);
+            const budget = budgetFramesForClips(selectedClips, getJoinedFrameBudget());
             joinedFrameBudgetInfo.textContent = budget.downsampled
-              ? `⚡ Smart frame budget: sending ${budget.totalSent} frames across ${selectedCount} clips (~${budget.perClipBudget}/clip + all pins)`
+              ? `⚡ Sending ${budget.totalSent} frames across ${selectedCount} clips (~${budget.perClipBudget}/clip + all pins)`
               : `🎞️ Sending all ${budget.totalSent} frames across ${selectedCount} clips`;
           }
         }
@@ -8314,7 +8340,7 @@
               }
             }
 
-            const budget = budgetFramesForClips(targetClips, 48);
+            const budget = budgetFramesForClips(targetClips, getJoinedFrameBudget());
             budgetedPerClip = budget.perClip;
             const totalFrames = budget.totalSent;
             const subtitle = isMultiClip
@@ -10806,7 +10832,7 @@ create policy "Allow anon read/write for personal lab"
       async function autoSaveAnalysisSession(reportObj, playerName, sessionTag, fileStamp, savedAtIso, targetClips = state.clips, opts = {}) {
         const refFrames = reportObj._referenceFrames || [];
         const firstFrame = targetClips[0]?.thumbnail || targetClips[0]?.frames?.[0]?.dataUrl || refFrames[0]?.dataUrl || null;
-        const { perClip } = budgetFramesForClips(targetClips, 48);
+        const { perClip } = budgetFramesForClips(targetClips, getJoinedFrameBudget());
         const clipsMeta = targetClips.length > 0
           ? targetClips.map((c, idx) => ({
               name: c.tag || c.name,
