@@ -3808,9 +3808,9 @@
                     <select id="sampleCountSelect" aria-label="Keyframe sample count" style="width:auto; padding:3px 6px; font-size:0.74rem;">
                       <option value="12">12 frames</option>
                       <option value="16">16 frames</option>
-                      <option value="20" selected>20 frames</option>
+                      <option value="20">20 frames</option>
                       <option value="24">24 frames</option>
-                      <option value="30">30 frames</option>
+                      <option value="30" selected>30 frames</option>
                     </select>
                   </div>
 
@@ -4958,7 +4958,7 @@
         activeClipId: null,
         nextClipId: 1,
         loopWindow: false,
-        sampleCount: 20,
+        sampleCount: 30,
         zoomLevel: 1,
         zoomFocusX: 0.5,
         zoomFocusY: 0.5,
@@ -5877,7 +5877,7 @@
           if (zoomSelectBox) zoomSelectBox.classList.remove('active');
         });
         sampleCountSelect.addEventListener('change', () => {
-          state.sampleCount = parseInt(sampleCountSelect.value, 10) || 20;
+          state.sampleCount = parseInt(sampleCountSelect.value, 10) || 30;
         });
 
         // --- STEP 1: CLIP CUTTING & SCRUBBER ZOOM CONTROLS ---
