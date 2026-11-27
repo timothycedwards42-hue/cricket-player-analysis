@@ -4508,18 +4508,15 @@
         <input type="text" id="historySearchInput" placeholder="Filter by player folder, batting/bowling, tag, or date...">
       </div>
 
-      <!-- Before vs. After Comparison Bar (tick any 2 saved files below) -->
+      <!-- Multi-Select Action Bar (tick any saved files below) -->
       <div class="compare-bar" id="compareBar">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-          <strong style="font-size:0.8rem; color:#b3e5fc;" id="compareBarTitle">⚖️ Comparison Mode: Select 2 files to compare</strong>
+          <strong style="font-size:0.8rem; color:#b3e5fc;" id="compareBarTitle">☑️ Selected files</strong>
           <button type="button" class="btn-sm btn-ghost" id="clearCompareBtn">Clear Selection</button>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <input type="text" id="compareInstructionsInput" placeholder="Optional comparison instructions (e.g. Check if front-leg brace &amp; head alignment improved)" style="flex:1; min-width:200px;">
           <button type="button" class="btn-primary" id="sendSelectedToStagingBtn" disabled title="Send all ticked saved clips to Step 2 Staging to browse frames, edit notes, or run a joint AI analysis">📥 Send to Staging</button>
-          <button type="button" id="loadSelectedReportsBtn" disabled title="Load all ticked files into tabs on the Report page to toggle between them">📂 Open in Report</button>
-          <button type="button" id="openSideBySideBtn" disabled title="Visually compare both stored frame sequences side by side">🎞️ Side-by-Side</button>
-          <button type="button" id="runCompareBtn" disabled>⚖️ AI Compare (2)</button>
+          <button type="button" id="loadSelectedReportsBtn" disabled title="Load all ticked files into tabs on the Report page to toggle between them or use Split View">📂 Open in Report</button>
         </div>
       </div>
 
@@ -6039,7 +6036,7 @@
           updateCompareBarUI();
           renderSavedSessionsList();
         });
-        runCompareBtn.addEventListener('click', runComparisonAnalysis);
+        runCompareBtn?.addEventListener('click', runComparisonAnalysis);
 
         // Email Dialog events
         document.getElementById('closeEmailDialogBtn').addEventListener('click', () => emailDialog.close());
@@ -14429,8 +14426,6 @@ create policy "Allow anon read/write for personal lab"
         state.compareIds = state.compareIds.filter(id => cachedSessions.some(s => s.id === id));
         if (state.compareIds.length === 0) {
           compareBar.classList.remove('active');
-          runCompareBtn.disabled = true;
-          if (openSideBySideBtn) openSideBySideBtn.disabled = true;
           if (sendSelectedToStagingBtn) {
             sendSelectedToStagingBtn.disabled = true;
             sendSelectedToStagingBtn.textContent = '📥 Send to Staging';
@@ -14458,18 +14453,9 @@ create policy "Allow anon read/write for personal lab"
 
         if (selected.length === 1) {
           const s1 = selected[0];
-          compareBarTitle.textContent = `☑️ Selected 1 (${s1.playerName} · ${s1.fileStamp || ''}) — send to Staging, or tick more for joint analysis`;
-          runCompareBtn.disabled = true;
-          if (openSideBySideBtn) openSideBySideBtn.disabled = true;
-        } else if (selected.length === 2) {
-          const [a, b] = selected;
-          compareBarTitle.textContent = `☑️ Selected 2: ${a.playerName} (${a.fileStamp || 'Earlier'}) → ${b.playerName} (${b.fileStamp || 'Later'})`;
-          runCompareBtn.disabled = false;
-          if (openSideBySideBtn) openSideBySideBtn.disabled = false;
+          compareBarTitle.textContent = `☑️ Selected 1 (${s1.playerName} · ${s1.fileStamp || ''}) — send to Staging or open in Report`;
         } else {
-          compareBarTitle.textContent = `☑️ Selected ${selected.length} clips — tap "Send ${selected.length} to Staging" to join & run AI with one set of notes`;
-          runCompareBtn.disabled = true;
-          if (openSideBySideBtn) openSideBySideBtn.disabled = true;
+          compareBarTitle.textContent = `☑️ Selected ${selected.length} clips — send to Staging to join/analyze or open in Report`;
         }
       }
 
