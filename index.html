@@ -4283,6 +4283,7 @@
               <div style="display:flex; gap:6px; flex-wrap:wrap;" id="reportBadges"></div>
               <span class="help-text" id="reportTimestamp"></span>
             </div>
+            <div id="reportInstructionsBox" style="display:none; background:rgba(79,195,247,0.08); border:1px solid rgba(79,195,247,0.28); border-radius:6px; padding:7px 10px; font-size:0.78rem; color:#d8ecff; line-height:1.45;"></div>
             <p id="reportOverview" style="font-size:0.86rem; color:#e7eaf4;"></p>
           </div>
 
@@ -8980,10 +8981,17 @@
             : formatFileTimestamp(new Date(nowIso));
           const isTestMode = isTestPlayerName(playerName);
 
+          const effectiveCoachNotes = (notesOverride !== null && notesOverride !== undefined && String(notesOverride).trim())
+            ? String(notesOverride).trim()
+            : (!usingStoredFrames
+                ? targetClips.map((c, i) => (c.notes || '').trim() ? (targetClips.length > 1 ? `[Clip ${i + 1}] ${(c.notes || '').trim()}` : (c.notes || '').trim()) : '').filter(Boolean).join(' · ')
+                : '') || (contextNotesInput?.value || '').trim();
+
           const parsed = JSON.parse(rawText);
           parsed._meta = {
             playerName,
             sessionTag,
+            coachNotes: effectiveCoachNotes,
             fileStamp: autoFileStamp,
             savedAt: nowIso,
             role: state.role,
@@ -9354,6 +9362,24 @@ For each improvement's diagram (top-down net/pitch view):
         });
 
         document.getElementById('reportTimestamp').textContent = meta.timestamp ? `Generated ${meta.timestamp}` : '';
+        const instrBox = document.getElementById('reportInstructionsBox');
+        if (instrBox) {
+          const activeSess = state.activeLoadedSessionId
+            ? cachedSessions.find(s => s.id === state.activeLoadedSessionId)
+            : null;
+          const fallbackClipNotes = (activeSess?.clipsMeta || [])
+            .map((c, i) => (c.notes || '').trim() ? ((activeSess.clipsMeta.length > 1 ? `[Clip ${i + 1}] ` : '') + (c.notes || '').trim()) : '')
+            .filter(Boolean)
+            .join(' · ');
+          const notesStr = (meta.coachNotes || fallbackClipNotes || '').trim();
+          if (notesStr) {
+            instrBox.textContent = `📝 Analysis Instructions / Notes: ${notesStr}`;
+            instrBox.style.display = 'block';
+          } else {
+            instrBox.textContent = '';
+            instrBox.style.display = 'none';
+          }
+        }
         document.getElementById('reportOverview').textContent = report.overview || '';
 
         // Attack tab label
@@ -12679,16 +12705,6 @@ create policy "Allow anon read/write for personal lab"
             deletePlayerBtn.disabled = true;
             await deletePlayerInStorage(pName);
           });
-          const trendsBtn = document.createElement('button');
-          trendsBtn.type = 'button';
-          trendsBtn.className = 'btn-sm folder-act-trends';
-          trendsBtn.textContent = '📈 Trends';
-          trendsBtn.title = `View progress trends across dates for ${pName}`;
-          trendsBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            openPlayerTrendsDialog(pName);
-          });
           const planBtn = document.createElement('button');
           planBtn.type = 'button';
           planBtn.className = 'btn-sm folder-act-plan';
@@ -12701,7 +12717,7 @@ create policy "Allow anon read/write for personal lab"
           const pBadge = document.createElement('span');
           pBadge.className = 'badge badge-pitch folder-act-count';
           pBadge.textContent = `${totalForPlayer} file${totalForPlayer === 1 ? '' : 's'}`;
-          pRightWrap.append(renamePlayerBtn, deletePlayerBtn, trendsBtn, planBtn, pBadge);
+          pRightWrap.append(renamePlayerBtn, deletePlayerBtn, planBtn, pBadge);
           pSum.append(pLeft, pRightWrap);
           playerDetails.appendChild(pSum);
 
