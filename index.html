@@ -1749,6 +1749,11 @@
       transition: border-color 0.15s;
     }
 
+    .secret-key-input {
+      -webkit-text-security: disc;
+      text-security: disc;
+    }
+
     select:focus, input:focus, textarea:focus {
       outline: none;
       border-color: var(--accent-bright);
@@ -4290,7 +4295,7 @@
 
       <div class="field">
         <label for="apiKeyInput">Gemini API Key</label>
-        <input type="password" id="apiKeyInput" placeholder="AIza..." autocomplete="off">
+        <input type="text" class="secret-key-input" id="apiKeyInput" placeholder="AIza..." autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" data-lpignore="true" data-1p-ignore="true">
       </div>
 
       <div class="field">
@@ -4459,7 +4464,7 @@
           </div>
           <div class="field">
             <label for="supabaseKeyInput">Supabase Anon Public Key</label>
-            <input type="password" id="supabaseKeyInput" placeholder="eyJ..." autocomplete="off">
+            <input type="text" class="secret-key-input" id="supabaseKeyInput" placeholder="eyJ..." autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off" data-lpignore="true" data-1p-ignore="true">
           </div>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
