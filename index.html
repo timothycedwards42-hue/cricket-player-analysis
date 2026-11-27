@@ -8374,29 +8374,66 @@
             });
           }
 
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent?key=${encodeURIComponent(state.apiKey)}`;
-          const requestBody = JSON.stringify({
+          // Auto-compress outbound frames if payload is large (> 5.5 MB) to prevent mobile / Google API "Failed to fetch" drops
+          const buildRequestBody = () => JSON.stringify({
             contents: [{ role: 'user', parts }],
             generationConfig: {
               temperature: 0.35,
               responseMimeType: 'application/json'
             }
           });
+          let requestBody = buildRequestBody();
+          let payloadMb = requestBody.length / (1024 * 1024);
+          if (payloadMb > 5.5) {
+            setLoading(true, `Optimizing frames for fast upload (${payloadMb.toFixed(1)} MB)...`, 'Compressing frames to keep Gemini API request fast and reliable.');
+            const targetW = payloadMb > 12 ? 480 : 560;
+            const targetQ = payloadMb > 12 ? 0.66 : 0.72;
+            for (const p of parts) {
+              if (p.inlineData && p.inlineData.mimeType === 'image/jpeg' && p.inlineData.data) {
+                try {
+                  const smaller = await downscaleDataUrlForCloud(`data:image/jpeg;base64,${p.inlineData.data}`, targetW, targetQ);
+                  const b64 = smaller.split(',')[1];
+                  if (b64) p.inlineData.data = b64;
+                } catch {}
+              }
+            }
+            requestBody = buildRequestBody();
+            payloadMb = requestBody.length / (1024 * 1024);
+          }
+
+          const cleanApiKey = (state.apiKey || '').trim();
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(state.model)}:generateContent?key=${encodeURIComponent(cleanApiKey)}`;
 
           let res;
+          let lastFetchErr = null;
           const retryDelays = [2500, 5000];
           for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
-            res = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: requestBody
-            });
-            if (res.ok || (res.status !== 503 && res.status !== 429) || attempt === retryDelays.length) {
-              break;
+            lastFetchErr = null;
+            try {
+              res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: requestBody
+              });
+              if (res.ok || (res.status !== 503 && res.status !== 429) || attempt === retryDelays.length) {
+                break;
+              }
+              const waitMs = retryDelays[attempt];
+              setLoading(true, `Gemini busy (${res.status}) — retrying...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
+              await new Promise(r => setTimeout(r, waitMs));
+            } catch (fetchErr) {
+              lastFetchErr = fetchErr;
+              if (attempt === retryDelays.length) break;
+              const waitMs = retryDelays[attempt];
+              setLoading(true, `Network hiccup — retrying (${payloadMb.toFixed(1)} MB)...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
+              await new Promise(r => setTimeout(r, waitMs));
             }
-            const waitMs = retryDelays[attempt];
-            setLoading(true, `Gemini busy (${res.status}) — retrying...`, `Attempt ${attempt + 2} of ${retryDelays.length + 1} in ${(waitMs / 1000).toFixed(1)}s.`);
-            await new Promise(r => setTimeout(r, waitMs));
+          }
+
+          if (lastFetchErr) {
+            throw new Error(
+              `Network error (${lastFetchErr.message}) sending ${payloadMb.toFixed(1)} MB to ${state.model}. Check internet/VPN/ad-blocker, or try fewer frames / a different model in AI Settings.`
+            );
           }
 
           if (!res.ok) {
@@ -8486,7 +8523,9 @@
         } catch (err) {
           console.error(err);
           showError(`Analysis failed: ${err.message}`);
+          showToast(`Analysis failed: ${err.message}`);
           setLoading(false);
+          setStep('staging');
         }
       }
 
