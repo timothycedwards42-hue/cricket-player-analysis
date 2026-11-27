@@ -12574,7 +12574,7 @@ create policy "Allow anon read/write for personal lab"
 
           const playerDetails = document.createElement('details');
           playerDetails.className = 'folder-player';
-          if (pIdx === 0 || q.length > 0) playerDetails.open = true;
+          if (q.length > 0) playerDetails.open = true;
 
           const pSum = document.createElement('summary');
           const pLeft = document.createElement('span');
@@ -12688,7 +12688,7 @@ create policy "Allow anon read/write for personal lab"
 
             const dateDetails = document.createElement('details');
             dateDetails.className = 'folder-date';
-            if (dateIdx === 0 || q.length > 0) dateDetails.open = true;
+            if (q.length > 0) dateDetails.open = true;
 
             const dateSum = document.createElement('summary');
             const dateLeft = document.createElement('span');
@@ -12721,7 +12721,7 @@ create policy "Allow anon read/write for personal lab"
 
               const dDetails = document.createElement('details');
               dDetails.className = 'folder-discipline';
-              dDetails.open = true;
+              if (q.length > 0) dDetails.open = true;
 
               const dSum = document.createElement('summary');
               const dLeft = document.createElement('span');
