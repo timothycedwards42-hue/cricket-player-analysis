@@ -4129,6 +4129,18 @@
             <div class="delta-grid" id="comparisonDeltaGrid"></div>
           </div>
 
+          <div class="summary-banner">
+            <div class="summary-meta">
+              <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;" id="reportBadges"></div>
+              <div class="btn-group">
+                <button type="button" class="btn-sm btn-ghost" id="editReportMetaBtn" title="Add or edit Tag and Coaching Notes for this report">✏️ Tag / Notes</button>
+                <span class="help-text" id="reportTimestamp"></span>
+              </div>
+            </div>
+            <div id="reportInstructionsBox" style="display:none; background:rgba(79,195,247,0.08); border:1px solid rgba(79,195,247,0.28); border-radius:6px; padding:7px 10px; font-size:0.78rem; color:#d8ecff; line-height:1.45;"></div>
+            <p id="reportOverview" style="font-size:0.86rem; color:#e7eaf4;"></p>
+          </div>
+
           <!-- Saved Video Reference Frames Viewer (shown when opening a saved session or after analysis) -->
           <div class="saved-frames-card" id="savedFramesCard">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
@@ -4276,15 +4288,6 @@
               </div>
             </div>
             <div class="filmstrip" id="savedFramesStrip"></div>
-          </div>
-
-          <div class="summary-banner">
-            <div class="summary-meta">
-              <div style="display:flex; gap:6px; flex-wrap:wrap;" id="reportBadges"></div>
-              <span class="help-text" id="reportTimestamp"></span>
-            </div>
-            <div id="reportInstructionsBox" style="display:none; background:rgba(79,195,247,0.08); border:1px solid rgba(79,195,247,0.28); border-radius:6px; padding:7px 10px; font-size:0.78rem; color:#d8ecff; line-height:1.45;"></div>
-            <p id="reportOverview" style="font-size:0.86rem; color:#e7eaf4;"></p>
           </div>
 
           <div class="report-tabs" role="tablist">
@@ -6057,6 +6060,40 @@
           }]);
         };
         analyzeStoredFramesBtn?.addEventListener('click', sendCurrentReportToStaging);
+        document.getElementById('editReportMetaBtn')?.addEventListener('click', async () => {
+          if (!state.currentReport) return;
+          if (!state.currentReport._meta) state.currentReport._meta = {};
+          const activeSess = state.activeLoadedSessionId
+            ? cachedSessions.find(s => s.id === state.activeLoadedSessionId)
+            : null;
+          const curTag = state.currentReport._meta.sessionTag || activeSess?.sessionTag || '';
+          const curNotes = state.currentReport._meta.coachNotes || activeSess?.note || '';
+          const nextTag = prompt('Session Tag (e.g. Cover Drive, Backfoot Pull, Yorker):', curTag);
+          if (nextTag === null) return;
+          const nextNotes = prompt('Analysis Instructions / Coaching Notes:', curNotes);
+          if (nextNotes === null) return;
+          const cleanTag = nextTag.trim();
+          const cleanNotes = nextNotes.trim();
+          state.currentReport._meta.sessionTag = cleanTag;
+          state.currentReport._meta.coachNotes = cleanNotes;
+          if (activeSess) {
+            activeSess.sessionTag = cleanTag;
+            activeSess.note = cleanNotes;
+            if (!activeSess.report) activeSess.report = { _framesOnly: true, _meta: {} };
+            if (!activeSess.report._meta) activeSess.report._meta = {};
+            activeSess.report._meta.sessionTag = cleanTag;
+            activeSess.report._meta.coachNotes = cleanNotes;
+            if (Array.isArray(activeSess.clipsMeta) && activeSess.clipsMeta[0]) {
+              activeSess.clipsMeta[0].notes = cleanNotes;
+            }
+            activeSess.synced = false;
+            await putSession(activeSess);
+            if (supabaseClient) pushSessionToSupabase(activeSess).catch(() => {});
+            renderLoadedReportsBar();
+          }
+          renderReport(state.currentReport);
+          showToast('✓ Updated Tag & Coaching Notes');
+        });
         document.getElementById('sendReportToStagingBtn')?.addEventListener('click', sendCurrentReportToStaging);
         document.getElementById('emptyBatterDemoBtn')?.addEventListener('click', () => loadDemo('batting'));
         document.getElementById('emptyBowlerDemoBtn')?.addEventListener('click', () => loadDemo('bowling'));
@@ -7428,14 +7465,17 @@
               handedness: handednessSelect.value,
               style: styleSelect.value,
               clipsMeta: (existingRecord.clipsMeta && existingRecord.clipsMeta.length > 0)
-                ? existingRecord.clipsMeta.map((cm, i) => i === 0 ? { ...cm, name: clipTag || cm.name, angle: clip.angle || cm.angle } : cm)
-                : [{ name: clipTag || clip.name, angle: clip.angle || 'Auto-detect', duration: clip.duration || 0, frames: clip.frames }],
+                ? existingRecord.clipsMeta.map((cm, i) => i === 0 ? { ...cm, name: clipTag || cm.name, angle: clip.angle || cm.angle, notes: clipNote } : cm)
+                : [{ name: clipTag || clip.name, angle: clip.angle || 'Auto-detect', duration: clip.duration || 0, notes: clipNote, frames: clip.frames }],
               synced: false
             };
-            if (updatedRecord.report && updatedRecord.report._meta) {
-              updatedRecord.report._meta.sessionTag = clipTag;
-              updatedRecord.report._meta.playerName = playerName;
+            if (!updatedRecord.report) {
+              updatedRecord.report = { _framesOnly: true, _meta: {} };
             }
+            if (!updatedRecord.report._meta) updatedRecord.report._meta = {};
+            updatedRecord.report._meta.sessionTag = clipTag;
+            updatedRecord.report._meta.playerName = playerName;
+            updatedRecord.report._meta.coachNotes = clipNote;
             await putSession(updatedRecord);
             await refreshSavedCount();
             if (supabaseClient) {
@@ -7456,6 +7496,7 @@
             name: clipTag || `${clip.name} [${(clip.trimStart || 0).toFixed(1)}s–${(clip.trimEnd || 0).toFixed(1)}s]`,
             angle: clip.angle || 'Auto-detect',
             duration: (clip.trimEnd || clip.duration || 0) - (clip.trimStart || 0),
+            notes: clipNote,
             frames: clip.frames
           }];
           const record = {
@@ -7474,7 +7515,16 @@
             includeVideo: false,
             videoBlobs: [],
             hasAnalysis: false,
-            report: null
+            report: {
+              _framesOnly: true,
+              _meta: {
+                playerName,
+                sessionTag: clipTag,
+                coachNotes: clipNote,
+                fileStamp,
+                savedAt: clipDateIso
+              }
+            }
           };
           await putSession(record);
           await refreshSavedCount();
@@ -9350,6 +9400,8 @@ For each improvement's diagram (top-down net/pitch view):
         );
         if (meta.sessionTag) {
           badgeList.push({ text: `🏷️ ${meta.sessionTag}`, cls: 'badge-blue' });
+        } else {
+          badgeList.push({ text: '🏷️ No tag', cls: 'badge-pitch' });
         }
         if (meta.measuredSpeed) {
           badgeList.push({ text: `⚡ ${meta.measuredSpeed}`, cls: 'badge-green' });
@@ -9371,13 +9423,15 @@ For each improvement's diagram (top-down net/pitch view):
             .map((c, i) => (c.notes || '').trim() ? ((activeSess.clipsMeta.length > 1 ? `[Clip ${i + 1}] ` : '') + (c.notes || '').trim()) : '')
             .filter(Boolean)
             .join(' · ');
-          const notesStr = (meta.coachNotes || fallbackClipNotes || '').trim();
+          const notesStr = (meta.coachNotes || activeSess?.note || fallbackClipNotes || '').trim();
           if (notesStr) {
             instrBox.textContent = `📝 Analysis Instructions / Notes: ${notesStr}`;
+            instrBox.style.color = '#d8ecff';
             instrBox.style.display = 'block';
           } else {
-            instrBox.textContent = '';
-            instrBox.style.display = 'none';
+            instrBox.textContent = '📝 Analysis Instructions / Notes: None saved (click ✏️ Tag / Notes to add)';
+            instrBox.style.color = 'var(--muted)';
+            instrBox.style.display = 'block';
           }
         }
         document.getElementById('reportOverview').textContent = report.overview || '';
@@ -12398,12 +12452,16 @@ create policy "Allow anon read/write for personal lab"
         const allFramesForReanalysis = storedFrames.length > 0 ? storedFrames : (session.report?._referenceFrames || []);
         setLoadedStoredFrames(allFramesForReanalysis, `${session.playerName} · ${session.fileStamp || ''}`);
 
+        const savedNotesStr = session.note || session.report?._meta?.coachNotes || (session.clipsMeta || []).map(c => c.notes || '').filter(Boolean).join(' · ') || '';
+        const savedTagStr = session.sessionTag || session.report?._meta?.sessionTag || '';
+
         if (isFramesOnly) {
           const stubReport = {
             _framesOnlyView: true,
             _meta: {
               playerName: session.playerName,
-              sessionTag: session.sessionTag || '',
+              sessionTag: savedTagStr,
+              coachNotes: savedNotesStr,
               role: session.role || state.role,
               handedness: session.handedness || handednessSelect.value,
               style: session.style || styleSelect.value,
@@ -12442,7 +12500,8 @@ create policy "Allow anon read/write for personal lab"
         reportCopy._meta = {
           ...(reportCopy._meta || {}),
           playerName: session.playerName,
-          sessionTag: session.sessionTag || '',
+          sessionTag: savedTagStr,
+          coachNotes: reportCopy._meta?.coachNotes || savedNotesStr,
           source: `Saved · ${session.fileStamp || formatFileTimestamp(new Date(session.savedAt))}`
         };
         renderReport(reportCopy);
