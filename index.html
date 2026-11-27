@@ -9065,8 +9065,11 @@
           const effectiveCoachNotes = (notesOverride !== null && notesOverride !== undefined && String(notesOverride).trim())
             ? String(notesOverride).trim()
             : (!usingStoredFrames
-                ? targetClips.map((c, i) => (c.notes || '').trim() ? (targetClips.length > 1 ? `[Clip ${i + 1}] ${(c.notes || '').trim()}` : (c.notes || '').trim()) : '').filter(Boolean).join(' · ')
-                : '') || (contextNotesInput?.value || '').trim();
+                ? targetClips.map((c, i) => {
+                    const txt = (c.note || c.notes || '').trim();
+                    return txt ? (targetClips.length > 1 ? `${c.tag || `Clip ${i + 1}`}: ${txt}` : txt) : '';
+                  }).filter(Boolean).join(' · ')
+                : '') || (document.getElementById('notesInput')?.value || '').trim();
 
           const parsed = JSON.parse(rawText);
           parsed._meta = {
