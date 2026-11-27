@@ -7849,7 +7849,22 @@
           poseCropCanvas.width = Math.max(64, Math.round(cropW * scale));
           poseCropCanvas.height = Math.max(64, Math.round(cropH * scale));
           const pCtx = poseCropCanvas.getContext('2d');
-          pCtx.drawImage(mediaEl, sx, sy, cropW, cropH, 0, 0, poseCropCanvas.width, poseCropCanvas.height);
+          if (mediaEl.tagName === 'VIDEO') {
+            // iOS WebKit bug workaround: 9-arg drawImage on rotated portrait <video> clips the frame.
+            // Draw full video with 5-arg drawImage to an offscreen canvas first, then crop canvas-to-canvas.
+            const tmpScale = Math.min(1, 1440 / Math.max(mw, mh));
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width = Math.max(64, Math.round(mw * tmpScale));
+            tmpCanvas.height = Math.max(64, Math.round(mh * tmpScale));
+            tmpCanvas.getContext('2d').drawImage(mediaEl, 0, 0, tmpCanvas.width, tmpCanvas.height);
+            pCtx.drawImage(
+              tmpCanvas,
+              sx * tmpScale, sy * tmpScale, cropW * tmpScale, cropH * tmpScale,
+              0, 0, poseCropCanvas.width, poseCropCanvas.height
+            );
+          } else {
+            pCtx.drawImage(mediaEl, sx, sy, cropW, cropH, 0, 0, poseCropCanvas.width, poseCropCanvas.height);
+          }
 
           const res = detector.detect(poseCropCanvas);
           const mappedAll = (res?.landmarks || []).map(lm =>
@@ -8141,20 +8156,45 @@
       function grabVideoFrameDataUrl(vEl = videoPlayer, cropOpts = null) {
         const canvas = document.createElement('canvas');
         const maxW = 720;
+        const maxDim = 960;
         const vw = vEl.videoWidth || 640;
         const vh = vEl.videoHeight || 360;
         const zoom = Math.max(1, cropOpts?.zoomLevel ?? state.zoomLevel ?? 1);
+        const ctx = canvas.getContext('2d');
+
+        if (zoom <= 1.001) {
+          // Use 5-arg drawImage for uncropped capture: avoids the iOS WebKit bug where
+          // 9-arg drawImage(video, sx, sy, sw, sh, ...) on portrait-rotated iPhone .MOV files
+          // clips the source rect against the unrotated sensor height (cutting off the bottom half).
+          const scale = Math.min(1, maxW / vw, maxDim / Math.max(vw, vh));
+          canvas.width = Math.max(1, Math.round(vw * scale));
+          canvas.height = Math.max(1, Math.round(vh * scale));
+          ctx.drawImage(vEl, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/jpeg', 0.84);
+        }
+
+        // For zoomed captures, render full frame via 5-arg drawImage to an intermediate canvas first,
+        // then crop canvas-to-canvas so rotated iOS videos never clip.
+        const tmpScale = Math.min(1, 1440 / Math.max(vw, vh));
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = Math.max(1, Math.round(vw * tmpScale));
+        tmpCanvas.height = Math.max(1, Math.round(vh * tmpScale));
+        tmpCanvas.getContext('2d').drawImage(vEl, 0, 0, tmpCanvas.width, tmpCanvas.height);
+
         const cropW = vw / zoom;
         const cropH = vh / zoom;
         const fx = Math.max(0, Math.min(1, cropOpts?.zoomFocusX ?? state.zoomFocusX ?? 0.5));
         const fy = Math.max(0, Math.min(1, cropOpts?.zoomFocusY ?? state.zoomFocusY ?? 0.5));
         const sx = Math.max(0, Math.min(vw - cropW, fx * vw - cropW / 2));
         const sy = Math.max(0, Math.min(vh - cropH, fy * vh - cropH / 2));
-        const scale = Math.min(1, maxW / cropW);
-        canvas.width = Math.round(cropW * scale);
-        canvas.height = Math.round(cropH * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(vEl, sx, sy, cropW, cropH, 0, 0, canvas.width, canvas.height);
+        const scale = Math.min(1, maxW / cropW, maxDim / Math.max(cropW, cropH));
+        canvas.width = Math.max(1, Math.round(cropW * scale));
+        canvas.height = Math.max(1, Math.round(cropH * scale));
+        ctx.drawImage(
+          tmpCanvas,
+          sx * tmpScale, sy * tmpScale, cropW * tmpScale, cropH * tmpScale,
+          0, 0, canvas.width, canvas.height
+        );
         return canvas.toDataURL('image/jpeg', 0.84);
       }
 
@@ -10616,10 +10656,12 @@ create policy "Allow anon read/write for personal lab"
         return new Promise((resolve) => {
           const img = new Image();
           img.onload = () => {
-            const scale = Math.min(1, maxW / (img.width || maxW));
+            const iw = img.naturalWidth || img.width || maxW;
+            const ih = img.naturalHeight || img.height || maxW;
+            const scale = Math.min(1, maxW / iw, 640 / Math.max(iw, ih));
             const c = document.createElement('canvas');
-            c.width = Math.max(1, Math.round(img.width * scale));
-            c.height = Math.max(1, Math.round(img.height * scale));
+            c.width = Math.max(1, Math.round(iw * scale));
+            c.height = Math.max(1, Math.round(ih * scale));
             const ctx = c.getContext('2d');
             ctx.drawImage(img, 0, 0, c.width, c.height);
             resolve(c.toDataURL('image/jpeg', quality));
