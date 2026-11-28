@@ -7495,15 +7495,9 @@
           editBtn.addEventListener('click', () => {
             autoFindState.previewStopTime = null;
             videoPlayer.pause();
-            state.draftClip.active = true;
-            state.draftClip.start = cand.start;
-            state.draftClip.end = cand.end;
-            state.draftClip.editingClipId = null;
-            state.draftClip.pins = [];
-            videoPlayer.currentTime = cand.start;
-            syncCutterScrubberBounds();
-            updateTimeReadout();
-            showToast(`✂️ Loaded #${idx + 1} (${fmtMinSec(cand.start)}–${fmtMinSec(cand.end)}) into cutter`);
+            startDraftClip(cand.start, cand.end, null, [], true);
+            videoStage?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            showToast(`✂️ Fine-tuning #${idx + 1} (${fmtMinSec(cand.start)} – ${fmtMinSec(cand.end)}) — adjust Start/End then tap Save Clip to Staging`);
           });
 
           btnRow.append(prevBtn, editBtn);
