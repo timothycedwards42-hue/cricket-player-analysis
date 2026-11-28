@@ -581,14 +581,14 @@
 
     .scrubber-pin-markers {
       position: relative;
-      height: 16px;
+      height: 22px;
       width: 100%;
       pointer-events: none;
     }
 
     .scrubber-pin-dot {
       position: absolute;
-      top: 0;
+      top: 1px;
       transform: translateX(-50%);
       padding: 1px 5px;
       border-radius: 999px;
@@ -603,13 +603,31 @@
     .scrubber-pin-dot.pin-start {
       background: var(--accent-bright);
       color: #091a0a;
-      z-index: 3;
+      z-index: 4;
+      pointer-events: auto;
+      cursor: ew-resize;
+      touch-action: none;
+      user-select: none;
+      padding: 2px 7px;
+      font-size: 0.66rem;
     }
 
     .scrubber-pin-dot.pin-end {
       background: var(--info);
       color: #061822;
-      z-index: 3;
+      z-index: 4;
+      pointer-events: auto;
+      cursor: ew-resize;
+      touch-action: none;
+      user-select: none;
+      padding: 2px 7px;
+      font-size: 0.66rem;
+    }
+
+    .scrubber-pin-dot.dragging {
+      transform: translateX(-50%) scale(1.12);
+      box-shadow: 0 0 0 2px #ffffff, 0 2px 8px rgba(0,0,0,0.75);
+      z-index: 6;
     }
 
     .scrubber-pin-dot.pin-saved-start {
@@ -6415,17 +6433,83 @@
           const span = Math.max(0.05, maxT - minT);
           const toPct = (t) => Math.max(2, Math.min(98, ((t - minT) / span) * 100));
 
-          // Start & End markers while actively clipping
+          // Draggable Start & End flags while actively clipping
+          const attachDraftFlagDrag = (dotEl, which) => {
+            dotEl.title = which === 'start'
+              ? 'Drag left/right to move Clip Start (scrubs video live)'
+              : 'Drag left/right to move Clip End (scrubs video live)';
+            dotEl.addEventListener('pointerdown', (e) => {
+              const curDraft = state.draftClip;
+              const curDur = videoPlayer.duration || 0;
+              if (!curDraft || !curDur) return;
+              e.preventDefault();
+              e.stopPropagation();
+              videoPlayer.pause();
+              dotEl.classList.add('dragging');
+              try { dotEl.setPointerCapture(e.pointerId); } catch {}
+
+              const dragMinT = curDraft.zoomRangeStart ?? 0;
+              const dragMaxT = curDraft.zoomRangeEnd ?? curDur;
+              const dragSpan = Math.max(0.05, dragMaxT - dragMinT);
+
+              const onMove = (ev) => {
+                const trackRect = scrubberPinMarkers.getBoundingClientRect();
+                if (!trackRect.width) return;
+                const ratio = Math.max(0, Math.min(1, (ev.clientX - trackRect.left) / trackRect.width));
+                const rawT = dragMinT + ratio * dragSpan;
+                if (which === 'start') {
+                  curDraft.start = Math.max(0, Math.min(curDraft.end - 0.1, rawT));
+                  videoPlayer.currentTime = curDraft.start;
+                  dotEl.style.left = `${Math.max(2, Math.min(98, ((curDraft.start - dragMinT) / dragSpan) * 100))}%`;
+                } else {
+                  curDraft.end = Math.min(curDur, Math.max(curDraft.start + 0.1, rawT));
+                  curDraft.endSet = true;
+                  videoPlayer.currentTime = curDraft.end;
+                  dotEl.style.left = `${Math.max(2, Math.min(98, ((curDraft.end - dragMinT) / dragSpan) * 100))}%`;
+                }
+                if (videoScrubber) videoScrubber.value = String(videoPlayer.currentTime);
+                if (trimReadout) {
+                  trimReadout.textContent = `${curDraft.start.toFixed(2)}s – ${curDraft.end.toFixed(2)}s (${(curDraft.end - curDraft.start).toFixed(2)}s)`;
+                }
+                if (trimBarRange) {
+                  const sPct = (curDraft.start / curDur) * 100;
+                  const ePct = (curDraft.end / curDur) * 100;
+                  trimBarRange.style.left = `${sPct}%`;
+                  trimBarRange.style.width = `${Math.max(1, ePct - sPct)}%`;
+                }
+                updateTimeReadout();
+              };
+
+              const onEnd = () => {
+                dotEl.classList.remove('dragging');
+                dotEl.removeEventListener('pointermove', onMove);
+                dotEl.removeEventListener('pointerup', onEnd);
+                dotEl.removeEventListener('pointercancel', onEnd);
+                // Re-pad zoomed window smoothly so user can keep dragging even further
+                curDraft.zoomRangeStart = Math.max(0, curDraft.start - 0.5);
+                curDraft.zoomRangeEnd = Math.min(curDur, curDraft.end + 0.5);
+                syncCutterScrubberBounds();
+                updateTrimUI();
+              };
+
+              dotEl.addEventListener('pointermove', onMove);
+              dotEl.addEventListener('pointerup', onEnd);
+              dotEl.addEventListener('pointercancel', onEnd);
+            });
+          };
+
           const startDot = document.createElement('span');
           startDot.className = 'scrubber-pin-dot pin-start';
           startDot.style.left = `${toPct(draft.start)}%`;
-          startDot.textContent = '[ START';
+          startDot.textContent = '◂ START';
+          attachDraftFlagDrag(startDot, 'start');
           scrubberPinMarkers.appendChild(startDot);
 
           const endDot = document.createElement('span');
           endDot.className = 'scrubber-pin-dot pin-end';
           endDot.style.left = `${toPct(draft.end)}%`;
-          endDot.textContent = 'END ]';
+          endDot.textContent = 'END ▸';
+          attachDraftFlagDrag(endDot, 'end');
           scrubberPinMarkers.appendChild(endDot);
 
           // Phase pins (BFC, FFC, Release, Trigger, Stride, Impact)
