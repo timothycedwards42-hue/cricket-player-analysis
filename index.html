@@ -3130,6 +3130,55 @@
       display: block;
     }
 
+    /* Step 1 Auto-Find Clips Panel */
+    .autofind-panel {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid rgba(79, 195, 247, 0.35);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-top: 8px;
+    }
+    .autofind-panel.active { display: flex; }
+    .autofind-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 0.76rem;
+    }
+    .autofind-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .autofind-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.74rem;
+      transition: border-color 0.15s, opacity 0.15s;
+    }
+    .autofind-card.unchecked { opacity: 0.48; }
+    .autofind-card.playing { border-color: #4fc3f7; box-shadow: 0 0 0 1px rgba(79,195,247,0.4); }
+    .autofind-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #05070c;
+      border-radius: 4px;
+      object-fit: contain;
+      display: block;
+    }
+
     .supabase-box {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -3794,7 +3843,67 @@
                   </div>
                   <div class="btn-group">
                     <span class="trim-readout" id="trimReadout" style="display:none;">0.00s – 0.00s</span>
+                    <button type="button" class="btn-sm" id="autoFindToggleBtn" title="Automatically detect deliveries or shots in a long training session video">⚡ Auto-Find Clips</button>
                     <button type="button" class="btn-sm" id="quickCutFullBtn" title="Stage the entire video as one clip">➕ Stage Full Video</button>
+                  </div>
+                </div>
+
+                <!-- AUTO-FIND CLIPS PANEL (Audio Spike / Motion Burst Detector for Long Session Videos) -->
+                <div class="autofind-panel" id="autoFindPanel">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                    <strong style="font-size:0.82rem; color:#b3e5fc;">⚡ Auto-Find Deliveries / Shots in Long Video</strong>
+                    <button type="button" class="btn-sm btn-ghost" id="autoFindCloseBtn" aria-label="Close Auto-Find">✕</button>
+                  </div>
+                  <div class="autofind-controls">
+                    <select id="autoFindModeSelect" aria-label="Detection method" style="width:auto; padding:4px 7px; font-size:0.74rem;">
+                      <option value="audio" selected>🔊 Audio Spikes (Fast · Bat/Ball)</option>
+                      <option value="motion">🏃 Motion Bursts (Visual · Wind/Muted)</option>
+                    </select>
+                    <select id="autoFindSensSelect" aria-label="Detection sensitivity" style="width:auto; padding:4px 7px; font-size:0.74rem;">
+                      <option value="low">Sens: Low (Strongest)</option>
+                      <option value="medium" selected>Sens: Medium</option>
+                      <option value="high">Sens: High (More clips)</option>
+                    </select>
+                    <label style="display:inline-flex; align-items:center; gap:4px; color:var(--text-muted);">
+                      Before:
+                      <select id="autoFindBeforeSelect" style="width:auto; padding:3px 5px; font-size:0.73rem;">
+                        <option value="1.0">1.0s</option>
+                        <option value="1.5" selected>1.5s</option>
+                        <option value="2.0">2.0s</option>
+                        <option value="2.5">2.5s</option>
+                      </select>
+                    </label>
+                    <label style="display:inline-flex; align-items:center; gap:4px; color:var(--text-muted);">
+                      After:
+                      <select id="autoFindAfterSelect" style="width:auto; padding:3px 5px; font-size:0.73rem;">
+                        <option value="1.0">1.0s</option>
+                        <option value="1.5" selected>1.5s</option>
+                        <option value="2.0">2.0s</option>
+                        <option value="2.5">2.5s</option>
+                      </select>
+                    </label>
+                    <label style="display:inline-flex; align-items:center; gap:4px; color:var(--text-muted);">
+                      Min Gap:
+                      <select id="autoFindGapSelect" style="width:auto; padding:3px 5px; font-size:0.73rem;">
+                        <option value="5">5s</option>
+                        <option value="8" selected>8s</option>
+                        <option value="12">12s</option>
+                        <option value="15">15s</option>
+                      </select>
+                    </label>
+                    <button type="button" class="btn-sm btn-primary" id="autoFindScanBtn">🔍 Scan Video</button>
+                    <button type="button" class="btn-sm btn-ghost" id="autoFindCancelBtn" style="display:none; color:var(--danger);">⏹ Stop</button>
+                  </div>
+                  <div id="autoFindStatus" class="help-text" style="color:#fde68a;">Pick Audio (instant) or Motion (windy/muted) and tap Scan Video.</div>
+                  <div id="autoFindResultsWrap" style="display:none; flex-direction:column; gap:8px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; border-top:1px dashed var(--border); padding-top:6px;">
+                      <div class="btn-group">
+                        <button type="button" class="btn-sm" id="autoFindSelectAllBtn">Select All</button>
+                        <button type="button" class="btn-sm" id="autoFindSelectNoneBtn">Select None</button>
+                      </div>
+                      <button type="button" class="btn-sm btn-primary" id="autoFindStageSelectedBtn">✂️ Stage Selected (0)</button>
+                    </div>
+                    <div class="autofind-grid" id="autoFindGrid"></div>
                   </div>
                 </div>
 
@@ -7151,6 +7260,460 @@
           }
         }
       }
+
+      // --- STEP 1: AUTO-FIND DELIVERIES / SHOTS IN LONG TRAINING SESSION VIDEOS ---
+      const autoFindToggleBtn = document.getElementById('autoFindToggleBtn');
+      const autoFindPanel = document.getElementById('autoFindPanel');
+      const autoFindCloseBtn = document.getElementById('autoFindCloseBtn');
+      const autoFindModeSelect = document.getElementById('autoFindModeSelect');
+      const autoFindSensSelect = document.getElementById('autoFindSensSelect');
+      const autoFindBeforeSelect = document.getElementById('autoFindBeforeSelect');
+      const autoFindAfterSelect = document.getElementById('autoFindAfterSelect');
+      const autoFindGapSelect = document.getElementById('autoFindGapSelect');
+      const autoFindScanBtn = document.getElementById('autoFindScanBtn');
+      const autoFindCancelBtn = document.getElementById('autoFindCancelBtn');
+      const autoFindStatus = document.getElementById('autoFindStatus');
+      const autoFindResultsWrap = document.getElementById('autoFindResultsWrap');
+      const autoFindGrid = document.getElementById('autoFindGrid');
+      const autoFindSelectAllBtn = document.getElementById('autoFindSelectAllBtn');
+      const autoFindSelectNoneBtn = document.getElementById('autoFindSelectNoneBtn');
+      const autoFindStageSelectedBtn = document.getElementById('autoFindStageSelectedBtn');
+
+      const autoFindState = {
+        scanning: false,
+        cancelled: false,
+        candidates: [], // { id, peakTime, start, end, score, mode, thumb, checked }
+        previewStopTime: null,
+        previewCardId: null
+      };
+
+      function fmtMinSec(sec) {
+        const s = Math.max(0, Number(sec) || 0);
+        const m = Math.floor(s / 60);
+        const rem = (s - m * 60).toFixed(1).padStart(4, '0');
+        return `${m}:${rem}`;
+      }
+
+      function computeMedianAndMad(arr) {
+        if (!arr.length) return { median: 0, mad: 0 };
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        const devs = sorted.map(v => Math.abs(v - median)).sort((a, b) => a - b);
+        const mad = devs.length % 2 ? devs[mid] : (devs[mid - 1] + devs[mid]) / 2;
+        return { median, mad };
+      }
+
+      function pickNonMaxPeaks(samples, threshold, minGapSec, maxClips = 40) {
+        const above = samples.filter(s => s.score >= threshold).sort((a, b) => b.score - a.score);
+        const chosen = [];
+        for (const cand of above) {
+          if (chosen.some(c => Math.abs(c.time - cand.time) < minGapSec)) continue;
+          chosen.push(cand);
+          if (chosen.length >= maxClips) break;
+        }
+        return chosen.sort((a, b) => a.time - b.time);
+      }
+
+      async function detectAudioSpikesFromFile(file, dur, sens, minGapSec) {
+        if (autoFindStatus) autoFindStatus.textContent = '🔊 Decoding audio track (usually 1–3s)...';
+        const arrayBuf = await file.arrayBuffer();
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) throw new Error('Web Audio API unavailable in this browser');
+        const actx = new AudioCtx();
+        let audioBuf;
+        try {
+          audioBuf = await actx.decodeAudioData(arrayBuf.slice(0));
+        } finally {
+          try { await actx.close(); } catch {}
+        }
+
+        const sr = audioBuf.sampleRate || 44100;
+        const ch0 = audioBuf.getChannelData(0);
+        const ch1 = audioBuf.numberOfChannels > 1 ? audioBuf.getChannelData(1) : null;
+        const binSec = 0.05; // 50ms bins
+        const binSize = Math.max(1, Math.floor(sr * binSec));
+        const numBins = Math.floor(ch0.length / binSize);
+        if (numBins < 5) return [];
+
+        const rawPeaks = new Float32Array(numBins);
+        for (let b = 0; b < numBins; b++) {
+          const offset = b * binSize;
+          let maxAbs = 0;
+          for (let i = 0; i < binSize; i += 4) {
+            const v0 = Math.abs(ch0[offset + i] || 0);
+            const v1 = ch1 ? Math.abs(ch1[offset + i] || 0) : 0;
+            const v = v0 > v1 ? v0 : v1;
+            if (v > maxAbs) maxAbs = v;
+          }
+          rawPeaks[b] = maxAbs;
+        }
+
+        // Compute local contrast so steady wind/chatter doesn't false-trigger while sharp bat/ball cracks pop
+        const samples = [];
+        const winRadius = 20; // +/- 1.0s local baseline
+        for (let b = 0; b < numBins; b++) {
+          const lo = Math.max(0, b - winRadius);
+          const hi = Math.min(numBins - 1, b + winRadius);
+          let sum = 0, cnt = 0;
+          for (let j = lo; j <= hi; j++) { sum += rawPeaks[j]; cnt++; }
+          const localAvg = cnt ? sum / cnt : 0.01;
+          const t = (b + 0.5) * binSec;
+          if (t < 0.3 || t > dur - 0.3) continue;
+          const contrast = rawPeaks[b] * (rawPeaks[b] / (localAvg + 0.015));
+          samples.push({ time: t, score: contrast });
+        }
+
+        const scores = samples.map(s => s.score);
+        const { median, mad } = computeMedianAndMad(scores);
+        const mult = sens === 'low' ? 7.0 : sens === 'high' ? 3.2 : 4.8;
+        const threshold = Math.max(0.02, median + Math.max(mad, 0.005) * mult);
+        return pickNonMaxPeaks(samples, threshold, minGapSec, 40);
+      }
+
+      async function detectMotionBurstsFromVideo(vEl, dur, sens, minGapSec) {
+        const w = 96, h = 54;
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+
+        const stepSec = dur <= 120 ? 0.45 : dur <= 360 ? 0.7 : Math.max(0.9, dur / 450);
+        const times = [];
+        for (let t = 0.4; t <= dur - 0.4; t += stepSec) times.push(t);
+
+        let prevGray = null;
+        const rawSamples = [];
+        for (let i = 0; i < times.length; i++) {
+          if (autoFindState.cancelled) return [];
+          const t = times[i];
+          await seekVideo(vEl, t);
+          // 5-arg drawImage avoids iOS portrait rotation clipping bug
+          ctx.drawImage(vEl, 0, 0, w, h);
+          const data = ctx.getImageData(0, 0, w, h).data;
+          const gray = new Uint8Array(w * h);
+          for (let p = 0, gi = 0; p < data.length; p += 4, gi++) {
+            gray[gi] = (data[p] * 77 + data[p + 1] * 150 + data[p + 2] * 29) >> 8;
+          }
+          if (prevGray) {
+            // Center-weighted diff (down-weight outer 12% border where bystanders walk past)
+            let diffSum = 0, wtSum = 0;
+            for (let y = 0; y < h; y++) {
+              const inY = (y >= 6 && y < h - 6);
+              for (let x = 0; x < w; x++) {
+                const wt = (inY && x >= 10 && x < w - 10) ? 1.0 : 0.25;
+                diffSum += Math.abs(gray[y * w + x] - prevGray[y * w + x]) * wt;
+                wtSum += wt;
+              }
+            }
+            rawSamples.push({ time: t, score: diffSum / (wtSum || 1) });
+          }
+          prevGray = gray;
+          if (autoFindStatus && (i % 5 === 0 || i === times.length - 1)) {
+            const pct = Math.round(((i + 1) / times.length) * 100);
+            autoFindStatus.textContent = `🏃 Scanning visual motion: ${pct}% (${fmtMinSec(t)} / ${fmtMinSec(dur)})...`;
+          }
+        }
+
+        // Smooth with 3-point moving average to find sustained bursts rather than 1-frame camera shake
+        const smoothed = rawSamples.map((s, i) => {
+          const prev = rawSamples[i - 1]?.score ?? s.score;
+          const next = rawSamples[i + 1]?.score ?? s.score;
+          return { time: s.time, score: (prev + s.score * 2 + next) / 4 };
+        });
+        const { median, mad } = computeMedianAndMad(smoothed.map(s => s.score));
+        const mult = sens === 'low' ? 3.5 : sens === 'high' ? 1.6 : 2.4;
+        const threshold = median + Math.max(mad, 0.8) * mult;
+        return pickNonMaxPeaks(smoothed, threshold, minGapSec, 40);
+      }
+
+      function updateAutoFindStageBtnCount() {
+        const checkedCount = autoFindState.candidates.filter(c => c.checked).length;
+        if (autoFindStageSelectedBtn) {
+          autoFindStageSelectedBtn.disabled = checkedCount === 0;
+          autoFindStageSelectedBtn.textContent = `✂️ Stage Selected (${checkedCount})`;
+        }
+      }
+
+      function renderAutoFindResults() {
+        if (!autoFindGrid || !autoFindResultsWrap) return;
+        autoFindGrid.textContent = '';
+        if (autoFindState.candidates.length === 0) {
+          autoFindResultsWrap.style.display = 'none';
+          return;
+        }
+        autoFindResultsWrap.style.display = 'flex';
+        const maxScore = Math.max(...autoFindState.candidates.map(c => c.score), 0.001);
+
+        autoFindState.candidates.forEach((cand, idx) => {
+          const card = document.createElement('div');
+          card.className = `autofind-card${cand.checked ? '' : ' unchecked'}${autoFindState.previewCardId === cand.id ? ' playing' : ''}`;
+
+          const topRow = document.createElement('div');
+          topRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:6px;';
+          const chkLabel = document.createElement('label');
+          chkLabel.style.cssText = 'display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-weight:700; color:var(--pitch);';
+          const chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.checked = cand.checked;
+          chk.style.cssText = 'width:auto; accent-color:var(--accent-bright);';
+          chk.addEventListener('change', () => {
+            cand.checked = chk.checked;
+            card.classList.toggle('unchecked', !cand.checked);
+            updateAutoFindStageBtnCount();
+          });
+          chkLabel.append(chk, document.createTextNode(`#${idx + 1} · ${fmtMinSec(cand.start)}–${fmtMinSec(cand.end)}`));
+          const pctStr = `${Math.round((cand.score / maxScore) * 100)}%`;
+          const strengthBadge = document.createElement('span');
+          strengthBadge.className = 'help-text';
+          strengthBadge.textContent = cand.mode === 'audio' ? `🔊 ${pctStr}` : `🏃 ${pctStr}`;
+          topRow.append(chkLabel, strengthBadge);
+
+          if (cand.thumb) {
+            const img = document.createElement('img');
+            img.className = 'autofind-thumb';
+            img.src = cand.thumb;
+            img.alt = `Detected clip ${idx + 1}`;
+            img.style.cursor = 'pointer';
+            img.addEventListener('click', () => previewAutoFindCandidate(cand));
+            card.appendChild(img);
+          }
+
+          const btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:6px;';
+          const prevBtn = document.createElement('button');
+          prevBtn.type = 'button';
+          prevBtn.className = 'btn-sm';
+          prevBtn.textContent = '▶ Preview';
+          prevBtn.addEventListener('click', () => previewAutoFindCandidate(cand));
+
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'btn-sm btn-ghost';
+          editBtn.textContent = '✂️ Fine-Tune';
+          editBtn.title = 'Load this window into the manual cutter to adjust start/end';
+          editBtn.addEventListener('click', () => {
+            autoFindState.previewStopTime = null;
+            videoPlayer.pause();
+            state.draftClip.active = true;
+            state.draftClip.start = cand.start;
+            state.draftClip.end = cand.end;
+            state.draftClip.editingClipId = null;
+            state.draftClip.pins = [];
+            videoPlayer.currentTime = cand.start;
+            syncCutterScrubberBounds();
+            updateTimeReadout();
+            showToast(`✂️ Loaded #${idx + 1} (${fmtMinSec(cand.start)}–${fmtMinSec(cand.end)}) into cutter`);
+          });
+
+          btnRow.append(prevBtn, editBtn);
+          card.prepend(topRow);
+          card.appendChild(btnRow);
+          autoFindGrid.appendChild(card);
+        });
+        updateAutoFindStageBtnCount();
+      }
+
+      function previewAutoFindCandidate(cand) {
+        if (!cand || !videoPlayer) return;
+        autoFindState.previewStopTime = cand.end;
+        autoFindState.previewCardId = cand.id;
+        videoPlayer.currentTime = cand.start;
+        videoPlayer.play().catch(() => {});
+        renderAutoFindResults();
+      }
+
+      videoPlayer?.addEventListener('timeupdate', () => {
+        if (autoFindState.previewStopTime !== null && videoPlayer.currentTime >= autoFindState.previewStopTime) {
+          videoPlayer.pause();
+          autoFindState.previewStopTime = null;
+          autoFindState.previewCardId = null;
+          renderAutoFindResults();
+        }
+      });
+
+      autoFindToggleBtn?.addEventListener('click', () => {
+        const next = !autoFindPanel?.classList.contains('active');
+        autoFindPanel?.classList.toggle('active', next);
+        autoFindToggleBtn.classList.toggle('btn-active', next);
+      });
+      autoFindCloseBtn?.addEventListener('click', () => {
+        autoFindPanel?.classList.remove('active');
+        autoFindToggleBtn?.classList.remove('btn-active');
+      });
+      autoFindCancelBtn?.addEventListener('click', () => {
+        autoFindState.cancelled = true;
+      });
+      autoFindSelectAllBtn?.addEventListener('click', () => {
+        autoFindState.candidates.forEach(c => { c.checked = true; });
+        renderAutoFindResults();
+      });
+      autoFindSelectNoneBtn?.addEventListener('click', () => {
+        autoFindState.candidates.forEach(c => { c.checked = false; });
+        renderAutoFindResults();
+      });
+
+      autoFindScanBtn?.addEventListener('click', async () => {
+        const src = getActiveSource();
+        const dur = videoPlayer.duration || src?.duration || 0;
+        if (!src || !dur) {
+          showToast('Load a video first before scanning');
+          return;
+        }
+        if (autoFindState.scanning) return;
+
+        videoPlayer.pause();
+        autoFindState.scanning = true;
+        autoFindState.cancelled = false;
+        autoFindState.candidates = [];
+        renderAutoFindResults();
+        if (autoFindScanBtn) autoFindScanBtn.disabled = true;
+        if (autoFindCancelBtn) autoFindCancelBtn.style.display = 'inline-flex';
+
+        const mode = autoFindModeSelect?.value || 'audio';
+        const sens = autoFindSensSelect?.value || 'medium';
+        const padBefore = parseFloat(autoFindBeforeSelect?.value) || 1.5;
+        const padAfter = parseFloat(autoFindAfterSelect?.value) || 1.5;
+        const minGap = parseFloat(autoFindGapSelect?.value) || 8;
+        const prevTime = videoPlayer.currentTime || 0;
+
+        try {
+          let peaks = [];
+          if (mode === 'audio') {
+            try {
+              peaks = await detectAudioSpikesFromFile(src.file, dur, sens, minGap);
+            } catch (audioErr) {
+              if (autoFindStatus) {
+                autoFindStatus.textContent = `Audio scan unavailable (${audioErr.message}) — try 🏃 Motion Bursts mode instead.`;
+              }
+              showToast('Could not decode audio track — switch to 🏃 Motion Bursts mode');
+              return;
+            }
+          } else {
+            peaks = await detectMotionBurstsFromVideo(videoPlayer, dur, sens, minGap);
+          }
+
+          if (autoFindState.cancelled) {
+            if (autoFindStatus) autoFindStatus.textContent = 'Scan stopped.';
+            return;
+          }
+
+          if (!peaks.length) {
+            if (autoFindStatus) autoFindStatus.textContent = 'No distinct action bursts found — try raising Sensitivity to High or switching between Audio / Motion.';
+            return;
+          }
+
+          // Capture crisp thumbnail at each peak moment
+          const cands = [];
+          for (let i = 0; i < peaks.length; i++) {
+            if (autoFindState.cancelled) break;
+            const pk = peaks[i];
+            if (autoFindStatus) autoFindStatus.textContent = `Capturing preview ${i + 1}/${peaks.length}...`;
+            await seekVideo(videoPlayer, pk.time);
+            const thumb = grabVideoFrameDataUrl(videoPlayer, { zoomLevel: 1, zoomFocusX: 0.5, zoomFocusY: 0.5 });
+            const start = Math.max(0, pk.time - padBefore);
+            const end = Math.min(dur, pk.time + padAfter);
+            cands.push({
+              id: `af_${Date.now()}_${i}`,
+              peakTime: pk.time,
+              start,
+              end,
+              score: pk.score,
+              mode,
+              thumb,
+              checked: true
+            });
+          }
+
+          autoFindState.candidates = cands;
+          await seekVideo(videoPlayer, prevTime);
+          renderAutoFindResults();
+          if (autoFindStatus) {
+            autoFindStatus.textContent = `✓ Found ${cands.length} likely delivery/shot clip${cands.length === 1 ? '' : 's'}. Preview & uncheck any false triggers, then tap Stage Selected!`;
+          }
+        } catch (err) {
+          console.error('Auto-find error:', err);
+          if (autoFindStatus) autoFindStatus.textContent = `Scan error: ${err.message}`;
+        } finally {
+          autoFindState.scanning = false;
+          if (autoFindScanBtn) autoFindScanBtn.disabled = false;
+          if (autoFindCancelBtn) autoFindCancelBtn.style.display = 'none';
+        }
+      });
+
+      autoFindStageSelectedBtn?.addEventListener('click', async () => {
+        const src = getActiveSource();
+        const dur = videoPlayer.duration || src?.duration || 0;
+        const selected = autoFindState.candidates.filter(c => c.checked);
+        if (!src || !dur || selected.length === 0) return;
+
+        videoPlayer.pause();
+        autoFindState.previewStopTime = null;
+        autoFindStageSelectedBtn.disabled = true;
+        const sampleCount = state.sampleCount || 30;
+        let stagedCount = 0;
+
+        try {
+          for (let i = 0; i < selected.length; i++) {
+            const cand = selected[i];
+            autoFindStageSelectedBtn.textContent = `⏳ Staging ${i + 1}/${selected.length}...`;
+            if (autoFindStatus) {
+              autoFindStatus.textContent = `Extracting ${sampleCount} frames for Clip ${i + 1} of ${selected.length} (${fmtMinSec(cand.start)}–${fmtMinSec(cand.end)})...`;
+            }
+            const clipObj = {
+              id: state.nextClipId++,
+              sourceId: src.id,
+              file: src.file,
+              url: src.url,
+              name: src.name,
+              tag: '',
+              note: '',
+              angle: 'Auto-detect',
+              recordedAt: src.recordedAt || new Date().toISOString(),
+              recordedStamp: src.recordedStamp || formatFileTimestamp(),
+              duration: dur,
+              trimStart: cand.start,
+              trimEnd: cand.end,
+              trimCustom: true,
+              zoomLevel: state.zoomLevel || 1,
+              zoomFocusX: state.zoomFocusX ?? 0.5,
+              zoomFocusY: state.zoomFocusY ?? 0.5,
+              sampleCount,
+              frames: [],
+              pins: [],
+              thumbnail: cand.thumb || null,
+              releaseTime: null,
+              arrivalTime: null,
+              storedSessionId: null,
+              analyzedSessionId: null,
+              selected: false
+            };
+
+            if (videoPlayer.readyState >= 1) {
+              await extractKeyframesFromElement(videoPlayer, clipObj, sampleCount);
+            } else {
+              await extractKeyframesOffscreen(clipObj, sampleCount);
+            }
+            const midFrame = clipObj.frames[Math.floor(clipObj.frames.length / 2)] || clipObj.frames[0];
+            clipObj.thumbnail = midFrame?.dataUrl || cand.thumb || null;
+            state.clips.push(clipObj);
+            stagedCount++;
+          }
+
+          renderMiniStagingBar();
+          renderStagingArea();
+          syncCutterScrubberBounds();
+          if (autoFindStatus) {
+            autoFindStatus.textContent = `✓ Staged ${stagedCount} clip${stagedCount === 1 ? '' : 's'} into Step 2 Staging!`;
+          }
+          showToast(`✓ Staged ${stagedCount} auto-detected clip${stagedCount === 1 ? '' : 's'} into Step 2!`);
+        } catch (err) {
+          console.error('Batch stage error:', err);
+          showToast(`Error staging clips: ${err.message}`);
+        } finally {
+          updateAutoFindStageBtnCount();
+        }
+      });
 
       function updateTimeReadout() {
         const cur = videoPlayer.currentTime || 0;
