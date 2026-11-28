@@ -6485,10 +6485,6 @@
                 dotEl.removeEventListener('pointermove', onMove);
                 dotEl.removeEventListener('pointerup', onEnd);
                 dotEl.removeEventListener('pointercancel', onEnd);
-                // Re-pad zoomed window smoothly so user can keep dragging even further
-                curDraft.zoomRangeStart = Math.max(0, curDraft.start - 0.5);
-                curDraft.zoomRangeEnd = Math.min(curDur, curDraft.end + 0.5);
-                syncCutterScrubberBounds();
                 updateTrimUI();
               };
 
